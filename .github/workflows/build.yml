@@ -63,7 +63,12 @@ jobs:
       - name: 重命名 APK
         run: |
           cd avbox/app/build/outputs/apk/debug
-          cp app-debug.apk qingfeng_${{ inputs.version }}.apk
+          echo "=== 找到的 APK ==="
+          ls -lh *.apk
+          # 找到第一个 apk 文件（排除已重命名的）
+          SRC=$(ls *.apk | grep -v "qingfeng_${{ inputs.version }}" | head -n1)
+          echo "源文件: $SRC"
+          cp "$SRC" "qingfeng_${{ inputs.version }}.apk"
           ls -lh qingfeng_*.apk
 
       - name: 发布到 Releases
