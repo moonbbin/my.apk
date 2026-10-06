@@ -8,12 +8,51 @@ jobs:
       - name: 克隆原仓库
         run: git clone --depth 1 https://github.com/XiaochangXu/AVBox.git avbox
 
+      - name: 应用清风品牌修改
+        run: |
+          cd avbox
+          sed -i 's/AVBox/清风/g' app/src/main/res/values/strings.xml
+          sed -i 's/applicationId = "com.github.avbox.osc"/applicationId = "com.qingfeng.tvbox"/' app/build.gradle.kts
+          sed -i 's/AVBox_/qingfeng_/g' app/build.gradle.kts
+
+      - name: 复制图标
+        uses: actions/checkout@v4
+        with:
+          path: myapk
+          sparse-checkout: |
+            app/src/main/res/mipmap-mdpi
+            app/src/main/res/mipmap-hdpi
+            app/src/main/res/mipmap-xhdpi
+            app/src/main/res/mipmap-xxhdpi
+            app/src/main/res/mipmap-xxxhdpi
+            app/src/main/res/drawable/ic_launcher_foreground.webp
+
+      - name: 覆盖图标到 AVBox
+        run: |
+          for d in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
+            cp -f myapk/app/src/main/res/$d/* avbox/app/src/main/res/$d/ 2>/dev/null || true
+          done
+          cp -f myapk/app/src/main/res/drawable/ic_launcher_foreground.webp avbox/app/src/main/res/drawable/ 2>/dev/null || true
+          rm -f avbox/app/src/main/res/drawable/ic_launcher_foreground.xml
+
       - uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: 构建原版
+      - name: 安装 Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 安装 Android 37 和 NDK
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -name sdkmanager -type f | head -n1)"
+          yes 2>/dev/null | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-37" "ndk;27.2.12479018" "build-tools;35.0.0"
+
+      - name: 构建
         working-directory: avbox
         run: |
           chmod +x gradlew
@@ -24,6 +63,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: avbox-original-apk
+          name: qingfeng-apk
           path: avbox/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
+          if-no-files-found: error
