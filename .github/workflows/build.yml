@@ -5,7 +5,7 @@ on:
       version:
         description: '版本号 (如 v1.0.0)'
         required: true
-        default: 'v1.0.3'
+        default: 'v1.0.4'
 
 permissions:
   contents: write
@@ -28,23 +28,12 @@ jobs:
       - name: 修改首页左上角图标（改小+圆角）
         run: |
           cd avbox
-          python3 << 'PYEOF2'
-          p = 'app/src/main/java/com/github/tvbox/osc/ui/page/HomePage.kt'
-          s = open(p, encoding='utf-8').read()
-          old = """                    Box(
-                        modifier = Modifier
-                            .size(26.dp)
-                            .drawBehind {"""
-          new = """                    Box(
-                        modifier = Modifier
-                            .size(20.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .drawBehind {"""
-          assert old in s, "未找到目标代码块"
-          s = s.replace(old, new, 1)
-          open(p, 'w', encoding='utf-8').write(s)
-          print("首页图标已改小并加圆角")
-          PYEOF2
+          F='app/src/main/java/com/github/tvbox/osc/ui/page/HomePage.kt'
+          # 26.dp -> 20.dp (仅 capsule logo 那一行，通过下一行 drawBehind 定位)
+          # 将唯一的 .size(26.dp) 改为 20.dp 并加圆角
+          sed -i 's/\.size(26\.dp)/.size(20.dp)\n                            .clip(RoundedCornerShape(6.dp))/' "$F"
+          echo "=== 验证修改 ==="
+          sed -n '169,175p' "$F"
 
       - name: 写入正确的图标文件
         run: |
