@@ -1,6 +1,15 @@
 name: Build APK
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号 (如 v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -8,32 +17,46 @@ jobs:
       - name: 克隆原仓库
         run: git clone --depth 1 https://github.com/XiaochangXu/AVBox.git avbox
 
-      - name: 应用清风品牌修改
+      - name: 应用清风品牌修改（精准版）
         run: |
           cd avbox
-          sed -i 's/AVBox/清风/g' app/src/main/res/values/strings.xml
+          # 只改 app_name，不全局替换 AVBox（避免改坏代码）
+          python3 << 'EOF'
+          import re
+          p = 'app/src/main/res/values/strings.xml'
+          s = open(p, encoding='utf-8').read()
+          # 只替换 app_name 的值
+          s2 = re.sub(r'()[^<]*(</string>)', r'\1清风\2', s)
+          s2 = re.sub(r'()[^<]*()', r'\1清风\2', s2)
+          open(p, 'w', encoding='utf-8').write(s2)
+          print("app_name 已改为清风")
+          EOF
+          grep -A1 'app_name' app/src/main/res/values/strings.xml | head -3
+          # 包名和 APK 文件名
           sed -i 's/applicationId = "com.github.avbox.osc"/applicationId = "com.qingfeng.tvbox"/' app/build.gradle.kts
           sed -i 's/AVBox_/qingfeng_/g' app/build.gradle.kts
 
-      - name: 复制图标
+      - name: 获取图标
         uses: actions/checkout@v4
         with:
           path: myapk
-          sparse-checkout: |
-            app/src/main/res/mipmap-mdpi
-            app/src/main/res/mipmap-hdpi
-            app/src/main/res/mipmap-xhdpi
-            app/src/main/res/mipmap-xxhdpi
-            app/src/main/res/mipmap-xxxhdpi
-            app/src/main/res/drawable/ic_launcher_foreground.webp
 
-      - name: 覆盖图标到 AVBox
+      - name: 覆盖图标到 AVBox（带验证）
         run: |
+          echo "=== myapk 中的图标 ==="
+          ls myapk/app/src/main/res/mipmap-xxxhdpi/ 2>&1
+          echo "=== 开始复制 ==="
           for d in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
-            cp -f myapk/app/src/main/res/$d/* avbox/app/src/main/res/$d/ 2>/dev/null || true
+            echo "复制 $d ..."
+            cp -vf myapk/app/src/main/res/$d/ic_launcher.webp avbox/app/src/main/res/$d/ 2>&1
+            cp -vf myapk/app/src/main/res/$d/ic_launcher_round.webp avbox/app/src/main/res/$d/ 2>&1
           done
-          cp -f myapk/app/src/main/res/drawable/ic_launcher_foreground.webp avbox/app/src/main/res/drawable/ 2>/dev/null || true
+          echo "=== 复制前景 ==="
+          cp -vf myapk/app/src/main/res/drawable/ic_launcher_foreground.webp avbox/app/src/main/res/drawable/ 2>&1
           rm -f avbox/app/src/main/res/drawable/ic_launcher_foreground.xml
+          echo "=== 验证 avbox 中的图标 ==="
+          ls -lh avbox/app/src/main/res/mipmap-xxxhdpi/
+          ls -lh avbox/app/src/main/res/drawable/ic_launcher_foreground.*
 
       - uses: actions/setup-java@v4
         with:
@@ -47,15 +70,10 @@ jobs:
 
       - name: 安装 SDK 组件
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
           SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          echo "SDK_ROOT=$SDK_ROOT"
-          ls "$SDK_ROOT/cmdline-tools/"
           SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" -name sdkmanager -type f | head -n1)
-          echo "SDKMANAGER=$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses || true
-          "$SDKMANAGER" --install "platforms;android-37" "ndk;27.2.12479018" 2>&1 | tail -20
+          "$SDKMANAGER" --install "platforms;android-37" "ndk;27.2.12479018" 2>&1 | tail -5
 
       - name: 构建
         working-directory: avbox
@@ -63,11 +81,16 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: 检查 APK
-        run: find avbox/app/build/outputs -name "*.apk" 2>/dev/null || echo "没有找到 APK"
+      - name: 重命名 APK
+        run: |
+          cd avbox/app/build/outputs/apk/debug
+          cp app-debug.apk qingfeng_${{ inputs.version }}.apk
+          ls -lh qingfeng_*.apk
 
-      - uses: actions/upload-artifact@v4
+      - name: 发布到 Releases
+        uses: softprops/action-gh-release@v2
         with:
-          name: qingfeng-apk
-          path: avbox/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          tag_name: ${{ inputs.version }}
+          name: 清风 ${{ inputs.version }}
+          files: avbox/app/build/outputs/apk/debug/qingfeng_${{ inputs.version }}.apk
+          generate_release_notes: false
