@@ -20,10 +20,7 @@ jobs:
       - name: 应用清风品牌修改
         run: |
           cd avbox
-          # 只改 app_name 显示名
-          sed -i 's|.*|清风|' app/src/main/res/values/strings.xml
-          grep 'app_name' app/src/main/res/values/strings.xml
-          # 包名和 APK 文件名
+          sed -i 's/AVBox/清风/g' app/src/main/res/values/strings.xml
           sed -i 's/applicationId = "com.github.avbox.osc"/applicationId = "com.qingfeng.tvbox"/' app/build.gradle.kts
           sed -i 's/AVBox_/qingfeng_/g' app/build.gradle.kts
 
@@ -32,13 +29,12 @@ jobs:
           BASE="https://raw.githubusercontent.com/moonbbin/my.apk/main/app/src/main/res"
           for d in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
             for f in ic_launcher.webp ic_launcher_round.webp; do
-              curl -sL "$BASE/$d/$f" -o "avbox/app/src/main/res/$d/$f" && echo "OK $d/$f" || echo "FAIL $d/$f"
+              curl -sL "$BASE/$d/$f" -o "avbox/app/src/main/res/$d/$f"
+              echo "$d/$f: $(ls -lh avbox/app/src/main/res/$d/$f 2>/dev/null | awk '{print $5}' || echo 'FAILED')"
             done
           done
-          curl -sL "$BASE/drawable/ic_launcher_foreground.webp" -o "avbox/app/src/main/res/drawable/ic_launcher_foreground.webp" && echo "OK foreground" || echo "FAIL foreground"
+          curl -sL "$BASE/drawable/ic_launcher_foreground.webp" -o "avbox/app/src/main/res/drawable/ic_launcher_foreground.webp"
           rm -f avbox/app/src/main/res/drawable/ic_launcher_foreground.xml
-          echo "=== 验证 ==="
-          ls -lh avbox/app/src/main/res/mipmap-xxxhdpi/
           ls -lh avbox/app/src/main/res/drawable/ic_launcher_foreground.*
 
       - uses: actions/setup-java@v4
