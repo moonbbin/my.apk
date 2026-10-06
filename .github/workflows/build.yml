@@ -8,52 +8,22 @@ jobs:
       - name: 克隆原仓库
         run: git clone --depth 1 https://github.com/XiaochangXu/AVBox.git avbox
 
-      - name: 应用清风品牌修改
-        run: |
-          cd avbox
-          sed -i 's/AVBox/清风/g' app/src/main/res/values/strings.xml
-          sed -i 's/applicationId = "com.github.avbox.osc"/applicationId = "com.qingfeng.tvbox"/' app/build.gradle.kts
-          sed -i 's/AVBox_/qingfeng_/g' app/build.gradle.kts
-
-      - name: 复制图标
-        uses: actions/checkout@v4
-        with:
-          path: myapk
-          sparse-checkout: |
-            app/src/main/res/mipmap-mdpi
-            app/src/main/res/mipmap-hdpi
-            app/src/main/res/mipmap-xhdpi
-            app/src/main/res/mipmap-xxhdpi
-            app/src/main/res/mipmap-xxxhdpi
-            app/src/main/res/drawable/ic_launcher_foreground.webp
-
-      - name: 覆盖图标到 AVBox
-        run: |
-          for d in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
-            cp -f myapk/app/src/main/res/$d/* avbox/app/src/main/res/$d/ 2>/dev/null || true
-          done
-          cp -f myapk/app/src/main/res/drawable/ic_launcher_foreground.webp avbox/app/src/main/res/drawable/ 2>/dev/null || true
-          rm -f avbox/app/src/main/res/drawable/ic_launcher_foreground.xml
-
       - uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: 构建
+      - name: 构建原版
         working-directory: avbox
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: 检查 APK
-        run: |
-          ls -lh avbox/app/build/outputs/apk/debug/
-          echo "---"
-          find avbox/app/build/outputs -name "*.apk"
+        run: find avbox/app/build/outputs -name "*.apk" 2>/dev/null || echo "没有找到 APK"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: qingfeng-apk
+          name: avbox-original-apk
           path: avbox/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          if-no-files-found: warn
