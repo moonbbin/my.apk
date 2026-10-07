@@ -5,7 +5,7 @@ on:
       version:
         description: '版本号 (如 v1.0.0)'
         required: true
-        default: 'v1.0.6'
+        default: 'v1.0.7'
 
 permissions:
   contents: write
@@ -72,11 +72,12 @@ jobs:
           ls -lh app/src/main/res/drawable/ic_launcher_foreground.webp
           file app/src/main/res/drawable/ic_launcher_foreground.webp
 
-      - name: 缓存 debug 签名（保证更新可覆盖安装）
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: qingfeng-debug-keystore-v1
+      - name: 写入固定签名（保证更新可覆盖安装）
+        run: |
+          mkdir -p ~/.android
+          echo "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" | base64 -d > ~/.android/debug.keystore
+          ls -lh ~/.android/debug.keystore
+          echo "固定签名已写入"
 
       - uses: actions/setup-java@v4
         with:
