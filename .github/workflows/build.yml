@@ -5,7 +5,7 @@ on:
       version:
         description: '版本号 (如 v1.0.0)'
         required: true
-        default: 'v1.0.4'
+        default: 'v1.0.5'
 
 permissions:
   contents: write
@@ -24,6 +24,14 @@ jobs:
           sed -i 's/applicationId = "com.github.avbox.osc"/applicationId = "com.qingfeng.tvbox"/' app/build.gradle.kts
           sed -i 's/AVBox_/qingfeng_/g' app/build.gradle.kts
 
+
+      - name: 修改设置页顶部应用名
+        run: |
+          cd avbox
+          F='app/src/main/java/com/github/tvbox/osc/ui/page/SettingsAppInfoCard.kt'
+          sed -i 's/text = "AVBox"/text = "清风"/' "$F"
+          echo "=== 验证修改 ==="
+          grep -n 'text = "清风"' "$F"
 
       - name: 修改首页左上角图标（改小+圆角）
         run: |
