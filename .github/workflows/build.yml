@@ -61,6 +61,7 @@ jobs:
 
       - name: 添加音乐tab和隐藏开关（v1.0.8）
         run: |
+          cd avbox
           set -e
           MS=app/src/main/java/com/github/tvbox/osc/ui/page/MainScreen.kt
           HC=app/src/main/java/com/github/tvbox/osc/util/HawkConfig.java
