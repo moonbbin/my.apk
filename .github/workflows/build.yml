@@ -71,10 +71,11 @@ jobs:
           echo "=== 添加音乐 tab ==="
           echo "IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwoiIiLlnKggUHJlZmVyZW5jZVNldHRpbmdzUGFnZS5rdCDmj5LlhaUn5a+86Iiq5qCP6ZqQ6JeP6Z+z5LmQJ+W8gOWFsyIiIgppbXBvcnQgc3lzCgpQUCA9ICJhcHAvc3JjL21haW4vamF2YS9jb20vZ2l0aHViL3R2Ym94L29zYy91aS9wYWdlL1ByZWZlcmVuY2VTZXR0aW5nc1BhZ2Uua3QiCnMgPSBvcGVuKFBQKS5yZWFkKCkKaWYgInNldHRpbmdzX25hdl9tdXNpY19oaWRkZW4iIGluIHM6CiAgICBwcmludCgi5bey5a2Y5Zyo77yM6Lez6L+HIikKICAgIHN5cy5leGl0KDApCgojIDEuIOaKiumakOiXj+ebtOaSreeahCBMQVNUIOaUueaIkCBNSURETEUKb2xkX2xpdmUgPSAiIiIgICAgICAgICAgICAgICAgU2V0dGluZ3NDYXJkKFNldHRpbmdzQ2FyZFBvc2l0aW9uLkxBU1QpIHsKICAgICAgICAgICAgICAgICAgICBTZXR0aW5nc1N3aXRjaFJvdygKICAgICAgICAgICAgICAgICAgICAgICAgdGl0bGUgPSBzdHJpbmdSZXNvdXJjZShSLnN0cmluZy5zZXR0aW5nc19uYXZfbGl2ZV9oaWRkZW4pLCIiIgpuZXdfbGl2ZSA9ICIiIiAgICAgICAgICAgICAgICBTZXR0aW5nc0NhcmQoU2V0dGluZ3NDYXJkUG9zaXRpb24uTUlERExFKSB7CiAgICAgICAgICAgICAgICAgICAgU2V0dGluZ3NTd2l0Y2hSb3coCiAgICAgICAgICAgICAgICAgICAgICAgIHRpdGxlID0gc3RyaW5nUmVzb3VyY2UoUi5zdHJpbmcuc2V0dGluZ3NfbmF2X2xpdmVfaGlkZGVuKSwiIiIKYXNzZXJ0IG9sZF9saXZlIGluIHMsICJsaXZlIGFuY2hvciBub3QgZm91bmQiCnMgPSBzLnJlcGxhY2Uob2xkX2xpdmUsIG5ld19saXZlLCAxKQoKIyAyLiDlnKjnm7Tmkq3lnZfnu5PmnZ/lkI7ov73liqDpn7PkuZDlnZcKbGl2ZV9lbmQgPSAiIiIgICAgICAgICAgICAgICAgICAgICAgICBvbkNoZWNrZWRDaGFuZ2UgPSB7IHZtLnB1dChIYXdrQ29uZmlnLk5BVl9MSVZFX0hJRERFTiwgaXQpIH0sCiAgICAgICAgICAgICAgICAgICAgKQogICAgICAgICAgICAgICAgfSIiIgphc3NlcnQgbGl2ZV9lbmQgaW4gcywgImxpdmUgZW5kIG5vdCBmb3VuZCIKbXVzaWNfYmxvY2sgPSBsaXZlX2VuZCArICIiIgogICAgICAgICAgICAgICAgU2V0dGluZ3NDYXJkKFNldHRpbmdzQ2FyZFBvc2l0aW9uLkxBU1QpIHsKICAgICAgICAgICAgICAgICAgICBTZXR0aW5nc1N3aXRjaFJvdygKICAgICAgICAgICAgICAgICAgICAgICAgdGl0bGUgPSBzdHJpbmdSZXNvdXJjZShSLnN0cmluZy5zZXR0aW5nc19uYXZfbXVzaWNfaGlkZGVuKSwKICAgICAgICAgICAgICAgICAgICAgICAgbGVhZGluZ0ljb25SZXMgPSBSLmRyYXdhYmxlLmljX3ByZWZfbmF2X211c2ljX2hpZGRlbiwKICAgICAgICAgICAgICAgICAgICAgICAgc3VidGl0bGUgPSBzdHJpbmdSZXNvdXJjZShSLnN0cmluZy5zZXR0aW5nc19uYXZfbXVzaWNfaGlkZGVuX3N1YnRpdGxlKSwKICAgICAgICAgICAgICAgICAgICAgICAgY2hlY2tlZCA9IHN0YXRlLm5hdk11c2ljSGlkZGVuLAogICAgICAgICAgICAgICAgICAgICAgICBvbkNoZWNrZWRDaGFuZ2UgPSB7IHZtLnB1dChIYXdrQ29uZmlnLk5BVl9NVVNJQ19ISURERU4sIGl0KSB9LAogICAgICAgICAgICAgICAgICAgICkKICAgICAgICAgICAgICAgIH0iIiIKcyA9IHMucmVwbGFjZShsaXZlX2VuZCwgbXVzaWNfYmxvY2ssIDEpCm9wZW4oUFAsICJ3Iikud3JpdGUocykKcHJpbnQoIuWBj+Wlveiuvue9riBVSSDlt7Lmj5LlhaUiKQo=" | base64 -d > /tmp/insert_music_toggle.py
           perl -0pi -e 's/FOLLOWING\(R\.string\.tab_following, R\.drawable\.ic_tab_following\),\n    SETTINGS/FOLLOWING(R.string.tab_following, R.drawable.ic_tab_following),\n    MUSIC(R.string.tab_music, R.drawable.ic_tab_music),\n    SETTINGS/' $MS
-          perl -0pi -e 's/AppTab\.FOLLOWING -> FollowingPage\(contentPadding = pageContentPadding\)/AppTab.FOLLOWING -> FollowingPage(contentPadding = pageContentPadding)\n                                AppTab.MUSIC -> { val ctx = LocalContext.current; LaunchedEffect(Unit) { ctx.startActivity(Intent(ctx, MusicPlayerActivity::class.java)) } }/' $MS
+          perl -0pi -e 's/AppTab\.FOLLOWING -> FollowingPage\(contentPadding = pageContentPadding\)/AppTab.FOLLOWING -> FollowingPage(contentPadding = pageContentPadding)\n                                AppTab.MUSIC -> { val ctx = LocalContext.current; LaunchedEffect(Unit) { ctx.startActivity(Intent(ctx, MusicPlayerActivity::class.java)) }; Box(modifier = Modifier.fillMaxSize()) }/' $MS
           grep -q "import android.content.Intent" $MS || sed -i '1i import android.content.Intent' $MS
           grep -q "import androidx.compose.ui.platform.LocalContext" $MS || sed -i '/import android.content.Intent/a import androidx.compose.ui.platform.LocalContext' $MS
           grep -q "com.github.tvbox.osc.ui.activity.MusicPlayerActivity" $MS || sed -i '/import androidx.compose.ui.platform.LocalContext/a import com.github.tvbox.osc.ui.activity.MusicPlayerActivity' $MS
+          grep -q "import androidx.compose.foundation.layout.Box" $MS || sed -i '/import com.github.tvbox.osc.ui.activity.MusicPlayerActivity/a import androidx.compose.foundation.layout.Box' $MS
           grep -q 'name="tab_music"' $SX || sed -i 's|<string name="tab_home">首页</string>|<string name="tab_home">首页</string>\n    <string name="tab_music">音乐</string>|' $SX
           cp app/src/main/res/drawable/ic_music_page.xml app/src/main/res/drawable/ic_tab_music.xml
           grep -q "NAV_MUSIC_HIDDEN" $HC || perl -0pi -e 's/public static final String NAV_LIVE_HIDDEN = "nav_live_hidden";/public static final String NAV_LIVE_HIDDEN = "nav_live_hidden";\n    public static final String NAV_MUSIC_HIDDEN = "nav_music_hidden";/' $HC
@@ -125,7 +126,20 @@ jobs:
         working-directory: avbox
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          set +e
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          set -e
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo ""
+            echo "=========================================="
+            echo "❌ 编译错误摘要："
+            echo "=========================================="
+            grep -E "^e: " /tmp/gradle.log | head -20 || echo "(未找到 e: 错误行)"
+            echo ""
+            echo "=========================================="
+            exit $EXIT_CODE
+          fi
 
       - name: 重命名 APK
         run: |
