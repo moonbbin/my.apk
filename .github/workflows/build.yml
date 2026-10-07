@@ -1,4 +1,4 @@
-name: Build APK
+   name: Build APK
 on:
   workflow_dispatch:
     inputs:
@@ -62,47 +62,27 @@ jobs:
       - name: 添加音乐tab和隐藏开关（v1.0.8）
         run: |
           set -e
+          MS=app/src/main/java/com/github/tvbox/osc/ui/page/MainScreen.kt
+          HC=app/src/main/java/com/github/tvbox/osc/util/HawkConfig.kt
+          SP=app/src/main/java/com/github/tvbox/osc/ui/page/SettingsPage.kt
+          PP=app/src/main/java/com/github/tvbox/osc/ui/page/PreferenceSettingsPage.kt
+          SX=app/src/main/res/values/strings.xml
           echo "=== 添加音乐 tab ==="
-          
-          # 1. MainScreen.kt: AppTab 枚举加 MUSIC
-          perl -0pi -e 's/FOLLOWING\(R\.string\.tab_following, R\.drawable\.ic_tab_following\),\n    SETTINGS/FOLLOWING(R.string.tab_following, R.drawable.ic_tab_following),\n    MUSIC(R.string.tab_music, R.drawable.ic_tab_music),\n    SETTINGS/' app/src/main/java/com/github/tvbox/osc/ui/page/MainScreen.kt
-          
-          # 2. MainScreen.kt: MUSIC tab 点击打开音乐播放器
-          # 在 when (AppTab.entries[page]) 中添加 MUSIC 分支
-          perl -0pi -e 's/AppTab\.FOLLOWING -> FollowingPage\(contentPadding = pageContentPadding\)\n                                AppTab\.SETTINGS/AppTab.FOLLOWING -> FollowingPage(contentPadding = pageContentPadding)\n                                AppTab.MUSIC -> { LaunchedEffect(Unit) { context.startActivity(Intent(context, MusicPlayerActivity::class.java)) } }\n                                AppTab.SETTINGS/' app/src/main/java/com/github/tvbox/osc/ui/page/MainScreen.kt
-          
-          # 3. 添加 Intent 和 MusicPlayerActivity 导入
-          grep -q "import android.content.Intent" app/src/main/java/com/github/tvbox/osc/ui/page/MainScreen.kt || sed -i '1i import android.content.Intent' app/src/main/java/com/github/tvbox/osc/ui/page/MainScreen.kt
-          grep -q "MusicPlayerActivity" app/src/main/java/com/github/tvbox/osc/ui/page/MainScreen.kt || sed -i '/import android.content.Intent/a import com.github.tvbox.osc.ui.activity.MusicPlayerActivity' app/src/main/java/com/github/tvbox/osc/ui/page/MainScreen.kt
-          
-          # 4. strings.xml: 添加 tab_music
-          sed -i 's|<string name="tab_home">首页</string>|<string name="tab_home">首页</string>\n    <string name="tab_music">音乐</string>|' app/src/main/res/values/strings.xml
-          
-          # 5. 复制音乐图标为 tab 图标
+          echo "IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwoiIiLlnKggUHJlZmVyZW5jZVNldHRpbmdzUGFnZS5rdCDmj5LlhaUn5a+86Iiq5qCP6ZqQ6JeP6Z+z5LmQJ+W8gOWFsyIiIgppbXBvcnQgc3lzCgpQUCA9ICJhcHAvc3JjL21haW4vamF2YS9jb20vZ2l0aHViL3R2Ym94L29zYy91aS9wYWdlL1ByZWZlcmVuY2VTZXR0aW5nc1BhZ2Uua3QiCnMgPSBvcGVuKFBQKS5yZWFkKCkKaWYgInNldHRpbmdzX25hdl9tdXNpY19oaWRkZW4iIGluIHM6CiAgICBwcmludCgi5bey5a2Y5Zyo77yM6Lez6L+HIikKICAgIHN5cy5leGl0KDApCgojIDEuIOaKiumakOiXj+ebtOaSreeahCBMQVNUIOaUueaIkCBNSURETEUKb2xkX2xpdmUgPSAiIiIgICAgICAgICAgICAgICAgU2V0dGluZ3NDYXJkKFNldHRpbmdzQ2FyZFBvc2l0aW9uLkxBU1QpIHsKICAgICAgICAgICAgICAgICAgICBTZXR0aW5nc1N3aXRjaFJvdygKICAgICAgICAgICAgICAgICAgICAgICAgdGl0bGUgPSBzdHJpbmdSZXNvdXJjZShSLnN0cmluZy5zZXR0aW5nc19uYXZfbGl2ZV9oaWRkZW4pLCIiIgpuZXdfbGl2ZSA9ICIiIiAgICAgICAgICAgICAgICBTZXR0aW5nc0NhcmQoU2V0dGluZ3NDYXJkUG9zaXRpb24uTUlERExFKSB7CiAgICAgICAgICAgICAgICAgICAgU2V0dGluZ3NTd2l0Y2hSb3coCiAgICAgICAgICAgICAgICAgICAgICAgIHRpdGxlID0gc3RyaW5nUmVzb3VyY2UoUi5zdHJpbmcuc2V0dGluZ3NfbmF2X2xpdmVfaGlkZGVuKSwiIiIKYXNzZXJ0IG9sZF9saXZlIGluIHMsICJsaXZlIGFuY2hvciBub3QgZm91bmQiCnMgPSBzLnJlcGxhY2Uob2xkX2xpdmUsIG5ld19saXZlLCAxKQoKIyAyLiDlnKjnm7Tmkq3lnZfnu5PmnZ/lkI7ov73liqDpn7PkuZDlnZcKbGl2ZV9lbmQgPSAiIiIgICAgICAgICAgICAgICAgICAgICAgICBvbkNoZWNrZWRDaGFuZ2UgPSB7IHZtLnB1dChIYXdrQ29uZmlnLk5BVl9MSVZFX0hJRERFTiwgaXQpIH0sCiAgICAgICAgICAgICAgICAgICAgKQogICAgICAgICAgICAgICAgfSIiIgphc3NlcnQgbGl2ZV9lbmQgaW4gcywgImxpdmUgZW5kIG5vdCBmb3VuZCIKbXVzaWNfYmxvY2sgPSBsaXZlX2VuZCArICIiIgogICAgICAgICAgICAgICAgU2V0dGluZ3NDYXJkKFNldHRpbmdzQ2FyZFBvc2l0aW9uLkxBU1QpIHsKICAgICAgICAgICAgICAgICAgICBTZXR0aW5nc1N3aXRjaFJvdygKICAgICAgICAgICAgICAgICAgICAgICAgdGl0bGUgPSBzdHJpbmdSZXNvdXJjZShSLnN0cmluZy5zZXR0aW5nc19uYXZfbXVzaWNfaGlkZGVuKSwKICAgICAgICAgICAgICAgICAgICAgICAgbGVhZGluZ0ljb25SZXMgPSBSLmRyYXdhYmxlLmljX3ByZWZfbmF2X211c2ljX2hpZGRlbiwKICAgICAgICAgICAgICAgICAgICAgICAgc3VidGl0bGUgPSBzdHJpbmdSZXNvdXJjZShSLnN0cmluZy5zZXR0aW5nc19uYXZfbXVzaWNfaGlkZGVuX3N1YnRpdGxlKSwKICAgICAgICAgICAgICAgICAgICAgICAgY2hlY2tlZCA9IHN0YXRlLm5hdk11c2ljSGlkZGVuLAogICAgICAgICAgICAgICAgICAgICAgICBvbkNoZWNrZWRDaGFuZ2UgPSB7IHZtLnB1dChIYXdrQ29uZmlnLk5BVl9NVVNJQ19ISURERU4sIGl0KSB9LAogICAgICAgICAgICAgICAgICAgICkKICAgICAgICAgICAgICAgIH0iIiIKcyA9IHMucmVwbGFjZShsaXZlX2VuZCwgbXVzaWNfYmxvY2ssIDEpCm9wZW4oUFAsICJ3Iikud3JpdGUocykKcHJpbnQoIuWBj+Wlveiuvue9riBVSSDlt7Lmj5LlhaUiKQo=" | base64 -d > /tmp/insert_music_toggle.py
+          perl -0pi -e 's/FOLLOWING\(R\.string\.tab_following, R\.drawable\.ic_tab_following\),\n    SETTINGS/FOLLOWING(R.string.tab_following, R.drawable.ic_tab_following),\n    MUSIC(R.string.tab_music, R.drawable.ic_tab_music),\n    SETTINGS/' $MS
+          perl -0pi -e 's/AppTab\.FOLLOWING -> FollowingPage\(contentPadding = pageContentPadding\)/AppTab.FOLLOWING -> FollowingPage(contentPadding = pageContentPadding)\n                                AppTab.MUSIC -> { val ctx = LocalContext.current; LaunchedEffect(Unit) { ctx.startActivity(Intent(ctx, MusicPlayerActivity::class.java)) } }/' $MS
+          grep -q "import android.content.Intent" $MS || sed -i '1i import android.content.Intent' $MS
+          grep -q "import androidx.compose.ui.platform.LocalContext" $MS || sed -i '/import android.content.Intent/a import androidx.compose.ui.platform.LocalContext' $MS
+          grep -q "com.github.tvbox.osc.ui.activity.MusicPlayerActivity" $MS || sed -i '/import androidx.compose.ui.platform.LocalContext/a import com.github.tvbox.osc.ui.activity.MusicPlayerActivity' $MS
+          grep -q 'name="tab_music"' $SX || sed -i 's|<string name="tab_home">首页</string>|<string name="tab_home">首页</string>\n    <string name="tab_music">音乐</string>|' $SX
           cp app/src/main/res/drawable/ic_music_page.xml app/src/main/res/drawable/ic_tab_music.xml
-          
-          # 6. HawkConfig.kt: 添加 NAV_MUSIC_HIDDEN
-          sed -i 's|const val NAV_LIVE_HIDDEN = "nav_live_hidden"|const val NAV_LIVE_HIDDEN = "nav_live_hidden"\n    const val NAV_MUSIC_HIDDEN = "nav_music_hidden"|' app/src/main/java/com/github/tvbox/osc/util/HawkConfig.kt
-          
-          # 7. strings.xml: 添加隐藏音乐开关文案
-          sed -i 's|</resources>|    <string name="settings_nav_music_hidden">导航栏隐藏音乐</string>\n    <string name="settings_nav_music_hidden_subtitle">开启后导航栏不再显示音乐入口</string>\n</resources>|' app/src/main/res/values/strings.xml
-          
-          # 8. 复制图标为设置页图标
-          cp app/src/main/res/drawable/ic_pref_nav_live_hidden.xml app/src/main/res/drawable/ic_pref_nav_music_hidden.xml 2>/dev/null || cp app/src/main/res/drawable/ic_music_page.xml app/src/main/res/drawable/ic_pref_nav_music_hidden.xml
-          
-          # 9. SettingsPage.kt: 添加 navMusicHidden 状态字段
-          perl -0pi -e 's/val navLiveHidden: Boolean,/val navLiveHidden: Boolean,\n    val navMusicHidden: Boolean,/' app/src/main/java/com/github/tvbox/osc/ui/page/SettingsPage.kt
-          perl -0pi -e 's/navLiveHidden = KV\.get\(HawkConfig\.NAV_LIVE_HIDDEN, false\),/navLiveHidden = KV.get(HawkConfig.NAV_LIVE_HIDDEN, false),\n        navMusicHidden = KV.get(HawkConfig.NAV_MUSIC_HIDDEN, false),/' app/src/main/java/com/github/tvbox/osc/ui/page/SettingsPage.kt
-          
-          # 10. PreferenceSettingsPage.kt: 添加隐藏音乐开关 UI
-          perl -0pi -e 's/(SettingsCard\(SettingsCardPosition\.LAST\) \{\n                    SettingsSwitchRow\(\n                        title = stringResource\(R\.string\.settings_nav_live_hidden\),.*?onCheckedChange = \{ vm\.put\(HawkConfig\.NAV_LIVE_HIDDEN, it\) \},\n                    \)\n                \})/$1\n                SettingsCard(SettingsCardPosition.LAST) {\n                    SettingsSwitchRow(\n                        title = stringResource(R.string.settings_nav_music_hidden),\n                        leadingIconRes = R.drawable.ic_pref_nav_music_hidden,\n                        subtitle = stringResource(R.string.settings_nav_music_hidden_subtitle),\n                        checked = state.navMusicHidden,\n                        onCheckedChange = { vm.put(HawkConfig.NAV_MUSIC_HIDDEN, it) },\n                    )\n                }/s' app/src/main/java/com/github/tvbox/osc/ui/page/PreferenceSettingsPage.kt
-          
-          # 11. MainScreen.kt: 添加 navMusicHidden 状态和隐藏逻辑
-          perl -0pi -e 's/mutableStateOf\(KV\.get\(HawkConfig\.NAV_LIVE_HIDDEN, false\)\)/mutableStateOf(KV.get(HawkConfig.NAV_LIVE_HIDDEN, false))\n    var navMusicHidden by remember {\n        mutableStateOf(KV.get(HawkConfig.NAV_MUSIC_HIDDEN, false))\n    }/' app/src/main/java/com/github/tvbox/osc/ui/page/MainScreen.kt
-          
-          echo "隐藏开关逻辑添加完成"
-          echo "音乐 tab 添加完成"
-
+          grep -q "NAV_MUSIC_HIDDEN" $HC || sed -i 's|const val NAV_LIVE_HIDDEN = "nav_live_hidden"|const val NAV_LIVE_HIDDEN = "nav_live_hidden"\n    const val NAV_MUSIC_HIDDEN = "nav_music_hidden"|' $HC
+          grep -q "settings_nav_music_hidden" $SX || sed -i 's|</resources>|    <string name="settings_nav_music_hidden">导航栏隐藏音乐</string>\n    <string name="settings_nav_music_hidden_subtitle">开启后导航栏不再显示音乐入口</string>\n</resources>|' $SX
+          cp app/src/main/res/drawable/ic_music_page.xml app/src/main/res/drawable/ic_pref_nav_music_hidden.xml
+          grep -q "val navMusicHidden" $SP || perl -0pi -e 's/val navLiveHidden: Boolean,/val navLiveHidden: Boolean,\n    val navMusicHidden: Boolean,/' $SP
+          grep -q "NAV_MUSIC_HIDDEN, false" $SP || perl -0pi -e 's/navLiveHidden = KV\.get\(HawkConfig\.NAV_LIVE_HIDDEN, false\),/navLiveHidden = KV.get(HawkConfig.NAV_LIVE_HIDDEN, false),\n        navMusicHidden = KV.get(HawkConfig.NAV_MUSIC_HIDDEN, false),/' $SP
+          python3 /tmp/insert_music_toggle.py
+          echo "=== 音乐 tab 添加完成 ==="
       - name: 写入正确的图标文件
         run: |
           cd avbox
