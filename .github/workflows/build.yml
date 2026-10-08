@@ -14,6 +14,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout 本仓库
+        uses: actions/checkout@v4
+
       - name: 克隆原仓库
         run: git clone --depth 1 https://github.com/XiaochangXu/AVBox.git avbox
 
