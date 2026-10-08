@@ -14,9 +14,9 @@ if "MUSIC(R.string.tab_music" not in content:
     content = content.replace(old_enum, new_enum)
     print("✅ 枚举已添加")
 
-# 2. 添加 MUSIC tab 内容分支（按钮，点击进入源管理）
+# 2. 添加 MUSIC tab 内容分支（自动跳转到音乐专区）
 old_branch = "AppTab.FOLLOWING -> FollowingPage(contentPadding = pageContentPadding)"
-new_branch = old_branch + "\n                                AppTab.MUSIC -> { val ctx = LocalContext.current; Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Button(onClick = { ctx.startActivity(Intent(ctx, LxSourceSettingsActivity::class.java)) }) { Text(stringResource(id = R.string.tab_music)) } } }"
+new_branch = old_branch + "\n                                AppTab.MUSIC -> { val ctx = LocalContext.current; Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Button(onClick = { ctx.startActivity(Intent(ctx, MusicHomeActivity::class.java)) }) { Text(\"进入音乐专区\") } } }"
 if "AppTab.MUSIC ->" not in content:
     content = content.replace(old_branch, new_branch)
     print("✅ 内容分支已添加")
@@ -27,9 +27,15 @@ imports = [
     ("import androidx.compose.ui.platform.LocalContext", "import androidx.compose.ui.platform.LocalContext\nimport androidx.compose.ui.res.stringResource\n"),
     ("import com.github.tvbox.osc.ui.activity.LxSourceSettingsActivity", None),  # 特殊处理
     ("import androidx.compose.foundation.layout.Box", None),
+    ("import androidx.compose.foundation.layout.Column", None),
+    ("import androidx.compose.foundation.layout.Spacer", None),
+    ("import androidx.compose.foundation.layout.Arrangement", None),
+    ("import androidx.compose.foundation.layout.height", None),
+    ("import androidx.compose.ui.unit.dp", None),
     ("import androidx.compose.ui.Alignment", None),
     ("import androidx.compose.material3.Button", None),
     ("import androidx.compose.material3.Text", None),
+    ("import androidx.compose.runtime.LaunchedEffect", None),
 ]
 
 # 先确保基础 import 存在
