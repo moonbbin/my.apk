@@ -26,8 +26,8 @@ jobs:
           chmod +x .github/scripts/*.sh
           echo '脚本已更新'
 
-      - name: 克隆原仓库
-        run: git clone --depth 1 https://github.com/XiaochangXu/AVBox.git avbox
+      - name: 克隆源码（从自己的 Fork）
+        run: git clone --depth 1 https://github.com/moonbbin/AVBox.git avbox
 
       - name: 设置版本号
         run: bash .github/scripts/00_version.sh "${{ inputs.version }}"
