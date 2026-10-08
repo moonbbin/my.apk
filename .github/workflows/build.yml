@@ -44,6 +44,8 @@ jobs:
         run: bash .github/scripts/13_music_player.sh
       - name: 添加真搜索
         run: bash .github/scripts/14_music_search.sh
+      - name: 添加音乐专区
+        run: bash .github/scripts/15_music_home.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
