@@ -10,11 +10,11 @@ SX=app/src/main/res/values/strings.xml
 echo "=== 添加音乐 tab ==="
 # Python 脚本已提取为同目录的 insert_music_toggle.py
 perl -0pi -e 's/FOLLOWING\(R\.string\.tab_following, R\.drawable\.ic_tab_following\),\n    SETTINGS/FOLLOWING(R.string.tab_following, R.drawable.ic_tab_following),\n    MUSIC(R.string.tab_music, R.drawable.ic_tab_music),\n    SETTINGS/' $MS
-perl -0pi -e 's/AppTab\.FOLLOWING -> FollowingPage\(contentPadding = pageContentPadding\)/AppTab.FOLLOWING -> FollowingPage(contentPadding = pageContentPadding)\n                                AppTab.MUSIC -> { val ctx = LocalContext.current; LaunchedEffect(Unit) { ctx.startActivity(Intent(ctx, MusicPlayerActivity::class.java)) }; Box(modifier = Modifier.fillMaxSize()) }/' $MS
+perl -0pi -e 's/AppTab\.FOLLOWING -> FollowingPage\(contentPadding = pageContentPadding\)/AppTab.FOLLOWING -> FollowingPage(contentPadding = pageContentPadding)\n                                AppTab.MUSIC -> { val ctx = LocalContext.current; LaunchedEffect(Unit) { ctx.startActivity(Intent(ctx, LxSourceSettingsActivity::class.java)) }; Box(modifier = Modifier.fillMaxSize()) }/' $MS
 grep -q "import android.content.Intent" $MS || sed -i '1i import android.content.Intent' $MS
 grep -q "import androidx.compose.ui.platform.LocalContext" $MS || sed -i '/import android.content.Intent/a import androidx.compose.ui.platform.LocalContext' $MS
-grep -q "com.github.tvbox.osc.ui.activity.MusicPlayerActivity" $MS || sed -i '/import androidx.compose.ui.platform.LocalContext/a import com.github.tvbox.osc.ui.activity.MusicPlayerActivity' $MS
-grep -q "import androidx.compose.foundation.layout.Box" $MS || sed -i '/import com.github.tvbox.osc.ui.activity.MusicPlayerActivity/a import androidx.compose.foundation.layout.Box' $MS
+grep -q "com.github.tvbox.osc.ui.activity.MusicPlayerActivity" $MS || sed -i '/import androidx.compose.ui.platform.LocalContext/a import com.github.tvbox.osc.ui.activity.LxSourceSettingsActivity' $MS
+grep -q "import androidx.compose.foundation.layout.Box" $MS || sed -i '/import com.github.tvbox.osc.ui.activity.LxSourceSettingsActivity/a import androidx.compose.foundation.layout.Box' $MS
 grep -q 'name="tab_music"' $SX || sed -i 's|<string name="tab_home">首页</string>|<string name="tab_home">首页</string>\n    <string name="tab_music">音乐</string>|' $SX
 cp app/src/main/res/drawable/ic_music_page.xml app/src/main/res/drawable/ic_tab_music.xml
 grep -q "NAV_MUSIC_HIDDEN" $HC || perl -0pi -e 's/const val NAV_LIVE_HIDDEN = "nav_live_hidden"/const val NAV_LIVE_HIDDEN = "nav_live_hidden"\n    const val NAV_MUSIC_HIDDEN = "nav_music_hidden"/' $HC
@@ -23,4 +23,5 @@ cp app/src/main/res/drawable/ic_music_page.xml app/src/main/res/drawable/ic_pref
 grep -q "val navMusicHidden" $SP || perl -0pi -e 's/val navLiveHidden: Boolean,/val navLiveHidden: Boolean,\n    val navMusicHidden: Boolean,/' $SP
 grep -q "NAV_MUSIC_HIDDEN, false" $SP || perl -0pi -e 's/navLiveHidden = KV\.get\(HawkConfig\.NAV_LIVE_HIDDEN, false\),/navLiveHidden = KV.get(HawkConfig.NAV_LIVE_HIDDEN, false),\n        navMusicHidden = KV.get(HawkConfig.NAV_MUSIC_HIDDEN, false),/' $SP
 python3 "$SCRIPT_DIR/insert_music_toggle.py"
+python3 "$SCRIPT_DIR/insert_music_filter.py"
 echo "=== 音乐 tab 添加完成 ==="
