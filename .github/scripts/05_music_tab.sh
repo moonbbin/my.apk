@@ -10,7 +10,7 @@ SX=app/src/main/res/values/strings.xml
 echo "=== 添加音乐 tab ==="
 # Python 脚本已提取为同目录的 insert_music_toggle.py
 perl -0pi -e 's/FOLLOWING\(R\.string\.tab_following, R\.drawable\.ic_tab_following\),\n    SETTINGS/FOLLOWING(R.string.tab_following, R.drawable.ic_tab_following),\n    MUSIC(R.string.tab_music, R.drawable.ic_tab_music),\n    SETTINGS/' $MS
-perl -0pi -e 's/AppTab\.FOLLOWING -> FollowingPage\(contentPadding = pageContentPadding\)/AppTab.FOLLOWING -> FollowingPage(contentPadding = pageContentPadding)\n                                AppTab.MUSIC -> { val ctx = LocalContext.current; LaunchedEffect(Unit) { ctx.startActivity(Intent(ctx, LxSourceSettingsActivity::class.java)) }; Box(modifier = Modifier.fillMaxSize()) }/' $MS
+perl -0pi -e 's/AppTab\.FOLLOWING -> FollowingPage\(contentPadding = pageContentPadding\)/AppTab.FOLLOWING -> FollowingPage(contentPadding = pageContentPadding)\n                                AppTab.MUSIC -> { val ctx = LocalContext.current; Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) { androidx.compose.material3.Button(onClick = { ctx.startActivity(Intent(ctx, LxSourceSettingsActivity::class.java)) }) { androidx.compose.material3.Text("进入音乐源管理") } } }/' $MS
 grep -q "import android.content.Intent" $MS || sed -i '1i import android.content.Intent' $MS
 grep -q "import androidx.compose.ui.platform.LocalContext" $MS || sed -i '/import android.content.Intent/a import androidx.compose.ui.platform.LocalContext' $MS
 grep -q "com.github.tvbox.osc.ui.activity.MusicPlayerActivity" $MS || sed -i '/import androidx.compose.ui.platform.LocalContext/a import com.github.tvbox.osc.ui.activity.LxSourceSettingsActivity' $MS
