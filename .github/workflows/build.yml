@@ -40,6 +40,8 @@ jobs:
         run: bash .github/scripts/11_music_engine.sh
       - name: 写入音乐 UI
         run: bash .github/scripts/12_music_ui.sh
+      - name: 添加音乐播放器
+        run: bash .github/scripts/13_music_player.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
