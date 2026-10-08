@@ -30,7 +30,21 @@ with open(f, 'w') as fh: fh.write(c)
 grep -q "settings_nav_music_hidden" $SX || sed -i 's|</resources>|    <string name="settings_nav_music_hidden">导航栏隐藏音乐</string>\n    <string name="settings_nav_music_hidden_subtitle">开启后导航栏不再显示音乐入口</string>\n</resources>|' $SX
 cp app/src/main/res/drawable/ic_music_page.xml app/src/main/res/drawable/ic_pref_nav_music_hidden.xml
 
-# SettingsPage.kt
+# SettingsPage.kt - 添加 navMusicHidden 属性
+SP=app/src/main/java/com/github/tvbox/osc/ui/page/SettingsPage.kt
+python3 << 'PYEOF2'
+sp_file = "app/src/main/java/com/github/tvbox/osc/ui/page/SettingsPage.kt"
+with open(sp_file, 'r', encoding='utf-8') as f:
+    c = f.read()
+if "val navMusicHidden" not in c:
+    c = c.replace("val navLiveHidden: Boolean,", "val navLiveHidden: Boolean,\n    val navMusicHidden: Boolean,")
+    print("SettingsState.navMusicHidden 已添加")
+if "NAV_MUSIC_HIDDEN, false" not in c:
+    c = c.replace("navLiveHidden = KV.get(HawkConfig.NAV_LIVE_HIDDEN, false),", "navLiveHidden = KV.get(HawkConfig.NAV_LIVE_HIDDEN, false),\n        navMusicHidden = KV.get(HawkConfig.NAV_MUSIC_HIDDEN, false),")
+    print("KV.get 已添加")
+with open(sp_file, 'w', encoding='utf-8') as f:
+    f.write(c)
+PYEOF2
 python3 "$SCRIPT_DIR/insert_music_toggle.py"
 python3 "$SCRIPT_DIR/insert_music_filter.py"
 
