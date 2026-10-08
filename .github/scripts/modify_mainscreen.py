@@ -52,6 +52,10 @@ if "LxSourceSettingsActivity" not in content or "import com.github.tvbox.osc.ui.
     content = content.replace("import androidx.compose.ui.res.stringResource\n", "import androidx.compose.ui.res.stringResource\nimport com.github.tvbox.osc.ui.activity.LxSourceSettingsActivity\n")
     print("✅ LxSourceSettingsActivity import 已添加")
 
+if "import com.github.tvbox.osc.ui.activity.MusicHomeActivity" not in content:
+    content = content.replace("import com.github.tvbox.osc.ui.activity.LxSourceSettingsActivity\n", "import com.github.tvbox.osc.ui.activity.LxSourceSettingsActivity\nimport com.github.tvbox.osc.ui.activity.MusicHomeActivity\n")
+    print("✅ MusicHomeActivity import 已添加")
+
 # Box, Alignment, Button, Text - 使用完全限定名，已在代码中写全路径，无需 import
 # 但为了简洁，代码中使用了 Box, Alignment, Button, Text 的短名，需要 import
 for imp, _ in imports[3:]:
