@@ -64,7 +64,7 @@ jobs:
           cd avbox
           set -e
           MS=app/src/main/java/com/github/tvbox/osc/ui/page/MainScreen.kt
-          HC=app/src/main/java/com/github/tvbox/osc/util/HawkConfig.java
+          HC=app/src/main/java/com/github/tvbox/osc/util/HawkConfig.kt
           SP=app/src/main/java/com/github/tvbox/osc/ui/page/SettingsPage.kt
           PP=app/src/main/java/com/github/tvbox/osc/ui/page/PreferenceSettingsPage.kt
           SX=app/src/main/res/values/strings.xml
@@ -78,7 +78,7 @@ jobs:
           grep -q "import androidx.compose.foundation.layout.Box" $MS || sed -i '/import com.github.tvbox.osc.ui.activity.MusicPlayerActivity/a import androidx.compose.foundation.layout.Box' $MS
           grep -q 'name="tab_music"' $SX || sed -i 's|<string name="tab_home">首页</string>|<string name="tab_home">首页</string>\n    <string name="tab_music">音乐</string>|' $SX
           cp app/src/main/res/drawable/ic_music_page.xml app/src/main/res/drawable/ic_tab_music.xml
-          grep -q "NAV_MUSIC_HIDDEN" $HC || perl -0pi -e 's/public static final String NAV_LIVE_HIDDEN = "nav_live_hidden";/public static final String NAV_LIVE_HIDDEN = "nav_live_hidden";\n    public static final String NAV_MUSIC_HIDDEN = "nav_music_hidden";/' $HC
+          grep -q "NAV_MUSIC_HIDDEN" $HC || perl -0pi -e 's/const val NAV_LIVE_HIDDEN = "nav_live_hidden"/const val NAV_LIVE_HIDDEN = "nav_live_hidden"\n    const val NAV_MUSIC_HIDDEN = "nav_music_hidden"/' $HC
           grep -q "settings_nav_music_hidden" $SX || sed -i 's|</resources>|    <string name="settings_nav_music_hidden">导航栏隐藏音乐</string>\n    <string name="settings_nav_music_hidden_subtitle">开启后导航栏不再显示音乐入口</string>\n</resources>|' $SX
           cp app/src/main/res/drawable/ic_music_page.xml app/src/main/res/drawable/ic_pref_nav_music_hidden.xml
           grep -q "val navMusicHidden" $SP || perl -0pi -e 's/val navLiveHidden: Boolean,/val navLiveHidden: Boolean,\n    val navMusicHidden: Boolean,/' $SP
