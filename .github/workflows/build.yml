@@ -46,6 +46,8 @@ jobs:
         run: bash .github/scripts/14_music_search.sh
       - name: 添加音乐专区
         run: bash .github/scripts/15_music_home.sh
+      - name: App 启动预热音乐引擎
+        run: bash .github/scripts/16_music_startup.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
