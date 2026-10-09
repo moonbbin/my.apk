@@ -1,35 +1,40 @@
 #!/bin/bash
-# 17_music_cover.sh - 真实歌曲封面（Coil + 酷狗封面API）
+# 17_music_cover.sh - 真实歌曲封面（Coil 依赖）
 set -e
 cd avbox
 
 echo "=== 添加 Coil 依赖 ==="
-GRADLE_FILE="app/build.gradle"
-if ! grep -q "coil-compose" "$GRADLE_FILE"; then
-  # 在 dependencies 块里加
-  python3 << 'PYEOF'
-with open('app/build.gradle', 'r') as f:
-    content = f.read()
-# 找 dependencies { 的第一行 implementation，加 Coil
-old = "dependencies {"
-new = """dependencies {
-    implementation("io.coil-kt:coil-compose:2.5.0")"""
-if old in content:
-    content = content.replace(old, new, 1)
-    with open('app/build.gradle', 'w') as f:
-        f.write(content)
-    print("✅ Coil 依赖已加")
-else:
-    print("❌ 没找到 dependencies")
-PYEOF
+
+# 找 Gradle 文件（兼容 .gradle 和 .gradle.kts）
+if [ -f "app/build.gradle.kts" ]; then
+  GRADLE_FILE="app/build.gradle.kts"
+  COIL_DEP='    implementation("io.coil-kt:coil-compose:2.5.0")'
+elif [ -f "app/build.gradle" ]; then
+  GRADLE_FILE="app/build.gradle"
+  COIL_DEP="    implementation 'io.coil-kt:coil-compose:2.5.0'"
 else
-  echo "Coil 已存在，跳过"
+  echo "❌ 找不到 app/build.gradle(.kts)"
+  ls app/ | head -10
+  exit 1
 fi
 
-echo "=== 修改播放器：获取并显示真实封面 ==="
-# 这里需要修改 LxPlayerActivity.kt，逻辑：
-# 1. 用 hash 调酷狗 API 拿 album_img
-# 2. 用 Coil AsyncImage 显示
-# 具体实现由 14 脚本里的 kt 文件修改（避免重复 base64）
-echo "封面逻辑需在 14_music_search.sh 的 kt 里实现"
+echo "Gradle 文件: $GRADLE_FILE"
+
+if grep -q "coil-compose" "$GRADLE_FILE"; then
+  echo "Coil 已存在，跳过"
+else
+  # 在 dependencies { 后加一行
+  if grep -q "dependencies {" "$GRADLE_FILE"; then
+    # 用 awk 在 dependencies { 后插入
+    awk -v dep="$COIL_DEP" '
+      /dependencies \{/ && !done { print; print dep; done=1; next }
+      { print }
+    ' "$GRADLE_FILE" > /tmp/build.gradle.tmp && mv /tmp/build.gradle.tmp "$GRADLE_FILE"
+    echo "✅ Coil 依赖已加"
+  else
+    echo "❌ 没找到 dependencies 块"
+    exit 1
+  fi
+fi
+
 echo "=== 完成 ==="
