@@ -50,6 +50,8 @@ jobs:
         run: bash .github/scripts/16_music_startup.sh
       - name: 真实封面依赖
         run: bash .github/scripts/17_music_cover.sh
+      - name: pyramid pip 重试
+        run: bash .github/scripts/19_pyramid_pip_retry.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
