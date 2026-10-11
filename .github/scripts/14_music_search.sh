@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 cd avbox
+PKG_DIR="app/src/main/java/com/github/tvbox/osc/ui/activity"
 echo "cGFja2FnZSBjb20uZ2l0aHViLnR2Ym94Lm9zYy51aS5hY3Rpdml0eQoKaW1wb3J0IGFuZHJvaWQu
 dXRpbC5Mb2cKaW1wb3J0IGtvdGxpbnguY29yb3V0aW5lcy5EaXNwYXRjaGVycwppbXBvcnQga290
 bGlueC5jb3JvdXRpbmVzLmFzeW5jCmltcG9ydCBrb3RsaW54LmNvcm91dGluZXMuYXdhaXRBbGwK
