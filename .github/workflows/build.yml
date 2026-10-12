@@ -83,7 +83,7 @@ jobs:
           cp "$APK" "../qingfeng_${{ inputs.version }}.apk"
       - name: 发布到 Releases
         if: success()
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.version }}
           name: 清风 ${{ inputs.version }}
