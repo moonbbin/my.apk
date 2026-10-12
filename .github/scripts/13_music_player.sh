@@ -307,22 +307,17 @@ if ! grep -q "LxPlayerActivity" "$MANIFEST"; then
     python3 << 'PYEOF2'
 mf = "app/src/main/AndroidManifest.xml"
 c = open(mf, encoding='utf-8').read()
-o1 = '<activity android:name=".ui.activity.LxSourceSettingsActivity"'
-if o1 in c and "LxPlayerActivity" not in c:
-    c = c.replace(o1, o1 + ' />\n        <activity android:name=".ui.activity.LxPlayerActivity"')
-    o2 = '<activity android:name=".ui.activity.LxPlayerActivity"'
-    if 'LxHistoryActivity' not in c:
-        c = c.replace(o2, o2 + '\n        <activity android:name=".ui.activity.LxHistoryActivity"')
-    open(mf, 'w', encoding='utf-8').write(c)
-    print("LxPlayerActivity 已注册")
-c = open(mf, encoding='utf-8').read()
+for act in [".ui.activity.LxPlayerActivity", ".ui.activity.LxHistoryActivity"]:
+    if act not in c:
+        c = c.replace('</application>', '        <activity android:name="%s" android:exported="false" />\n    </application>' % act, 1)
+        print(act, "已注册")
 rt = '<receiver android:name=".ui.activity.LxNotificationReceiver"'
 if rt not in c:
-    c = c.replace('</application>', '        ' + rt + ' android:exported="false">\n            <intent-filter>\n                <action android:name="com.github.tvbox.osc.lx.ACTION_TOGGLE" />\n                <action android:name="com.github.tvbox.osc.lx.ACTION_NEXT" />\n                <action android:name="com.github.tvbox.osc.lx.ACTION_PREV" />\n                <action android:name="com.github.tvbox.osc.lx.ACTION_CLOSE" />\n            </intent-filter>\n        </receiver>\n    </application>')
+    c = c.replace('</application>', '        ' + rt + ' android:exported="false">\n            <intent-filter>\n                <action android:name="com.github.tvbox.osc.lx.ACTION_TOGGLE" />\n                <action android:name="com.github.tvbox.osc.lx.ACTION_NEXT" />\n                <action android:name="com.github.tvbox.osc.lx.ACTION_PREV" />\n                <action android:name="com.github.tvbox.osc.lx.ACTION_CLOSE" />\n            </intent-filter>\n        </receiver>\n    </application>', 1)
     print("LxNotificationReceiver 已注册")
 st = '<service android:name=".ui.activity.LxMusicService"'
 if st not in c:
-    c = c.replace('</application>', '        ' + st + ' android:exported="false" android:foregroundServiceType="mediaPlayback" />\n    </application>')
+    c = c.replace('</application>', '        ' + st + ' android:exported="false" android:foregroundServiceType="mediaPlayback" />\n    </application>', 1)
     print("LxMusicService 已注册")
 for p in ["android.permission.FOREGROUND_SERVICE", "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"]:
     if p not in c:
