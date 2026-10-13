@@ -327,6 +327,20 @@ l9NV8QQXoAJ/vIJVuO0IAdIq5n2A8dbSBiNnoTeyL52nqTEVdm6AXnCcJnAi7sctDYyM5jNISj7L6A8e
 yKLexuwfM/5i6nbLkwK8HkOdnl8sn1mcX56b8sLn7OZgvHV4ZWGm9Pzp0uQzcc1E3MD90ZS8T7BPMy2UFkQThWLGGhc0rS6VFpdW
 qkuVyWee57Jzopczac7GInkrcV22LYtFKJKnBZmL3ZH/ARHMxFzYkwAA"
 
+# 解码写入播放器文件（blob0=LxPlayerActivity.kt, blob1=LxPlayerManager.kt）
+export SCRIPT_ABS="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+python3 << PYEOF_DECODE
+import re, base64, gzip, os
+with open(os.environ.get("SCRIPT_ABS", "13_music_player.sh"), encoding="utf-8") as f:
+    c = f.read()
+blobs = re.findall(r'echo "(H4s[A-Za-z0-9+/=\n]+)"', c)
+names = ["LxPlayerActivity.kt", "LxPlayerManager.kt"]
+pkg = "app/src/main/java/com/github/tvbox/osc/ui/activity"
+for blob, name in zip(blobs, names):
+    data = gzip.decompress(base64.b64decode(blob.replace("\n", "")))
+    open(os.path.join(pkg, name), "wb").write(data)
+    print(name, "已写入", len(data), "字节")
+PYEOF_DECODE
 echo "LxPlayerManager.kt 已更新"
 
 # 注册 LxPlayerActivity / Receiver / Service 到 AndroidManifest.xml
