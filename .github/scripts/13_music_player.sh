@@ -1,5 +1,8 @@
 #!/bin/bash
 set -e
+# 先解析脚本自身绝对路径（必须在 cd avbox 之前，否则 dirname 的相对路径会错）
+SCRIPT_ABS="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+export SCRIPT_ABS
 cd avbox
 echo "=== 播放器 Spotify 风格重写 ==="
 PKG_DIR="app/src/main/java/com/github/tvbox/osc/ui/activity"
@@ -328,7 +331,7 @@ yKLexuwfM/5i6nbLkwK8HkOdnl8sn1mcX56b8sLn7OZgvHV4ZWGm9Pzp0uQzcc1E3MD90ZS8T7BPMy2U
 qkuVyWee57Jzopczac7GInkrcV22LYtFKJKnBZmL3ZH/ARHMxFzYkwAA"
 
 # 解码写入播放器文件（blob0=LxPlayerActivity.kt, blob1=LxPlayerManager.kt）
-export SCRIPT_ABS="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+# （SCRIPT_ABS 已在脚本开头解析，此处不再重复）
 python3 << PYEOF_DECODE
 import re, base64, gzip, os
 with open(os.environ.get("SCRIPT_ABS", "13_music_player.sh"), encoding="utf-8") as f:
