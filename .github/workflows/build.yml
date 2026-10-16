@@ -54,6 +54,8 @@ jobs:
         run: bash .github/scripts/19_pyramid_pip_retry.sh
       - name: 接入音乐全局主题
         run: bash .github/scripts/20_music_theme.sh
+      - name: 音乐音质验货
+        run: bash .github/scripts/21_music_bitrate_guard.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
