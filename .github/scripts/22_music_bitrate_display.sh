@@ -18,6 +18,7 @@ with open(path, encoding="utf-8") as f:
 
 MARK_V6 = "// 验货实测优先显示（22）+ v6 全档位中文标签"
 MARK_V5 = "// 验货实测优先显示（22）+ v5 Hi-Res 自诊断"
+MARK_V42 = "// 验货实测优先显示（22）+ v4.2 内联自诊断"
 if MARK_V6 in src:
     print("跳过（已是 v6）: " + path)
     raise SystemExit(0)
@@ -80,9 +81,48 @@ if MARK_V5 in src:
                 break
         i += 1
     print("v5 → v6 替换完成")
+elif MARK_V42 in src:
+    # v4.2 → v6：先升到 v5 形态，再套 v6 中文标签
+    print("检测到 v4.2，升级 → v6")
+    # v4.2 的块结构与 v5 相同，直接替换为 v6
+    start = src.find(MARK_V42)
+    idx = src.find("text = when {", start)
+    depth = 0
+    i = src.find("{", idx)
+    while i < len(src):
+        if src[i] == "{":
+            depth += 1
+        elif src[i] == "}":
+            depth -= 1
+            if depth == 0:
+                end = src.find(",", i) + 1
+                old_block = src[start:end]
+                src = src.replace(old_block, v6_block, 1)
+                break
+        i += 1
+    print("v4.2 → v6 完成")
 else:
-    print("错误: 未找到 v5 标记，无法升级到 v6。请先打 v5。")
-    sys.exit(1)
+    # 全新文件：直接打 v6（兼容 v1_old / v1_new_old 两种锚点）
+    v1_old = """                        text = when {
+                            bitrate > 0 -> "${LxPlayerManager.qualityLabel(currentQuality)} · ${bitrate}kbps"
+                            measuredBitrate > 0 -> "${LxPlayerManager.qualityLabel(currentQuality)} · 实测约${measuredBitrate}kbps"
+                            else -> LxPlayerManager.qualityLabel(currentQuality)
+                        },"""
+    v1_new_old = """                        // 验货实测优先显示（22）：v2 测出的真实码率优先于 ExoPlayer track 估算值
+                        text = when {
+                            measuredBitrate > 0 -> "${LxPlayerManager.qualityLabel(currentQuality)} · 实测约${measuredBitrate}kbps"
+                            bitrate > 0 -> "${LxPlayerManager.qualityLabel(currentQuality)} · ${bitrate}kbps"
+                            else -> LxPlayerManager.qualityLabel(currentQuality)
+                        },"""
+    if v1_old in src:
+        print("全新文件，直接打 v6")
+        src = src.replace(v1_old, v6_block, 1)
+    elif v1_new_old in src:
+        print("检测到 v1，升级 → v6")
+        src = src.replace(v1_new_old, v6_block, 1)
+    else:
+        print("错误: v6 锚点未命中")
+        sys.exit(1)
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(src)
