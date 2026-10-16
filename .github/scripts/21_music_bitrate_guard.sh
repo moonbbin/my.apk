@@ -1,5 +1,5 @@
 #!/bin/bash
-# 21 - 播放器音质验货（防糊）：v6
+# 21 - 播放器音质验货（防糊）：v7
 # v1：请求高音质时 Range 取前 64KB 验货（FLAC 解析 STREAMINFO 采样精度、MP3 解析帧头
 #     平均码率），实测档位必须 >= 请求档位才播放，不达标换平台继续试；全部试完无达标则
 #     降级播放档位最高的备选（不断歌）。
@@ -19,7 +19,7 @@
 set -e
 cd avbox
 
-echo "=== 播放器音质验货补丁 v6 ==="
+echo "=== 播放器音质验货补丁 v7 ==="
 
 python3 << 'PYEOF'
 import sys
@@ -810,7 +810,38 @@ else:
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(src)
-print("=== 音质验货补丁 v6 完成 ===")
+print("=== 音质验货补丁 v7 完成 ===")
 PYEOF
+
+# ===== v7：音质请求顺序升级（Hi-Res 优先拉取） =====
+python3 << 'PYEOF_V7'
+import re
+path7 = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+with open(path7, encoding="utf-8") as f:
+    s7 = f.read()
+MARK7 = "// 音质请求顺序 v7"
+if MARK7 in s7:
+    print("v7：已是最新，跳过")
+else:
+    NEW_Q = 'listOf("master", "atmos_plus", "atmos", "hires", "flac24bit", "flac", "320k", "128k")'
+    n7 = 0
+    for pat7, rep7 in [
+        (r'listOf\("flac24bit",\s*"flac",\s*"320k",\s*"128k"\)', NEW_Q),
+        (r'arrayOf\("flac24bit",\s*"flac",\s*"320k",\s*"128k"\)', NEW_Q.replace("listOf", "arrayOf")),
+    ]:
+        c7 = len(re.findall(pat7, s7))
+        if c7:
+            s7 = re.sub(pat7, rep7, s7)
+            n7 += c7
+    if n7 > 0:
+        s7 += "\n" + MARK7 + "\n"
+        with open(path7, "w", encoding="utf-8") as f:
+            f.write(s7)
+        print(f"v7：请求顺序已升级（{n7} 处）")
+    else:
+        print("v7：未找到顺序定义，跳过（不中断构建）")
+PYEOF_V7
+# ===== v7 结束 =====
+
 
 echo "=== 完成 ==="
