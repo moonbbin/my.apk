@@ -70,6 +70,8 @@ jobs:
         run: bash .github/scripts/27_music_playlist_cover.sh
       - name: 榜单名胶囊加深
         run: bash .github/scripts/28_music_rank_capsule.sh
+      - name: 胶囊颜色修复
+        run: bash .github/scripts/29_music_rank_capsule_fix.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
