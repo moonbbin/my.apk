@@ -1,12 +1,13 @@
 #!/bin/bash
-# 22 - 播放页音质徽标 v5：Hi-Res 可疑检测
-# v5：在 v4.2 基础上新增 Hi-Res 档位的假无损检测——hires/master/atmos 等高音质
-#     若实测码率过低也标 ⚠（hires<800kbps，master/atmos<1000kbps）。
-#     与 21 v5 的档位映射（4=母带）配套。
+# 22 - 播放页音质徽标 v6：全档位中文标签 + 可疑检测
+# v6：在 v5 基础上新增——徽章显示中文标签（master→母带、atmos_plus→全景声+、
+#     atmos→全景声、hires→Hi-Res），不再显示英文原名；
+#     可疑检测覆盖全档位（master<1000、atmos系<800、hires/flac24bit<800、flac<500）。
+#     与 21 v6 的 7 档映射（6=母带 5=全景声+ 4=全景声 3=Hi-Res 2=FLAC 1=320k 0=普通）配套。
 set -e
 cd avbox
 
-echo "=== 播放页音质徽标 v5 ==="
+echo "=== 播放页音质徽标 v6 ==="
 
 python3 << 'PYEOF'
 import sys
@@ -15,33 +16,55 @@ path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
+MARK_V6 = "// 验货实测优先显示（22）+ v6 全档位中文标签"
 MARK_V5 = "// 验货实测优先显示（22）+ v5 Hi-Res 自诊断"
-MARK_V42 = "// 验货实测优先显示（22）+ v4.2 内联自诊断"
-if MARK_V5 in src:
-    print("跳过（已是 v5）: " + path)
+if MARK_V6 in src:
+    print("跳过（已是 v6）: " + path)
     raise SystemExit(0)
 
-# v5 最终形态：内联判断，含 Hi-Res 档位
-v5_block = """                        // 验货实测优先显示（22）+ v5 Hi-Res 自诊断：假无损警告
+# v6 最终形态：中文标签 + 全档位可疑检测
+v6_block = """                        // 验货实测优先显示（22）+ v6 全档位中文标签：假无损警告
                         text = when {
                             measuredBitrate > 0 -> {
-                                val lbl = LxPlayerManager.qualityLabel(currentQuality)
-                                val sus = (currentQuality == "flac" && measuredBitrate < 500) || (currentQuality in listOf("flac24bit", "hires") && measuredBitrate < 800) || (currentQuality in listOf("master", "atmos", "atmos_plus") && measuredBitrate < 1000)
+                                val rawLbl = LxPlayerManager.qualityLabel(currentQuality)
+                                // 中文标签映射（v6）：英文原名→中文
+                                val lbl = when (currentQuality) {
+                                    "master" -> "母带"
+                                    "atmos_plus" -> "全景声+"
+                                    "atmos" -> "全景声"
+                                    "hires" -> "Hi-Res"
+                                    else -> rawLbl
+                                }
+                                val sus = (currentQuality == "flac" && measuredBitrate < 500) || (currentQuality in listOf("flac24bit", "hires") && measuredBitrate < 800) || (currentQuality in listOf("atmos", "atmos_plus") && measuredBitrate < 800) || (currentQuality == "master" && measuredBitrate < 1000)
                                 if (sus) "$lbl · 实测约${measuredBitrate}kbps ⚠" else "$lbl · 实测约${measuredBitrate}kbps"
                             }
                             bitrate > 0 -> {
-                                val lbl = LxPlayerManager.qualityLabel(currentQuality)
-                                val sus = (currentQuality == "flac" && bitrate < 500) || (currentQuality in listOf("flac24bit", "hires") && bitrate < 800) || (currentQuality in listOf("master", "atmos", "atmos_plus") && bitrate < 1000)
+                                val rawLbl = LxPlayerManager.qualityLabel(currentQuality)
+                                val lbl = when (currentQuality) {
+                                    "master" -> "母带"
+                                    "atmos_plus" -> "全景声+"
+                                    "atmos" -> "全景声"
+                                    "hires" -> "Hi-Res"
+                                    else -> rawLbl
+                                }
+                                val sus = (currentQuality == "flac" && bitrate < 500) || (currentQuality in listOf("flac24bit", "hires") && bitrate < 800) || (currentQuality in listOf("atmos", "atmos_plus") && bitrate < 800) || (currentQuality == "master" && bitrate < 1000)
                                 if (sus) "$lbl · ${bitrate}kbps ⚠" else "$lbl · ${bitrate}kbps"
                             }
-                            else -> LxPlayerManager.qualityLabel(currentQuality)
+                            else -> {
+                                val rawLbl = LxPlayerManager.qualityLabel(currentQuality)
+                                when (currentQuality) {
+                                    "master" -> "母带"
+                                    "atmos_plus" -> "全景声+"
+                                    "atmos" -> "全景声"
+                                    "hires" -> "Hi-Res"
+                                    else -> rawLbl
+                                }
+                            }
                         },"""
 
-if MARK_V42 in src:
-    print("检测到 v4.2，增量升级 → v5（Hi-Res 检测）")
-    # 替换 v4.2 块为 v5 块：找到 MARK_V42 到块结束
-    start = src.find(MARK_V42)
-    # v4.2 块以 "}," 结尾
+if MARK_V5 in src:
+    print("检测到 v5，增量升级 → v6（中文标签）")
+    start = src.find(MARK_V5)
     idx = src.find("text = when {", start)
     depth = 0
     i = src.find("{", idx)
@@ -53,17 +76,17 @@ if MARK_V42 in src:
             if depth == 0:
                 end = src.find(",", i) + 1
                 old_block = src[start:end]
-                src = src.replace(old_block, v5_block, 1)
+                src = src.replace(old_block, v6_block, 1)
                 break
         i += 1
-    print("v4.2 → v5 替换完成")
+    print("v5 → v6 替换完成")
 else:
-    print("错误: 未找到 v4.2 标记，无法升级到 v5。请先打 v4.2。")
+    print("错误: 未找到 v5 标记，无法升级到 v6。请先打 v5。")
     sys.exit(1)
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(src)
-print("v5 完成: " + path)
+print("v6 完成: " + path)
 PYEOF
 
 echo "=== 完成 ==="
