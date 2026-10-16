@@ -1,5 +1,5 @@
 #!/bin/bash
-# 21 - 播放器音质验货（防糊）：v3
+# 21 - 播放器音质验货（防糊）：v4
 # v1：请求高音质时 Range 取前 64KB 验货（FLAC 解析 STREAMINFO 采样精度、MP3 解析帧头
 #     平均码率），实测档位必须 >= 请求档位才播放，不达标换平台继续试；全部试完无达标则
 #     降级播放档位最高的备选（不断歌）。
@@ -9,6 +9,8 @@
 #     估算，仍拿不到则扫描帧同步点取中位帧长兜底，保证"实测约"能显示；
 #     新增假无损识别：FLAC 容器但实测码率 <400kbps 时 tier 降为 0（普通），使验货继续
 #     寻找真无损；kbps=0（未知）时不降档，避免误杀。
+# v4：新增 isSuspiciousLossless() 自诊断函数，供播放页徽标使用；
+#     FLAC<500kbps 或 24bit<800kbps 时标记为可疑（假无损/转码）。
 # 幂等：已打过 v3 则跳过；支持 v2/v1 → v3 增量升级；锚点未命中则报错退出。
 set -e
 cd avbox
@@ -23,6 +25,21 @@ with open(path, encoding="utf-8") as f:
     src = f.read()
 
 MARK_V3 = "// ============ 音质验货（防糊）v3 ============"
+MARK_V4 = "// ============ 音质验货（防糊）v4：假无损自诊断 ============"
+
+V4_FUNC = '''
+    // ============ 音质验货（防糊）v4：假无损自诊断 ============
+    // FLAC 容器但码率过低时标记为可疑，供 UI 徽标自诊断使用。
+    // 16bit FLAC 正常 700kbps+，低于 500 可疑；24bit 正常 1000kbps+，低于 800 可疑。
+    fun isSuspiciousLossless(quality: String, bitrateKbps: Int): Boolean {
+        if (bitrateKbps <= 0) return false
+        return when (quality) {
+            "flac" -> bitrateKbps < 500
+            "flac24bit" -> bitrateKbps < 800
+            else -> false
+        }
+    }
+'''
 MARK_V2 = "// ============ 音质验货（防糊）v2 ============"
 MARK_V1 = "// ============ 音质验货（防糊） ============"
 
@@ -685,8 +702,14 @@ def rep(old, new):
         sys.exit(1)
     src = src.replace(old, new, 1)
 
-if MARK_V3 in src:
-    print("跳过（已是 v3）: " + path)
+if MARK_V4 in src:
+    print("跳过（已是 v4）: " + path)
+elif MARK_V3 in src:
+    print("检测到 v3，增量升级 → v4")
+    # 在 v3 标记后插入 v4 函数
+    if MARK_V4 not in src:
+        src = src.replace(MARK_V3, MARK_V3 + V4_FUNC, 1)
+    print("v3 → v4 增量升级完成")
 elif MARK_V2 in src:
     print("检测到 v2，增量升级 → v3")
     rep(V2_FNS, NEW_FNS_V3)   # 函数块整体替换（含标记升级为 v3、帧长估算、假无损降档）
