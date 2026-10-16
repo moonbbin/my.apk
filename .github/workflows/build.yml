@@ -68,6 +68,8 @@ jobs:
         run: bash .github/scripts/26_music_rank_polish.sh
       - name: 歌单封面 Coil
         run: bash .github/scripts/27_music_playlist_cover.sh
+      - name: 榜单名胶囊加深
+        run: bash .github/scripts/28_music_rank_capsule.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
