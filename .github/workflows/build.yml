@@ -58,6 +58,8 @@ jobs:
         run: bash .github/scripts/21_music_bitrate_guard.sh
       - name: 实测码率优先显示
         run: bash .github/scripts/22_music_bitrate_display.sh
+      - name: 主题颜色源统一
+        run: bash .github/scripts/23_music_theme_unify.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
