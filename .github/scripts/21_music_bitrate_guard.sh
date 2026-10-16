@@ -1,5 +1,5 @@
 #!/bin/bash
-# 21 - 播放器音质验货（防糊）：v4
+# 21 - 播放器音质验货（防糊）：v5
 # v1：请求高音质时 Range 取前 64KB 验货（FLAC 解析 STREAMINFO 采样精度、MP3 解析帧头
 #     平均码率），实测档位必须 >= 请求档位才播放，不达标换平台继续试；全部试完无达标则
 #     降级播放档位最高的备选（不断歌）。
@@ -9,13 +9,15 @@
 #     估算，仍拿不到则扫描帧同步点取中位帧长兜底，保证"实测约"能显示；
 #     新增假无损识别：FLAC 容器但实测码率 <400kbps 时 tier 降为 0（普通），使验货继续
 #     寻找真无损；kbps=0（未知）时不降档，避免误杀。
-# v4：新增 isSuspiciousLossless() 自诊断函数，供播放页徽标使用；
-#     FLAC<500kbps 或 24bit<800kbps 时标记为可疑（假无损/转码）。
-# 幂等：已打过 v3 则跳过；支持 v2/v1 → v3 增量升级；锚点未命中则报错退出。
+# v4：新增 isSuspiciousLossless() 自诊断函数（FLAC<500kbps 或 24bit<800kbps 判可疑），
+#     供 22 号徽标显示 ⚠ 警告（22 v4.2 已内联，此函数为死代码，保留无害）。
+# v5：新增 Hi-Res 档位——tierOfQuality 识别 master/atmos_plus/atmos/hires 为 4 档（母带），
+#     tierLabel 4→"母带"；解决脚本支持 Hi-Res 但 App 不认的问题。
+# 幂等：已打过 v5 则跳过；支持 v3/v4 → v5 增量升级；v2/v1 → v5 全量升级；锚点未命中则报错退出。
 set -e
 cd avbox
 
-echo "=== 播放器音质验货补丁 v3 ==="
+echo "=== 播放器音质验货补丁 v5 ==="
 
 python3 << 'PYEOF'
 import sys
@@ -24,22 +26,8 @@ path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
+MARK_V5 = "// ============ 音质验货（防糊）v5 ============"
 MARK_V3 = "// ============ 音质验货（防糊）v3 ============"
-MARK_V4 = "// ============ 音质验货（防糊）v4：假无损自诊断 ============"
-
-V4_FUNC = '''
-    // ============ 音质验货（防糊）v4：假无损自诊断 ============
-    // FLAC 容器但码率过低时标记为可疑，供 UI 徽标自诊断使用。
-    // 16bit FLAC 正常 700kbps+，低于 500 可疑；24bit 正常 1000kbps+，低于 800 可疑。
-    fun isSuspiciousLossless(quality: String, bitrateKbps: Int): Boolean {
-        if (bitrateKbps <= 0) return false
-        return when (quality) {
-            "flac" -> bitrateKbps < 500
-            "flac24bit" -> bitrateKbps < 800
-            else -> false
-        }
-    }
-'''
 MARK_V2 = "// ============ 音质验货（防糊）v2 ============"
 MARK_V1 = "// ============ 音质验货（防糊） ============"
 
@@ -325,12 +313,13 @@ V2_FNS = '''
     }
 '''
 NEW_FNS_V3 = '''
-    // ============ 音质验货（防糊）v3 ============
+    // ============ 音质验货（防糊）v5 ============
     // 请求高音质时，用文件头实测直链真实档位：不达标就换平台继续试；
     // 实测档位与码率回传 UI，替换原来靠文件魔数猜的假标签。
-    // 档位：3=Hi-Res(24bit FLAC) 2=FLAC/无损 1=320k档 0=普通；-1=无法探测
+    // 档位：4=母带(hires/atmos/master) 3=Hi-Res(24bit FLAC) 2=FLAC/无损 1=320k档 0=普通；-1=无法探测
 
     private fun tierOfQuality(q: String): Int = when (q) {
+        "master", "atmos_plus", "atmos", "hires" -> 4 // 母带/全景声：最高档
         "flac24bit" -> 3
         "flac" -> 2
         "320k" -> 1
@@ -341,6 +330,7 @@ NEW_FNS_V3 = '''
     // 注意 qualityLabel() 对 "Hi-Res"/"FLAC"/"普通"/"未知" 原样返回；"320k" 已在
     // qualityLabel 中修正为显示 "320k"（原为"HQ"），保证与枚举一致。
     private fun tierLabel(tier: Int): String = when (tier) {
+        4 -> "母带"
         3 -> "Hi-Res"
         2 -> "FLAC"
         1 -> "320k"
@@ -702,20 +692,51 @@ def rep(old, new):
         sys.exit(1)
     src = src.replace(old, new, 1)
 
-if MARK_V4 in src:
-    print("跳过（已是 v4）: " + path)
+if MARK_V5 in src:
+    print("跳过（已是 v5）: " + path)
 elif MARK_V3 in src:
-    print("检测到 v3，增量升级 → v4")
-    # 在 v3 标记后插入 v4 函数
-    if MARK_V4 not in src:
-        src = src.replace(MARK_V3, MARK_V3 + V4_FUNC, 1)
-    print("v3 → v4 增量升级完成")
+    print("检测到 v3/v4，增量升级 → v5（Hi-Res 档位）")
+    # v5 档位映射（targeted 替换，保留 v4 的 isSuspiciousLossless）
+    OLD_TIER_V3 = '''    private fun tierOfQuality(q: String): Int = when (q) {
+        "flac24bit" -> 3
+        "flac" -> 2
+        "320k" -> 1
+        else -> 0 // 128k 及未知：底线档，来者不拒
+    }'''
+    NEW_TIER_V5 = '''    private fun tierOfQuality(q: String): Int = when (q) {
+        "master", "atmos_plus", "atmos", "hires" -> 4 // 母带/全景声：最高档
+        "flac24bit" -> 3
+        "flac" -> 2
+        "320k" -> 1
+        else -> 0 // 128k 及未知：底线档，来者不拒
+    }'''
+    OLD_LABEL_V3 = '''    private fun tierLabel(tier: Int): String = when (tier) {
+        3 -> "Hi-Res"
+        2 -> "FLAC"
+        1 -> "320k"
+        else -> "普通"
+    }'''
+    NEW_LABEL_V5 = '''    private fun tierLabel(tier: Int): String = when (tier) {
+        4 -> "母带"
+        3 -> "Hi-Res"
+        2 -> "FLAC"
+        1 -> "320k"
+        else -> "普通"
+    }'''
+    if OLD_TIER_V3 in src:
+        src = src.replace(OLD_TIER_V3, NEW_TIER_V5)
+        print("  tierOfQuality → v5")
+    if OLD_LABEL_V3 in src:
+        src = src.replace(OLD_LABEL_V3, NEW_LABEL_V5)
+        print("  tierLabel → v5")
+    src = src.replace(MARK_V3, MARK_V5)
+    print("v3/v4 → v5 增量升级完成")
 elif MARK_V2 in src:
-    print("检测到 v2，增量升级 → v3")
-    rep(V2_FNS, NEW_FNS_V3)   # 函数块整体替换（含标记升级为 v3、帧长估算、假无损降档）
-    print("v2 → v3 增量升级完成")
+    print("检测到 v2，增量升级 → v5")
+    rep(V2_FNS, NEW_FNS_V3)   # 函数块整体替换（含标记升级为 v5、Hi-Res 档位）
+    print("v2 → v5 增量升级完成")
 elif MARK_V1 in src:
-    print("检测到 v1，增量升级 → v3")
+    print("检测到 v1，增量升级 → v5")
     rep(OLD_FNS_V1, NEW_FNS_V3)
     rep(OLD_ONSUCC, NEW_ONSUCC)
     rep(OLD_FALLBACK, NEW_FALLBACK)
@@ -723,9 +744,9 @@ elif MARK_V1 in src:
         "                var bestTier = -1\n                var bestKbps = 0\n")
     if HQ_ANCHOR in src:
         rep(HQ_ANCHOR, HQ_NEW)
-    print("v1 → v3 增量升级完成")
+    print("v1 → v5 增量升级完成")
 else:
-    print("全新文件，走全量 v3 补丁")
+    print("全新文件，走全量 v5 补丁")
     rep(ANCHOR1, ANCHOR1 + NEW_FNS_V3)
     rep(ANCHOR2, ANCHOR2 + NEW_VARS_FULL)
     rep(ANCHOR3, NEW_ONSUCC)
@@ -736,7 +757,7 @@ else:
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(src)
-print("=== 音质验货补丁 v3 完成 ===")
+print("=== 音质验货补丁 v5 完成 ===")
 PYEOF
 
 echo "=== 完成 ==="
