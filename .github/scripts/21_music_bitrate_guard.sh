@@ -1,5 +1,5 @@
 #!/bin/bash
-# 21 - 播放器音质验货（防糊）：v7
+# 21 - 播放器音质验货（防糊）：v8
 # v1：请求高音质时 Range 取前 64KB 验货（FLAC 解析 STREAMINFO 采样精度、MP3 解析帧头
 #     平均码率），实测档位必须 >= 请求档位才播放，不达标换平台继续试；全部试完无达标则
 #     降级播放档位最高的备选（不断歌）。
@@ -843,5 +843,35 @@ else:
 PYEOF_V7
 # ===== v7 结束 =====
 
+
+
+# ===== v8：音质顺序全文件扫描（宽松匹配） =====
+python3 << 'PYEOF_V8SCAN'
+import re, sys
+p8 = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+with open(p8, encoding="utf-8") as f:
+    s8 = f.read()
+M8 = "// 音质请求顺序 v8"
+if M8 in s8:
+    print("v8：已是最新，跳过")
+    sys.exit(0)
+pat8 = re.compile(r'(listOf|arrayOf|setOf)\s*\(\s*"flac24bit"\s*,\s*"flac"\s*,\s*"320k"\s*(,\s*"128k"\s*)?\)', re.MULTILINE)
+def r8(m):
+    fn8 = m.group(1)
+    t8 = ', "128k"' if m.group(2) else ''
+    return f'{fn8}("master", "atmos_plus", "atmos", "hires", "flac24bit", "flac", "320k"{t8})'
+s8_new, n8 = pat8.subn(r8, s8)
+if n8 > 0:
+    s8_new += "\n" + M8 + "\n"
+    with open(p8, "w", encoding="utf-8") as f:
+        f.write(s8_new)
+    print(f"v8：质量序列已升级 {n8} 处")
+else:
+    print("v8：未找到序列，跳过（不中断）")
+    s8 += "\n" + M8 + " // 未命中\n"
+    with open(p8, "w", encoding="utf-8") as f:
+        f.write(s8)
+PYEOF_V8SCAN
+# ===== v8 结束 =====
 
 echo "=== 完成 ==="
