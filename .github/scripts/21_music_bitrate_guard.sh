@@ -1,5 +1,5 @@
 #!/bin/bash
-# 21 - 播放器音质验货（防糊）：v9
+# 21 - 播放器音质验货（防糊）：v10
 # ============================================================================
 # 版本导航（v1→v9 一句话）：
 #   v1：Range 取前 64KB 验货（FLAC 解析 STREAMINFO、MP3 解析帧头），实测档位须≥请求档
@@ -911,5 +911,51 @@ else:
     print("v9：未找到锚点，跳过（不中断）")
 PYEOF_V9
 # ===== v9 结束 =====
+
+
+# ===== v10：默认偏好 master =====
+python3 << 'PYEOF'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [v10] default quality = master"
+if MARK in src:
+    print("跳过（已是 v10）")
+    sys.exit(0)
+
+OLD = '''    fun getPreferredQuality(): String {
+        return try {
+            val ctx = appContext ?: return "flac24bit"
+            val prefs = ctx.getSharedPreferences("music_quality", android.content.Context.MODE_PRIVATE)
+            prefs.getString("music_quality", "flac24bit") ?: "flac24bit"
+        } catch (e: Exception) {
+            "flac24bit"
+        }
+    }'''
+
+NEW = '''    fun getPreferredQuality(): String {
+        // [v10] default quality = master
+        return try {
+            val ctx = appContext ?: return "master"
+            val prefs = ctx.getSharedPreferences("music_quality", android.content.Context.MODE_PRIVATE)
+            prefs.getString("music_quality", "master") ?: "master"
+        } catch (e: Exception) {
+            "master"
+        }
+    }'''
+
+if OLD in src:
+    src = src.replace(OLD, NEW, 1)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(src)
+    print("v10：默认偏好已改为 master")
+else:
+    print("错误：未找到 getPreferredQuality 锚点")
+    sys.exit(1)
+PYEOF
+# ===== v10 结束 =====
 
 echo "=== 完成 ==="
