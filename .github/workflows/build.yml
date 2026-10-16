@@ -64,6 +64,10 @@ jobs:
         run: bash .github/scripts/24_music_rank_screen.sh
       - name: 三页面注入 + 导航接线
         run: bash .github/scripts/25_music_pages_wire.sh
+      - name: 排行榜精修 5 项
+        run: bash .github/scripts/26_music_rank_polish.sh
+      - name: 歌单封面 Coil
+        run: bash .github/scripts/27_music_playlist_cover.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
