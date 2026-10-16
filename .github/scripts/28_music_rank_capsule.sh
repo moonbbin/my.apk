@@ -1,6 +1,6 @@
 #!/bin/bash
 # 28_music_rank_capsule.sh
-# v6 2026-10-16: 音质标签移至歌名下方+歌手名前（橙色 QualityOrange）+ 数据直接透传（V4）
+# v6.1 2026-10-16: 修复 #212 失败——V2->V4 直升路径（全新构建无 V3）
 set -e
 cd "$(dirname "$0")/../.." 2>/dev/null || true
 BASE="avbox"
@@ -26,17 +26,25 @@ src = open(path, encoding='utf-8').read()
 MARK4 = '// NAV_WIRE_V4'
 if MARK4 in src:
     print("V4 done"); sys.exit(0)
+new_v4 = 'qualityLabel = it.quality, // NAV_WIRE_V4: 平台原始值直接透传'
+# 路径1: V3 -> V4（28 v4 跑过的构建）
 old_v3 = '''qualityLabel = when (it.quality) { // NAV_WIRE_V3
                     "24bit" -> "Hi-Res"
                     "SQ" -> "SQ"
                     "HQ" -> "HQ"
                     else -> ""
                 },'''
-assert src.count(old_v3) == 1, "V3 anchor fail"
-new_v4 = 'qualityLabel = it.quality, // NAV_WIRE_V4: 平台原始值直接透传'
-src = src.replace(old_v3, new_v4)
+if src.count(old_v3) == 1:
+    src = src.replace(old_v3, new_v4)
+    print("V3 -> V4 OK")
+else:
+    # 路径2: V2 -> V4（全新构建只有 26 的 V2）
+    old_v2 = 'hasSQ = it.quality.isNotBlank(), // NAV_WIRE_V2: 真实音质（SQ/HQ/24bit）才显示'
+    assert src.count(old_v2) == 1, "V2/V3 anchor fail"
+    src = src.replace(old_v2, new_v4)
+    print("V2 -> V4 OK")
 open(path, 'w', encoding='utf-8').write(src)
-print("V4 OK")
+print("done")
 PYEOF2
 
 echo "28 done"
