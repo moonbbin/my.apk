@@ -1,21 +1,36 @@
 #!/bin/bash
 # 21 - 播放器音质验货（防糊）：v9
-# v1：请求高音质时 Range 取前 64KB 验货（FLAC 解析 STREAMINFO 采样精度、MP3 解析帧头
-#     平均码率），实测档位必须 >= 请求档位才播放，不达标换平台继续试；全部试完无达标则
-#     降级播放档位最高的备选（不断歌）。
-# v2：tierLabel 档位→UI 真实标签（3→Hi-Res/2→FLAC/1→320k/0→普通）；qualityLabel 的
-#     "320k"->"HQ" 改为 "320k"->"320k"；探测失败显示"未知"；_measuredBitrate 回传 UI。
-# v3：FLAC 码率不再依赖 Content-Range——拿不到文件总大小时改用 STREAMINFO min/max 帧长
-#     估算，仍拿不到则扫描帧同步点取中位帧长兜底，保证"实测约"能显示；
-#     新增假无损识别：FLAC 容器但实测码率 <400kbps 时 tier 降为 0（普通），使验货继续
-#     寻找真无损；kbps=0（未知）时不降档，避免误杀。
-# v4：新增 isSuspiciousLossless() 自诊断函数（FLAC<500kbps 或 24bit<800kbps 判可疑），
-#     供 22 号徽标显示 ⚠ 警告（22 v4.2 已内联，此函数为死代码，保留无害）。
-# v5：新增 Hi-Res 档位——tierOfQuality 识别 master/atmos_plus/atmos/hires 为 4 档（母带），
-#     tierLabel 4→"母带"；解决脚本支持 Hi-Res 但 App 不认的问题。
-# v6：全档位映射（按脚本支持列表从高到低）——6=母带(master) 5=全景声+(atmos_plus)
-#     4=全景声(atmos) 3=Hi-Res(hires/flac24bit) 2=FLAC 1=320k 0=普通。
-# 幂等：已打过 v6 则跳过；支持 v5 → v6 增量升级；v3/v4 → v6 增量升级；锚点未命中则报错退出。
+# ============================================================================
+# 版本导航（v1→v9 一句话）：
+#   v1：Range 取前 64KB 验货（FLAC 解析 STREAMINFO、MP3 解析帧头），实测档位须≥请求档
+#       位才播放，不达标换平台；全试完无达标则播最高备选（不断歌）。
+#   v2：tierLabel 档位→UI 标签（3=Hi-Res/2=FLAC/1=320k/0=普通）；"320k"显示修正；
+#       _measuredBitrate 回传 UI。
+#   v3：FLAC 码率改用 STREAMINFO min/max 帧长估算（不依赖 Content-Range）；新增假无损
+#       识别：FLAC<400kbps 降为 0 档继续找真货；kbps=0 时不降档（防误杀）。
+#   v4：新增 isSuspiciousLossless()（FLAC<500/24bit<800 判可疑），供 22 显示⚠；
+#       22 v4.2 已内联，此函数成死代码（保留无害）。
+#   v5：tierOfQuality 识别 master/atmos/hires→4 档（母带）；解决脚本支持 Hi-Res
+#       但 App 不认的问题。
+#   v6：7 档全映射——6=母带(master)/5=全景声+(atmos_plus)/4=全景声(atmos)/
+#       3=Hi-Res(hires/flac24bit)/2=FLAC/1=320k/0=普通。
+#   v7：尝试升级 QUALITY_ORDER 请求顺序（精确匹配失败，未生效）。
+#   v8：宽松正则全文件扫描质量序列（未命中真实格式，未生效）。
+#   v9：解码 13 号 base64 找到真实锚点（LxPlayerManager.kt:297
+#       `val QUALITY_ORDER = listOf("flac24bit","flac","320k","128k")`），精确替换为
+#       master→atmos_plus→atmos→hires→flac24bit→flac→320k→128k。生效。
+# ----------------------------------------------------------------------------
+# 关键锚点速查（改代码时定位用）：
+#   QUALITY_ORDER  请求顺序（LxPlayerManager.kt:297，v9 目标）
+#   tierOfQuality()  质量→档位映射（v6 定义 7 档）
+#   tierLabel()      档位→中文标签（v6 定义）
+#   getQualityTryOrder()/qualityTryOrder()  按用户偏好截取请求顺序
+#   verifyQuality()  验货入口：实测档位须≥请求档位
+#   probeTier()      探测 URL 真实档位（FLAC/MP3/AAC 解析）
+#   isSuspiciousLossless()  v4 死代码（22 已内联，不用动）
+# ============================================================================
+# 幂等：已打过 v9 则跳过；支持 v6/v7/v8 → v9 增量升级；锚点未命中则报错退出（v7/v8
+#      的宽松逻辑保留但已验证 v9 精确锚点为最终生效路径）。
 set -e
 cd avbox
 
