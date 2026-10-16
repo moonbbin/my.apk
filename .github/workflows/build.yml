@@ -56,6 +56,8 @@ jobs:
         run: bash .github/scripts/20_music_theme.sh
       - name: 音乐音质验货
         run: bash .github/scripts/21_music_bitrate_guard.sh
+      - name: 实测码率优先显示
+        run: bash .github/scripts/22_music_bitrate_display.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
