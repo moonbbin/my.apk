@@ -62,6 +62,8 @@ jobs:
         run: bash .github/scripts/23_music_theme_unify.sh
       - name: 排行榜页 RankScreen
         run: bash .github/scripts/24_music_rank_screen.sh
+      - name: 三页面注入 + 导航接线
+        run: bash .github/scripts/25_music_pages_wire.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
