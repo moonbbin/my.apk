@@ -1896,8 +1896,8 @@ if MARK in src:
 #             }
 #         }
 # [32v38-fix] 用正则宽松匹配
-    _m38 = re.search(r'        setContent \{\n            MaterialTheme \{\n                MusicHomeScreen\(\n                    onBackToAppHome = \{ finish\(\) \}\n                \)\n            \}\n        \}', src)
-    old_setcontent = _m38.group(0) if _m38 else ""
+_m38 = re.search(r'        setContent \{\n            MaterialTheme \{\n                MusicHomeScreen\(\n                    onBackToAppHome = \{ finish\(\) \}\n                \)\n            \}\n        \}', src)
+old_setcontent = _m38.group(0) if _m38 else ""
 
 # 新: 用 LxMusicTheme 包裹，从 MusicThemeManager 读 isDarkTheme
 new_setcontent = """        setContent {
