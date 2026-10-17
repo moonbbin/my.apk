@@ -1446,3 +1446,63 @@ PYEOF
 
 echo "=== 32 v31 完成 ==="
 
+# 32 v32: 删除"背景随封面变化"（用户确认无用）
+
+echo "=== 32 v32: 删除背景随封面变化 ==="
+
+python3 << 'PYEOF'
+import re, sys
+
+with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt", encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v32]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# 删除从 "// 背景随封面变" 到第二个 Switch 块结束的部分
+# 结构：
+#                 Spacer(modifier = Modifier.height(8.dp))
+#                 Divider(...)
+#                 Spacer(modifier = Modifier.height(8.dp))
+#
+#                 // 背景随封面变
+#                 val bgFollow by MusicThemeManager.bgFollowCover
+#                 Row(...) { ... Switch(...) }
+#
+# 我们删除 Spacer+Divider+Spacer+整个背景随封面 Row
+
+# 先找到 "// 背景随封面变" 的位置
+idx = src.find("// 背景随封面变")
+if idx == -1:
+    print("错误: 未找到'背景随封面变'锚点")
+    sys.exit(1)
+
+# 往前找 Spacer/Divider 分隔部分（在深色主题 Row 之后）
+# 往后找到 Row 块的结束（匹配括号）
+# 简化：找到 "// 背景随封面变" 之前最近的 Spacer，分隔符开始
+# 实际：删除从第二个 Spacer(modifier = Modifier.height(8.dp)) 到 Row 结束
+
+# 找到 idx 之前的最后两个 Spacer+Divider
+# 更简单：用正则匹配整个块
+pattern = r'\n                Spacer\(modifier = Modifier\.height\(8\.dp\)\)\n                Divider\(color = musicColors\(\)\.textPrimary\.copy\(alpha = 0\.1f\)\)\n                Spacer\(modifier = Modifier\.height\(8\.dp\)\)\n\n                // 背景随封面变\n.*?(?=\n            \}\n        \})'
+
+m = re.search(pattern, src, re.DOTALL)
+if not m:
+    print("错误: 正则未匹配到背景随封面块")
+    # 调试：打印 idx 附近
+    print("--- idx 附近 500 字符 ---")
+    print(src[max(0,idx-500):idx+500][:500])
+    sys.exit(1)
+
+# 标记删除
+src = src[:m.start()] + "\n                // [32v32] 背景随封面变化已删除（用户确认无用）\n" + src[m.end():]
+
+with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt", "w", encoding="utf-8") as f:
+    f.write(src)
+print("背景随封面变化已删除")
+PYEOF
+
+echo "=== 32 v32 完成 ==="
+
