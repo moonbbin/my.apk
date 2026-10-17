@@ -933,3 +933,43 @@ with open(tpath, "w", encoding="utf-8") as f:
 print("=== 32 v19 完成 ===")
 PYEOF
 
+# 32 v20: MainActivity 读取主题设置
+echo "=== 32 v20: MainActivity 读主题 ==="
+
+python3 << 'PYEOF'
+import re
+
+mpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
+with open(mpath, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v20]"
+if MARK in src:
+    print("已处理，跳过")
+else:
+    # 找到 LxMusicTheme {，在其前插入主题读取逻辑
+    # v14 已把 AVBoxTheme 换成 LxMusicTheme
+    old = "com.github.tvbox.osc.ui.activity.LxMusicTheme {"
+    if old in src:
+        new_code = f'''{MARK} 读取用户主题设置
+                val themeCtx = androidx.compose.ui.platform.LocalContext.current
+                val themePrefs = themeCtx.getSharedPreferences("theme_prefs", android.content.Context.MODE_PRIVATE)
+                val savedMode = themePrefs.getInt("theme_mode", 0)
+                val isDarkTheme = when (savedMode) {{
+                    1 -> true
+                    2 -> false
+                    else -> androidx.compose.foundation.isSystemInDarkTheme()
+                }}
+                com.github.tvbox.osc.ui.activity.LxMusicTheme(isDarkTheme = isDarkTheme) {{'''
+        src = src.replace(old, new_code, 1)
+        print("MainActivity 已接主题设置读取")
+    else:
+        print("警告: 未找到 LxMusicTheme 调用")
+
+    with open(mpath, "w", encoding="utf-8") as f:
+        f.write(src)
+
+print("=== 32 v20 完成 ===")
+print("说明: 0=跟随系统, 1=深色, 2=浅色")
+PYEOF
+
