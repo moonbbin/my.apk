@@ -217,3 +217,64 @@ else:
     sys.exit(1)
 PYEOF
 # ===== v8 结束 =====
+
+# ===== v9：24-bit/母带细分 =====
+python3 << 'PYEOF'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [v9] 24-bit/master detail"
+if MARK in src:
+    print("跳过（已是 v9）")
+    sys.exit(0)
+
+OLD = '''                                // [v8] detail tier by measured bitrate：按实测码率给细档位
+                                val lbl = when {
+                                    measuredBitrate >= 1000 -> "无损"
+                                    measuredBitrate >= 800 -> "Hi-Res"
+                                    measuredBitrate >= 500 -> "SQ"
+                                    measuredBitrate >= 320 -> "HQ"
+                                    measuredBitrate > 0 -> "标准"
+                                    else -> when (currentQuality) {
+                                        "master" -> "母带"
+                                        "atmos_plus" -> "全景声+"
+                                        "atmos" -> "全景声"
+                                        "hires" -> "Hi-Res"
+                                        else -> rawLbl
+                                    }
+                                }'''
+
+NEW = '''                                // [v9] 24-bit/master detail：v15 保证被 master 系接受的必为 24-bit
+                                val lbl = when {
+                                    // 24-bit 系：按请求音质+码率细分
+                                    currentQuality in listOf("master", "hires", "flac24bit", "atmos", "atmos_plus") && measuredBitrate >= 1800 -> "母带"
+                                    currentQuality in listOf("master", "hires", "flac24bit", "atmos", "atmos_plus") && measuredBitrate >= 1000 -> "24-bit"
+                                    currentQuality in listOf("master", "hires", "flac24bit", "atmos", "atmos_plus") && measuredBitrate > 0 -> "Hi-Res"
+                                    // 16-bit 系：按码率分档（v8）
+                                    measuredBitrate >= 1000 -> "无损"
+                                    measuredBitrate >= 800 -> "Hi-Res"
+                                    measuredBitrate >= 500 -> "SQ"
+                                    measuredBitrate >= 320 -> "HQ"
+                                    measuredBitrate > 0 -> "标准"
+                                    else -> when (currentQuality) {
+                                        "master" -> "母带"
+                                        "atmos_plus" -> "全景声+"
+                                        "atmos" -> "全景声"
+                                        "hires" -> "Hi-Res"
+                                        else -> rawLbl
+                                    }
+                                }'''
+
+if OLD in src:
+    src = src.replace(OLD, NEW, 1)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(src)
+    print("v9：已替换为 24-bit 细分逻辑")
+else:
+    print("错误：未找到 v8 lbl 块")
+    sys.exit(1)
+PYEOF
+# ===== v9 结束 =====
