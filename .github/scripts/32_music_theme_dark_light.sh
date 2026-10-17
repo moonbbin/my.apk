@@ -1891,13 +1891,9 @@ if MARK in src:
 #                 MusicHomeScreen(...)
 #             }
 #         }
-old_setcontent = """        setContent {
-            MaterialTheme {
-                MusicHomeScreen(
-                    onBackToAppHome = { finish() }
-                )
-            }
-        }"""
+# [32v38-fix] 用正则宽松匹配
+    _m38 = re.search(r'        setContent \{\n            MaterialTheme \{\n                MusicHomeScreen\(\n                    onBackToAppHome = \{ finish\(\) \}\n                \)\n            \}\n        \}', src)
+    old_setcontent = _m38.group(0) if _m38 else ""
 
 # 新: 用 LxMusicTheme 包裹，从 MusicThemeManager 读 isDarkTheme
 new_setcontent = """        setContent {
@@ -1926,7 +1922,7 @@ new_setcontent = """        setContent {
             }
         }"""
 
-if old_setcontent not in src:
+if not old_setcontent:
     print("错误: 未找到 setContent 锚点")
     # 尝试更宽松的匹配
     if "setContent" in src and "MusicHomeScreen" in src:
