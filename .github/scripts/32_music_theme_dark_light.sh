@@ -521,3 +521,59 @@ print()
 print("=== 32 v13 侦查完成 ===")
 PYEOF
 
+# 32 v14: 按真实结构接入 - MainActivity换LxMusicTheme，SettingsScreen加SettingItem数据
+echo "=== 32 v14: 真实结构接入 ==="
+
+python3 << 'PYEOF'
+import re
+
+# ===== 1) MainActivity: AVBoxTheme -> LxMusicTheme =====
+mpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
+with open(mpath, encoding="utf-8") as f:
+    msrc = f.read()
+
+MARK1 = "// [32v14] use LxMusicTheme"
+if MARK1 not in msrc:
+    # 替换 AVBoxTheme { 为 LxMusicTheme {
+    # LxMusicTheme 默认 isDarkTheme = isSystemInDarkTheme()，先跟随系统
+    old = "AVBoxTheme {"
+    if old in msrc:
+        msrc = msrc.replace(old, f"{MARK1}\n                com.github.tvbox.osc.ui.activity.LxMusicTheme {{", 1)
+        print("1) MainActivity: AVBoxTheme -> LxMusicTheme")
+    else:
+        print("1) 警告: 未找到 AVBoxTheme {")
+    with open(mpath, "w", encoding="utf-8") as f:
+        f.write(msrc)
+else:
+    print("1) MainActivity 已接入，跳过")
+
+# ===== 2) SettingsScreen: 加主题 SettingItem 数据 =====
+# SettingItem 是数据类，需要在构建 groups 的地方加
+# 先找到调用 SettingsScreen 的地方（通常在 MusicHomeActivity）
+print()
+print("2) 查找 SettingsScreen 调用点...")
+
+import os
+found = []
+for root, dirs, files in os.walk("app/src/main/java"):
+    for fn in files:
+        if fn.endswith(".kt"):
+            fp = os.path.join(root, fn)
+            try:
+                with open(fp, encoding="utf-8") as f:
+                    content = f.read()
+                if "SettingsScreen(" in content and "fun SettingsScreen(" not in content:
+                    # 是调用点，不是定义
+                    found.append(fp)
+            except:
+                pass
+
+for fp in found[:5]:
+    print(f"   调用点: {fp}")
+
+print()
+print("=== 32 v14 完成 ===")
+print("说明: MainActivity 已换 LxMusicTheme（跟随系统）。")
+print("设置页开关需在 groups 构建处加 SettingItem，待定位调用点后处理。")
+PYEOF
+
