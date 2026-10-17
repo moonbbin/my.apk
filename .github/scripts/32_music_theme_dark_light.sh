@@ -824,3 +824,112 @@ with open(tpath, "w", encoding="utf-8") as f:
 print("=== 32 v18 完成 ===")
 PYEOF
 
+# 32 v19: 清掉 v16-v18 的 DataStore，改用 SharedPreferences
+echo "=== 32 v19: SharedPreferences 重构 ==="
+
+python3 << 'PYEOF'
+import re, os
+
+tpath = None
+for root, dirs, files in os.walk("app/src/main/java"):
+    for fn in files:
+        if fn == "ThemeSettingsPage.kt":
+            tpath = os.path.join(root, fn)
+            break
+    if tpath:
+        break
+
+with open(tpath, encoding="utf-8") as f:
+    src = f.read()
+
+# 1) 删除 v16 加的状态代码块（从 MARK 到 cycleTheme 函数结束）
+# MARK = "// [32v16]"
+src = re.sub(
+    r'\n\s*// \[32v16\][^\n]*\n(?:.*?\n)*?\s*fun cycleTheme\(\) \{\s*\n(?:.*?\n)*?\s*\}\s*\n',
+    '\n',
+    src,
+    count=1
+)
+
+# 2) 删除 v16 插入的 SettingItem
+src = re.sub(
+    r'// \[32v16\] theme item\n[^\n]*SettingItem\(\n(?:[^\n]*\n)*?[^\n]*action = \{ cycleTheme\(\) \}[^\n]*\n[^\n]*\),\n',
+    '',
+    src,
+    count=1
+)
+
+# 3) 删除 v16/v17/v18 的 dataStore 定义
+src = re.sub(r'\n// \[32v1[678]\][^\n]*\ninternal val android\.content\.Context\.themeDataStore[^\n]*\n', '\n', src)
+src = re.sub(r'\n// \[32v16\] DataStore\nprivate val android\.content\.Context\.dataStore[^\n]*\n', '\n', src)
+
+# 4) 删除 DataStore 相关的 import
+src = re.sub(r'^import androidx\.datastore[^\n]*\n', '', src, flags=re.MULTILINE)
+src = re.sub(r'^import kotlinx\.coroutines\.launch\n', '', src, flags=re.MULTILINE)
+
+# 5) 删除 v16 加的 import（getValue/setValue/collectAsState 如果只用于主题）
+# 保留它们，因为文件其他地方可能用
+
+print("1-4) v16-v18 DataStore 代码已清理")
+
+# 6) 加 SharedPreferences 版本的主题切换
+# 在 ThemeSettingsPage 函数开头插入
+m = re.search(r'fun\s+ThemeSettingsPage\s*\([^)]*\)\s*\{', src)
+MARK19 = "// [32v19]"
+if m and MARK19 not in src:
+    pos = m.end()
+    code = f'''
+    {MARK19} 主题切换（SharedPreferences，无 DataStore 委托）
+    val themeCtx = androidx.compose.ui.platform.LocalContext.current
+    val themePrefs = themeCtx.getSharedPreferences("theme_prefs", android.content.Context.MODE_PRIVATE)
+    var themeModeState by androidx.compose.runtime.remember {{ androidx.compose.runtime.mutableStateOf(themePrefs.getInt("theme_mode", 0)) }}
+    val themeModeLabel = when (themeModeState) {{
+        1 -> "深色"
+        2 -> "浅色"
+        else -> "跟随系统"
+    }}
+    fun cycleThemeMode() {{
+        val next = (themeModeState + 1) % 3
+        themePrefs.edit().putInt("theme_mode", next).apply()
+        themeModeState = next
+    }}
+'''
+    src = src[:pos] + code + src[pos:]
+    print("5) SharedPreferences 主题逻辑已加")
+
+    # 7) 插入 SettingItem
+    m2 = re.search(r'items\s*=\s*listOf\(\s*\n', src)
+    if m2 and "32v19" not in src[m2.end():m2.end()+500]:
+        pos2 = m2.end()
+        line_end = src.find('\n', pos2)
+        next_line = src[pos2:line_end] if line_end != -1 else ""
+        indent = next_line[:len(next_line) - len(next_line.lstrip())] if next_line.strip() else "                "
+        item_code = f'''{MARK19} theme item
+{indent}SettingItem(
+{indent}    title = "深色模式",
+{indent}    subtitle = themeModeLabel,
+{indent}    action = {{ cycleThemeMode() }}
+{indent}),
+'''
+        src = src[:pos2] + item_code + src[pos2:]
+        print("6) 主题 SettingItem 已插入")
+
+# 8) 确保必要的 import
+needed = [
+    "import androidx.compose.runtime.getValue",
+    "import androidx.compose.runtime.setValue",
+]
+imports = list(re.finditer(r'^import .+$', src, re.MULTILINE))
+if imports:
+    pos = imports[-1].end()
+    to_add = [imp for imp in needed if imp not in src]
+    if to_add:
+        src = src[:pos] + "\n" + "\n".join(to_add) + src[pos:]
+        print(f"7) 补 import: {to_add}")
+
+with open(tpath, "w", encoding="utf-8") as f:
+    f.write(src)
+
+print("=== 32 v19 完成 ===")
+PYEOF
+
