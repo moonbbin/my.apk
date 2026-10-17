@@ -1893,8 +1893,8 @@ elif "// [32v39]" in src:
     print("v39 已处理，跳过")
     sys.exit(0)
 else:
-    print("未找到 v38 标记，v38 可能没应用")
-    sys.exit(1)
+    print("v38 标记未找到（v38 为跳过版），由 v40 处理")
+    # 不退出，继续
 
 with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", "w", encoding="utf-8") as f:
     f.write(src)
