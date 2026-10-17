@@ -1260,3 +1260,40 @@ else:
     sys.exit(1)
 PYEOF
 
+# 32 v29: 提取完整的 MusicThemeManager
+
+echo "=== 32 v29: MusicThemeManager 完整定义 ==="
+
+python3 << 'PYEOF'
+import os, re
+
+for root, dirs, files in os.walk("app/src/main/java"):
+    for fn in files:
+        if fn == "LxMusicTheme.kt":
+            fp = os.path.join(root, fn)
+            with open(fp, encoding="utf-8") as f:
+                src = f.read()
+            # 找到 object MusicThemeManager { 到其匹配的 }
+            idx = src.find("object MusicThemeManager")
+            if idx != -1:
+                start = src.find("{", idx)
+                depth = 0
+                end = -1
+                for i in range(start, len(src)):
+                    if src[i] == '{':
+                        depth += 1
+                    elif src[i] == '}':
+                        depth -= 1
+                        if depth == 0:
+                            end = i
+                            break
+                if end != -1:
+                    print(src[idx:end+1])
+                else:
+                    print("错误: 括号不匹配")
+            else:
+                print("错误: 未找到")
+            break
+PYEOF
+echo "=== 32 v29 完成 ==="
+
