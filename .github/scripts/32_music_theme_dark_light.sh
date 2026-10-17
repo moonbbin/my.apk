@@ -973,3 +973,24 @@ print("=== 32 v20 完成 ===")
 print("说明: 0=跟随系统, 1=深色, 2=浅色")
 PYEOF
 
+echo "=== 32 v22: 定位真正的主题外观页 ==="
+python3 << 'PYEOF'
+import os, re
+# 找包含"深色主题"或"背景随封面变化"的 Kotlin 文件
+hits = []
+for root, dirs, files in os.walk("app/src/main/java"):
+    for fn in files:
+        if fn.endswith(".kt"):
+            fp = os.path.join(root, fn)
+            try:
+                with open(fp, encoding="utf-8") as f:
+                    c = f.read()
+                if "深色主题" in c or "背景随封面变化" in c:
+                    hits.append(fp)
+            except:
+                pass
+print("命中文件:")
+for h in hits:
+    print(" ", h)
+PYEOF
+
