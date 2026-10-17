@@ -2201,3 +2201,54 @@ PYEOF
 
 echo "=== 32 v44 完成 ==="
 
+# 32 v45: 暴力清黑底 + 强制主题背景
+
+echo "=== 32 v45: 暴力清黑底 ==="
+
+python3 << 'PYEOF'
+import re, sys
+
+MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+with open(MPATH, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v45]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+orig_len = len(src)
+
+# 1. 用正则暴力匹配所有 BgDeepBlue 背景（不管缩进格式）
+# 匹配 .background( 前后可能有换行和空格的 BgDeepBlue
+patterns = [
+    (r'\.background\(\s*BgDeepBlue\s*\)', '.background(musicColors().background)'),
+    (r'\.background\(\s*BgDeepBlue\.copy\([^)]+\)\s*\)', '.background(musicColors().background)'),
+    (r'\.background\(\s*Color\(0xFF000000\)\s*\)', '.background(musicColors().background)'),
+    (r'\.background\(\s*Color\.Black\s*\)', '.background(musicColors().background)'),
+]
+
+total = 0
+for pat, repl in patterns:
+    src, n = re.subn(pat, repl, src)
+    total += n
+    if n > 0:
+        print(f"  替换 {n} 处: {pat[:40]}")
+
+print(f"共替换 {total} 处")
+
+# 2. 如果一处都没找到，打印警告（大声失败）
+if total == 0:
+    print("警告: 未找到任何黑底模式，打印文件中的 background 以便诊断")
+    for m in re.finditer(r'\.background\([^)]{0,50}\)', src):
+        print(f"  发现: {m.group(0)[:60]}")
+    # 不退出，让构建继续（可能是已经清过了）
+
+src = MARK + "\n" + src
+with open(MPATH, "w", encoding="utf-8") as f:
+    f.write(src)
+print("已写入")
+PYEOF
+
+echo "=== 32 v45 完成 ==="
+
