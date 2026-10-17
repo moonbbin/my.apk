@@ -722,3 +722,54 @@ else:
     print("4) 跳过（已插入或未找到位置）")
 PYEOF2
 
+# 32 v17: 修复 dataStore 引用
+echo "=== 32 v17: 修复 dataStore ==="
+
+python3 << 'PYEOF'
+import re, os
+
+tpath = None
+for root, dirs, files in os.walk("app/src/main/java"):
+    for fn in files:
+        if fn == "ThemeSettingsPage.kt":
+            tpath = os.path.join(root, fn)
+            break
+    if tpath:
+        break
+
+with open(tpath, encoding="utf-8") as f:
+    src = f.read()
+
+# 1) 确保 import 正确
+# preferencesDataStore 需要 import
+if "import androidx.datastore.preferences.preferencesDataStore" not in src:
+    m = re.search(r'^import androidx\.datastore\.preferences\.core\.edit$', src, re.MULTILINE)
+    if m:
+        src = src[:m.end()] + "\nimport androidx.datastore.preferences.preferencesDataStore" + src[m.end():]
+        print("1) 已加 preferencesDataStore import")
+
+# 2) 修复 dataStore 定义：确保在文件顶部（package 后）定义，且非 private
+# 先删除旧的 private 定义
+src = re.sub(r'\n?// \[32v16\] DataStore\nprivate val android\.content\.Context\.dataStore[^\n]+\n', '\n', src)
+
+# 在 package 行后添加
+m2 = re.search(r'^package .+$', src, re.MULTILINE)
+if m2 and "val android.content.Context.dataStore" not in src:
+    ds_def = '''
+// [32v17] DataStore for theme
+internal val android.content.Context.themeDataStore by preferencesDataStore(name = "theme_prefs")
+'''
+    src = src[:m2.end()] + ds_def + src[m2.end():]
+    print("2) 已加 themeDataStore 定义（internal）")
+
+# 3) 替换所有 ctx.dataStore 为 ctx.themeDataStore
+src = src.replace("ctx.dataStore", "ctx.themeDataStore")
+src = src.replace("context.dataStore", "context.themeDataStore")
+print("3) 已替换 dataStore 引用")
+
+with open(tpath, "w", encoding="utf-8") as f:
+    f.write(src)
+
+print("=== 32 v17 完成 ===")
+PYEOF
+
