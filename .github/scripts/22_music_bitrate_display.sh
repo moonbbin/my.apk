@@ -279,7 +279,7 @@ else:
 PYEOF
 # ===== v9 结束 =====
 
-# ===== v10：bitrate 细档位 =====
+# ===== v10：bitrate 细档位（修复版） =====
 python3 << 'PYEOF'
 import sys
 
@@ -292,29 +292,42 @@ if MARK in src:
     print("跳过（已是 v10）")
     sys.exit(0)
 
-# 找到 bitrate 分支的老格式
-OLD = '''                            bitrate > 0 -> "${LxPlayerManager.qualityLabel(currentQuality)} · ${bitrate}kbps"'''
+# v6 的 bitrate 块格式
+OLD = '''                            bitrate > 0 -> {
+                                val rawLbl = LxPlayerManager.qualityLabel(currentQuality)
+                                val lbl = when (currentQuality) {
+                                    "master" -> "母带"
+                                    "atmos_plus" -> "全景声+"
+                                    "atmos" -> "全景声"
+                                    "hires" -> "Hi-Res"
+                                    else -> rawLbl
+                                }'''
 
-NEW = '''                            // [v10] bitrate detail tier：bitrate 分支也用细档位
+NEW = '''                            // [v10] bitrate detail tier
                             bitrate > 0 -> {
-                                val lblB = when {
+                                val rawLbl = LxPlayerManager.qualityLabel(currentQuality)
+                                val lbl = when {
                                     bitrate >= 1000 -> "无损"
                                     bitrate >= 800 -> "Hi-Res"
                                     bitrate >= 500 -> "SQ"
                                     bitrate >= 320 -> "HQ"
-                                    else -> "标准"
-                                }
-                                val susB = (currentQuality == "flac" && bitrate < 500) || (currentQuality in listOf("flac24bit", "hires") && bitrate < 800) || (currentQuality in listOf("atmos", "atmos_plus") && bitrate < 800) || (currentQuality == "master" && bitrate < 1000)
-                                if (susB) "$lblB · ${bitrate}kbps ⚠" else "$lblB · ${bitrate}kbps"
-                            }'''
+                                    bitrate > 0 -> "标准"
+                                    else -> when (currentQuality) {
+                                        "master" -> "母带"
+                                        "atmos_plus" -> "全景声+"
+                                        "atmos" -> "全景声"
+                                        "hires" -> "Hi-Res"
+                                        else -> rawLbl
+                                    }
+                                }'''
 
 if OLD in src:
     src = src.replace(OLD, NEW, 1)
     with open(path, "w", encoding="utf-8") as f:
         f.write(src)
-    print("v10：bitrate 分支已用细档位")
+    print("v10 修复版：已应用")
 else:
-    print("错误：未找到 bitrate 分支锚点")
+    print("错误：未找到 v6 bitrate 块")
     sys.exit(1)
 PYEOF
 # ===== v10 结束 =====
