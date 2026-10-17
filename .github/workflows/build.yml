@@ -74,6 +74,8 @@ jobs:
         run: bash .github/scripts/29_music_rank_capsule_fix.sh
       - name: 搜索结果页 UI
         run: bash .github/scripts/31_music_search_result.sh
+      - name: 深色/浅色主题切换
+        run: bash .github/scripts/32_music_theme_dark_light.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
