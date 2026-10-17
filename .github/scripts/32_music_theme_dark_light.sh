@@ -4,7 +4,7 @@
 set -e
 cd avbox
 
-echo "=== 32 v8：深色/浅色全局切换 ==="
+echo "=== 32 v9：深色/浅色全局切换 ==="
 
 # ===== Part 1: Color.kt 追加浅色 Token =====
 python3 << 'PYEOF'
@@ -64,10 +64,10 @@ with open(path, "w", encoding="utf-8") as f:
 print("PartA2：LxMusicTheme 桥接已创建")
 PYEOF
 
-echo "=== 32 v8 PartA2 完成 ==="
+echo "=== 32 v9 PartA2 完成 ==="
 
-# 32 v8: 修复 LxMusicTheme.kt 的 import 缺失
-echo "=== 32 v8 PartA3: 补 Import ==="
+# 32 v9: 修复 LxMusicTheme.kt 的 import 缺失
+echo "=== 32 v9 PartA3: 补 Import ==="
 
 python3 << 'PYEOF'
 import re
@@ -110,11 +110,11 @@ else:
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(src)
-print("=== 32 v8 PartA3 完成 ===")
+print("=== 32 v9 PartA3 完成 ===")
 PYEOF
 
-# 32 v8: PartB 详细打印 MainActivity setContent 结构
-echo "=== 32 v8 PartB: MainActivity 详细结构 ==="
+# 32 v9: PartB 详细打印 MainActivity setContent 结构
+echo "=== 32 v9 PartB: MainActivity 详细结构 ==="
 
 MAIN="app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
 if [ ! -f "$MAIN" ]; then
@@ -161,14 +161,14 @@ for i, line in enumerate(lines):
 PYEOF
 
 echo ""
-echo "=== 32 v8 PartB 完成（仅排查，不修改）==="
+echo "=== 32 v9 PartB 完成（仅排查，不修改）==="
 # 不退出 1，让构建继续，先看到结构
 
-# 32 v8 PartC: 搜 isSystemInDarkTheme 并替换
+# 32 v9 PartC: 搜 isSystemInDarkTheme 并替换
 set -e
 # cd avbox (已在 avbox 内，跳过)
 
-echo "=== 32 v8 PartC：isSystemInDarkTheme 排查 ==="
+echo "=== 32 v9 PartC：isSystemInDarkTheme 排查 ==="
 
 # 只查 music 相关目录，避免动主体其他部分
 TARGET_DIR="app/src/main/java/com/github/tvbox/osc/ui/music"
@@ -195,12 +195,12 @@ if [ "$FOUND" -gt 0 ]; then
     echo "或：MaterialTheme.colorScheme.background.luminance() < 0.5"
 fi
 
-echo "=== 32 v8 PartC 完成 ==="
-# 32 v8 PartD: Modifier.shadow 检查
+echo "=== 32 v9 PartC 完成 ==="
+# 32 v9 PartD: Modifier.shadow 检查
 set -e
 # cd avbox (已在 avbox 内，跳过)
 
-echo "=== 32 v8 PartD：shadow 检查 ==="
+echo "=== 32 v9 PartD：shadow 检查 ==="
 
 TARGET_DIR="app/src/main/java/com/github/tvbox/osc/ui/music"
 
@@ -221,10 +221,10 @@ if [ "$FOUND" -gt 0 ]; then
     echo "如需修复，考虑用 MaterialTheme.colorScheme.surfaceVariant 做阴影色，或调低 elevation"
 fi
 
-echo "=== 32 v8 PartD 完成 ==="
+echo "=== 32 v9 PartD 完成 ==="
 
-# 32 v8: BrandGreen -> PlayerGreen (实际存在的常量名)
-echo "=== 32 v8: 修复 BrandGreen ==="
+# 32 v9: BrandGreen -> PlayerGreen (实际存在的常量名)
+echo "=== 32 v9: 修复 BrandGreen ==="
 
 python3 << 'PYEOF'
 path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
@@ -245,6 +245,34 @@ print("Import 已修正")
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(src)
-print("=== 32 v8 完成 ===")
+print("=== 32 v9 完成 ===")
+PYEOF
+
+# 32 v9: PlayerGreen 改为 public
+echo "=== 32 v9: PlayerGreen public ==="
+
+python3 << 'PYEOF'
+path = "app/src/main/java/com/github/tvbox/osc/ui/music/theme/Color.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+# 把 private val PlayerGreen 改为 val PlayerGreen
+import re
+old = r'private\s+val\s+PlayerGreen\s*='
+new = 'val PlayerGreen ='
+src_new, n = re.subn(old, new, src)
+print(f"PlayerGreen private -> public: {n} 处")
+
+# 同理检查 DetailGreen, SearchAccent, AccentBlue 是否也需要
+for name in ['DetailGreen', 'SearchAccent', 'AccentBlue', 'ErrorRed', 'TextOnAccent']:
+    # 如果是 private，改为 public
+    pattern = rf'private\s+val\s+{name}\s*='
+    src_new, cnt = re.subn(pattern, f'val {name} =', src_new)
+    if cnt > 0:
+        print(f"{name} private -> public: {cnt} 处")
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src_new)
+print("=== 32 v9 完成 ===")
 PYEOF
 
