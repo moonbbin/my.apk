@@ -1577,3 +1577,117 @@ PYEOF
 
 echo "=== 32 v33 完成 ==="
 
+# 32 v34: 修 v33 遗留的 bgFollowCover 引用
+
+echo "=== 32 v34: 清 bgFollow 残留 ==="
+
+python3 << 'PYEOF'
+import re, os, sys
+
+MARK = "// [32v34]"
+
+# 1) LxMusicTheme.kt: 删除残留的 KEY_BG_FOLLOW_COVER 引用（第 109 行附近）
+lpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+with open(lpath, encoding="utf-8") as f:
+    src = f.read()
+
+if MARK not in src:
+    # 删除所有含 KEY_BG_FOLLOW_COVER 的行（常量定义已删，这是使用处）
+    lines = src.split('\n')
+    new_lines = []
+    for line in lines:
+        if 'KEY_BG_FOLLOW_COVER' in line:
+            # 如果是 val 定义行，跳过；如果是使用行，也删（因为常量已删）
+            continue
+        # 删除 bgFollowCover 相关的 StateFlow 初始化残留
+        if 'bgFollowCover' in line and 'val' in line and 'StateFlow' in line:
+            continue
+        new_lines.append(line)
+    src = '\n'.join(new_lines)
+    # 加标记
+    src = src.rstrip() + f"\n{MARK} bgFollow 残留已清\n"
+    with open(lpath, "w", encoding="utf-8") as f:
+        f.write(src)
+    print("LxMusicTheme.kt 残留已清")
+else:
+    print("LxMusicTheme.kt 已处理")
+
+# 2) LxPlaybackSettingsActivity.kt: 删除 bgFollowCover UI 块
+ppath = None
+for root, dirs, files in os.walk("app/src/main/java"):
+    for fn in files:
+        if fn == "LxPlaybackSettingsActivity.kt":
+            ppath = os.path.join(root, fn)
+            break
+    if ppath:
+        break
+
+if ppath:
+    with open(ppath, encoding="utf-8") as f:
+        psrc = f.read()
+    if MARK not in psrc:
+        # 找到 setBgFollowCover 调用，往前找整个 Row 块删除
+        # 简化：删除含 bgFollowCover/setBgFollowCover 的行所在的 Row 块
+        # 用括号匹配找 Row { ... }
+        idx = psrc.find("setBgFollowCover")
+        if idx != -1:
+            # 往前找最近的 Row( 或 Column 包含
+            # 往后找匹配的 } 
+            # 简化策略：删除从 "背景随封面" 注释（或 Text）到 Switch 块结束
+            # 先找 "背景随封面" 文本
+            t_idx = psrc.rfind("背景随封面", 0, idx)
+            if t_idx != -1:
+                # 往前找 Row( 的开始
+                row_start = psrc.rfind("Row(", 0, t_idx)
+                if row_start != -1:
+                    # 括号匹配找 Row 结束
+                    b_start = psrc.find("(", row_start)
+                    depth = 0
+                    end = -1
+                    for i in range(b_start, len(psrc)):
+                        if psrc[i] == '(':
+                            depth += 1
+                        elif psrc[i] == ')':
+                            depth -= 1
+                            if depth == 0:
+                                # Row( ... ) 结束，再找 { ... } 
+                                # 实际上 Row( modifier ) { content }
+                                # 找到 ) 后的 {
+                                brace = psrc.find('{', i)
+                                if brace != -1:
+                                    d2 = 0
+                                    for j in range(brace, len(psrc)):
+                                        if psrc[j] == '{':
+                                            d2 += 1
+                                        elif psrc[j] == '}':
+                                            d2 -= 1
+                                            if d2 == 0:
+                                                end = j + 1
+                                                break
+                                break
+                    if end != -1:
+                        psrc = psrc[:row_start] + f"\n{MARK} 背景随封面 UI 已删除\n" + psrc[end:]
+                        print("LxPlaybackSettingsActivity.kt UI 块已删除")
+                    else:
+                        print("警告: 未找到 Row 块结束")
+                else:
+                    print("警告: 未找到 Row( 开始")
+            else:
+                print("警告: 未找到'背景随封面'文本，尝试按行删除")
+                lines = psrc.split('\n')
+                new_lines = [l for l in lines if 'bgFollowCover' not in l and 'BgFollowCover' not in l and '背景随封面' not in l]
+                psrc = '\n'.join(new_lines)
+                print("按行删除完成")
+        else:
+            print("未找到 setBgFollowCover 调用")
+        
+        with open(ppath, "w", encoding="utf-8") as f:
+            f.write(psrc)
+    else:
+        print("LxPlaybackSettingsActivity.kt 已处理")
+else:
+    print("未找到 LxPlaybackSettingsActivity.kt")
+
+print("=== 32 v34 完成 ===")
+PYEOF
+
