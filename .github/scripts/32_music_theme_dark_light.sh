@@ -1845,112 +1845,15 @@ MPATH="app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
 LPATH="app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
 
 python3 << 'PYEOF'
-import re, sys
-
-# === 修复点 2: 先检查 musicColors() 定义 ===
-print("--- 检查 musicColors() ---")
+import sys
+print("--- v38: skip setContent, handled by v40 ---")
 try:
     with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt", encoding="utf-8") as f:
         lsrc = f.read()
+    print("LxMusicTheme.kt exists")
 except FileNotFoundError:
-    print("警告: LxMusicTheme.kt 不存在，跳过 musicColors 检查")
-    lsrc = ""
-
-# 找 fun musicColors
-m = re.search(r'fun musicColors\(\)[^\n]*\n((?:.*\n){0,5})', lsrc)
-if m:
-    print("找到 musicColors 定义:")
-    print(m.group(0)[:300])
-    if "LocalMusicColors.current" in m.group(0):
-        print("✓ 是动态的 (LocalMusicColors.current)")
-    elif "DarkMusicColors" in m.group(0) and "if" not in m.group(0):
-        print("✗ 写死了 DarkMusicColors! 需要修复")
-    else:
-        print("? 需人工确认")
-else:
-    print("未找到 fun musicColors() 定义，搜索其他形式...")
-    # 可能在 MusicHomeActivity 里？
-    with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", encoding="utf-8") as f:
-        msrc = f.read()
-    if "fun musicColors" in msrc:
-        print("在 MusicHomeActivity.kt 里定义")
-    else:
-        print("两处都未找到，可能是 import 的")
-
-print()
-print("--- 修复点 1+3: MusicHomeActivity ---")
-
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", encoding="utf-8") as f:
-    src = f.read()
-
-MARK = "// [32v38]"
-if MARK in src:
-    print("已处理，跳过")
-    sys.exit(0)
-
-# 修复点 1: setContent 的 MaterialTheme -> LxMusicTheme(isDarkTheme=...)
-# 原:
-#         setContent {
-#             MaterialTheme {
-#                 MusicHomeScreen(...)
-#             }
-#         }
-# [32v38-fix] 用正则宽松匹配
-_m38 = re.search(r'        setContent \{\n            MaterialTheme \{\n                MusicHomeScreen\(\n                    onBackToAppHome = \{ finish\(\) \}\n                \)\n            \}\n        \}', src)
-old_setcontent = _m38.group(0) if _m38 else ""
-
-# 新: 用 LxMusicTheme 包裹，从 MusicThemeManager 读 isDarkTheme
-new_setcontent = """        setContent {
-            // [32v38] 用桥接主题包裹，isDarkTheme 从 MusicThemeManager 读
-            val isDark38 by MusicThemeManager.isDarkTheme.collectAsStateWithLifecycle()
-            // 跟随系统模式：读 theme_prefs
-            val prefs38 = getSharedPreferences("theme_prefs", MODE_PRIVATE)
-            val mode38 = prefs38.getInt("theme_mode", 0)
-            val sysDark38 = androidx.compose.foundation.isSystemInDarkTheme()
-            val finalDark38 = when (mode38) {
-                1 -> true
-                2 -> false
-                else -> sysDark38
-            }
-            LxMusicTheme(isDarkTheme = finalDark38) {
-                // [32v38] 状态栏跟随主题（只在音乐区内）
-                androidx.compose.runtime.SideEffect {
-                    val window = window
-                    val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-                    controller.isAppearanceLightStatusBars = !finalDark38
-                    controller.isAppearanceLightNavigationBars = !finalDark38
-                }
-                MusicHomeScreen(
-                    onBackToAppHome = { finish() }
-                )
-            }
-        }"""
-
-if not old_setcontent:
-    print("错误: 未找到 setContent 锚点")
-    # 尝试更宽松的匹配
-    if "setContent" in src and "MusicHomeScreen" in src:
-        print("找到 setContent 和 MusicHomeScreen，但格式不匹配，打印实际:")
-        idx = src.find("setContent")
-        print(src[idx:idx+300][:300])
-    sys.exit(1)
-
-src = src.replace(old_setcontent, new_setcontent, 1)
-print("✓ setContent 已换 LxMusicTheme + 状态栏 SideEffect")
-
-# 确保 import collectAsStateWithLifecycle
-if "collectAsStateWithLifecycle" in src and "import androidx.lifecycle.compose.collectAsStateWithLifecycle" not in src:
-    # 加到 imports
-    src = src.replace(
-        "import androidx.compose.runtime.*",
-        "import androidx.compose.runtime.*\nimport androidx.lifecycle.compose.collectAsStateWithLifecycle",
-        1
-    )
-    print("✓ 已加 collectAsStateWithLifecycle import")
-
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", "w", encoding="utf-8") as f:
-    f.write(src)
-print("已写入")
+    print("LxMusicTheme.kt not found, skip")
+print("v38 done")
 PYEOF
 
 echo "=== 32 v38 完成 ==="
