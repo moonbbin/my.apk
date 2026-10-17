@@ -4,7 +4,7 @@
 set -e
 cd avbox
 
-echo "=== 32 v12：深色/浅色全局切换 ==="
+echo "=== 32 v13：深色/浅色全局切换 ==="
 
 # ===== Part 1: Color.kt 追加浅色 Token =====
 python3 << 'PYEOF'
@@ -64,10 +64,10 @@ with open(path, "w", encoding="utf-8") as f:
 print("PartA2：LxMusicTheme 桥接已创建")
 PYEOF
 
-echo "=== 32 v12 PartA2 完成 ==="
+echo "=== 32 v13 PartA2 完成 ==="
 
-# 32 v12: 修复 LxMusicTheme.kt 的 import 缺失
-echo "=== 32 v12 PartA3: 补 Import ==="
+# 32 v13: 修复 LxMusicTheme.kt 的 import 缺失
+echo "=== 32 v13 PartA3: 补 Import ==="
 
 python3 << 'PYEOF'
 import re
@@ -110,11 +110,11 @@ else:
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(src)
-print("=== 32 v12 PartA3 完成 ===")
+print("=== 32 v13 PartA3 完成 ===")
 PYEOF
 
-# 32 v12: PartB 详细打印 MainActivity setContent 结构
-echo "=== 32 v12 PartB: MainActivity 详细结构 ==="
+# 32 v13: PartB 详细打印 MainActivity setContent 结构
+echo "=== 32 v13 PartB: MainActivity 详细结构 ==="
 
 MAIN="app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
 if [ ! -f "$MAIN" ]; then
@@ -161,14 +161,14 @@ for i, line in enumerate(lines):
 PYEOF
 
 echo ""
-echo "=== 32 v12 PartB 完成（仅排查，不修改）==="
+echo "=== 32 v13 PartB 完成（仅排查，不修改）==="
 # 不退出 1，让构建继续，先看到结构
 
-# 32 v12 PartC: 搜 isSystemInDarkTheme 并替换
+# 32 v13 PartC: 搜 isSystemInDarkTheme 并替换
 set -e
 # cd avbox (已在 avbox 内，跳过)
 
-echo "=== 32 v12 PartC：isSystemInDarkTheme 排查 ==="
+echo "=== 32 v13 PartC：isSystemInDarkTheme 排查 ==="
 
 # 只查 music 相关目录，避免动主体其他部分
 TARGET_DIR="app/src/main/java/com/github/tvbox/osc/ui/music"
@@ -195,12 +195,12 @@ if [ "$FOUND" -gt 0 ]; then
     echo "或：MaterialTheme.colorScheme.background.luminance() < 0.5"
 fi
 
-echo "=== 32 v12 PartC 完成 ==="
-# 32 v12 PartD: Modifier.shadow 检查
+echo "=== 32 v13 PartC 完成 ==="
+# 32 v13 PartD: Modifier.shadow 检查
 set -e
 # cd avbox (已在 avbox 内，跳过)
 
-echo "=== 32 v12 PartD：shadow 检查 ==="
+echo "=== 32 v13 PartD：shadow 检查 ==="
 
 TARGET_DIR="app/src/main/java/com/github/tvbox/osc/ui/music"
 
@@ -221,10 +221,10 @@ if [ "$FOUND" -gt 0 ]; then
     echo "如需修复，考虑用 MaterialTheme.colorScheme.surfaceVariant 做阴影色，或调低 elevation"
 fi
 
-echo "=== 32 v12 PartD 完成 ==="
+echo "=== 32 v13 PartD 完成 ==="
 
-# 32 v12: BrandGreen -> PlayerGreen (实际存在的常量名)
-echo "=== 32 v12: 修复 BrandGreen ==="
+# 32 v13: BrandGreen -> PlayerGreen (实际存在的常量名)
+echo "=== 32 v13: 修复 BrandGreen ==="
 
 python3 << 'PYEOF'
 path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
@@ -245,11 +245,11 @@ print("Import 已修正")
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(src)
-print("=== 32 v12 完成 ===")
+print("=== 32 v13 完成 ===")
 PYEOF
 
-# 32 v12: PlayerGreen 改为 public
-echo "=== 32 v12: PlayerGreen public ==="
+# 32 v13: PlayerGreen 改为 public
+echo "=== 32 v13: PlayerGreen public ==="
 
 python3 << 'PYEOF'
 path = "app/src/main/java/com/github/tvbox/osc/ui/music/theme/Color.kt"
@@ -273,11 +273,11 @@ for name in ['DetailGreen', 'SearchAccent', 'AccentBlue', 'ErrorRed', 'TextOnAcc
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(src_new)
-print("=== 32 v12 完成 ===")
+print("=== 32 v13 完成 ===")
 PYEOF
 
-# 32 v12: 按用户要求 - Color.kt private->internal，确保 BrandGreen 存在；LxMusicTheme 统一用 BrandGreen
-echo "=== 32 v12: 主题 Token 可见性修复 ==="
+# 32 v13: 按用户要求 - Color.kt private->internal，确保 BrandGreen 存在；LxMusicTheme 统一用 BrandGreen
+echo "=== 32 v13: 主题 Token 可见性修复 ==="
 
 python3 << 'PYEOF'
 import re
@@ -337,11 +337,11 @@ if "import com.github.tvbox.osc.ui.music.theme.BrandGreen" not in lsrc:
 with open(lpath, "w", encoding="utf-8") as f:
     f.write(lsrc)
 
-print("=== 32 v12 完成 ===")
+print("=== 32 v13 完成 ===")
 PYEOF
 
-# 32 v12: 按用户三步要求 - Color.kt 加 BrandGreen(0xFF34C759)，确保可见性；LxMusicTheme 确保 import
-echo "=== 32 v12: BrandGreen 三步修复 ==="
+# 32 v13: 按用户三步要求 - Color.kt 加 BrandGreen(0xFF34C759)，确保可见性；LxMusicTheme 确保 import
+echo "=== 32 v13: BrandGreen 三步修复 ==="
 
 python3 << 'PYEOF'
 import re
@@ -401,11 +401,11 @@ else:
 with open(lpath, "w", encoding="utf-8") as f:
     f.write(lsrc)
 
-print("=== 32 v12 完成 ===")
+print("=== 32 v13 完成 ===")
 PYEOF
 
-# 32 v12: 强制 BrandGreen = Color(0xFF34C759)，覆盖旧别名
-echo "=== 32 v12: 强制 BrandGreen 定义 ==="
+# 32 v13: 强制 BrandGreen = Color(0xFF34C759)，覆盖旧别名
+echo "=== 32 v13: 强制 BrandGreen 定义 ==="
 
 python3 << 'PYEOF'
 import re
@@ -451,6 +451,207 @@ else:
 with open(lpath, "w", encoding="utf-8") as f:
     f.write(lsrc)
 
-print("=== 32 v12 完成 ===")
+print("=== 32 v13 完成 ===")
+PYEOF
+
+# 32 v13: 补设置页主题开关 + MainActivity 接线
+echo "=== 32 v13: 主题开关与 MainActivity 接线 ==="
+
+python3 << 'PYEOF'
+import re, sys
+
+# ===== Part 1: SettingsScreen 加 ThemeSettingItem =====
+spath = "app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+try:
+    with open(spath, encoding="utf-8") as f:
+        ssrc = f.read()
+except FileNotFoundError:
+    print(f"警告: 未找到 {spath}，跳过设置页")
+    ssrc = None
+
+if ssrc is not None and "// [32v13] ThemeSettingItem" not in ssrc:
+    # 主题开关 composable（用户定稿版）
+    theme_item_code = '''
+// [32v13] ThemeSettingItem: 深色模式切换
+@Composable
+fun ThemeSettingItem(
+    themeViewModel: com.github.tvbox.osc.ui.music.theme.ThemeViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+) {
+    val themeMode by themeViewModel.themeMode.collectAsState()
+    var showDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    val modeLabel = when (themeMode) {
+        com.github.tvbox.osc.ui.music.theme.ThemeMode.FORCE_DARK -> "深色"
+        com.github.tvbox.osc.ui.music.theme.ThemeMode.FORCE_LIGHT -> "浅色"
+        else -> "跟随系统"
+    }
+
+    SettingItem(
+        title = "深色模式",
+        subtitle = modeLabel,
+        onClick = { showDialog = true }
+    )
+
+    if (showDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = {
+                androidx.compose.material3.Text(
+                    "深色模式",
+                    style = androidx.compose.material3.MaterialTheme.typography.titleLarge
+                )
+            },
+            text = {
+                androidx.compose.foundation.layout.Column {
+                    ThemeOption(
+                        label = "跟随系统",
+                        selected = themeMode == com.github.tvbox.osc.ui.music.theme.ThemeMode.FOLLOW_SYSTEM,
+                        onClick = {
+                            themeViewModel.setThemeMode(com.github.tvbox.osc.ui.music.theme.ThemeMode.FOLLOW_SYSTEM)
+                            showDialog = false
+                        }
+                    )
+                    ThemeOption(
+                        label = "开启（深色）",
+                        selected = themeMode == com.github.tvbox.osc.ui.music.theme.ThemeMode.FORCE_DARK,
+                        onClick = {
+                            themeViewModel.setThemeMode(com.github.tvbox.osc.ui.music.theme.ThemeMode.FORCE_DARK)
+                            showDialog = false
+                        }
+                    )
+                    ThemeOption(
+                        label = "关闭（浅色）",
+                        selected = themeMode == com.github.tvbox.osc.ui.music.theme.ThemeMode.FORCE_LIGHT,
+                        onClick = {
+                            themeViewModel.setThemeMode(com.github.tvbox.osc.ui.music.theme.ThemeMode.FORCE_LIGHT)
+                            showDialog = false
+                        }
+                    )
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { showDialog = false }) {
+                    androidx.compose.material3.Text("取消")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun ThemeOption(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    androidx.compose.foundation.layout.Row(
+        modifier = androidx.compose.ui.Modifier
+            .fillMaxWidth()
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp, horizontal = 8.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+    ) {
+        androidx.compose.material3.RadioButton(
+            selected = selected,
+            onClick = null,
+            colors = androidx.compose.material3.RadioButtonDefaults.colors(
+                selectedColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                unselectedColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        )
+        androidx.compose.foundation.layout.Spacer(
+            modifier = androidx.compose.ui.Modifier.width(12.dp)
+        )
+        androidx.compose.material3.Text(
+            text = label,
+            style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
+            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+'''
+    # 追加到文件末尾
+    ssrc = ssrc.rstrip() + "\n" + theme_item_code + "\n"
+    with open(spath, "w", encoding="utf-8") as f:
+        f.write(ssrc)
+    print("1) SettingsScreen.kt: ThemeSettingItem 已追加")
+    print("   注意: 需手动在设置列表中调用 ThemeSettingItem()")
+else:
+    print("1) SettingsScreen.kt: 已有 ThemeSettingItem，跳过")
+
+# ===== Part 2: MainActivity 接线 =====
+mpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
+with open(mpath, encoding="utf-8") as f:
+    msrc = f.read()
+
+if "// [32v13] MainActivity theme" not in msrc:
+    # 加 findActivity 扩展函数和必要的 import
+    # 在文件末尾追加扩展函数
+    ext_code = '''
+// [32v13] MainActivity theme: 安全获取 Activity
+fun android.content.Context.findActivity(): android.app.Activity? {
+    var ctx = this
+    while (ctx is android.content.ContextWrapper) {
+        if (ctx is android.app.Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
+}
+'''
+    msrc = msrc.rstrip() + "\n" + ext_code + "\n"
+
+    # 在 setContent 中包裹 LxMusicTheme
+    # 找 setContent { 的位置
+    m = re.search(r'setContent\s*\{', msrc)
+    if m:
+        # 在 setContent { 后插入主题逻辑
+        insert_pos = m.end()
+        theme_wrap = '''
+        // [32v13] MainActivity theme: 主题切换
+        val themeViewModel: com.github.tvbox.osc.ui.music.theme.ThemeViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+        val themeMode by themeViewModel.themeMode.collectAsState()
+        val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
+        val isDark = when (themeMode) {
+            com.github.tvbox.osc.ui.music.theme.ThemeMode.FORCE_DARK -> true
+            com.github.tvbox.osc.ui.music.theme.ThemeMode.FORCE_LIGHT -> false
+            else -> systemDark
+        }
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val window = context.findActivity()?.window
+        androidx.compose.runtime.SideEffect {
+            window?.let {
+                val controller = androidx.core.view.WindowCompat.getInsetsController(it, it.decorView)
+                controller.isAppearanceLightStatusBars = !isDark
+                controller.isAppearanceLightNavigationBars = !isDark
+            }
+        }
+        com.github.tvbox.osc.ui.activity.LxMusicTheme(isDarkTheme = isDark) {
+'''
+        # 找到 setContent 块的结束位置（匹配大括号）
+        # 简化：假设 setContent 是最后一个大块，在文件末尾前插入闭合
+        # 这里用括号匹配
+        depth = 1
+        end_pos = insert_pos
+        for i in range(insert_pos, len(msrc)):
+            if msrc[i] == '{':
+                depth += 1
+            elif msrc[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    end_pos = i
+                    break
+
+        msrc = msrc[:insert_pos] + theme_wrap + msrc[insert_pos:end_pos] + "\n        }\n" + msrc[end_pos:]
+        print("2) MainActivity.kt: 已包裹 LxMusicTheme(isDarkTheme)")
+    else:
+        print("2) 警告: 未找到 setContent")
+
+    with open(mpath, "w", encoding="utf-8") as f:
+        f.write(msrc)
+else:
+    print("2) MainActivity.kt: 已有主题接线，跳过")
+
+print("=== 32 v13 完成 ===")
 PYEOF
 
