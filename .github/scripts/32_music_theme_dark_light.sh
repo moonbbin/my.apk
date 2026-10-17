@@ -1737,3 +1737,53 @@ PYEOF
 
 echo "=== 32 v35 完成 ==="
 
+# 32 v36: 全局替换 MusicHomeActivity 硬编码黑底
+
+echo "=== 32 v36: 硬编码黑底换主题 ==="
+
+MPATH="app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+
+python3 << 'PYEOF'
+import sys
+
+with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v36]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# 替换所有 .background(BgDeepBlue) -> .background(musicColors().background)
+# 注意：保留 .copy(alpha=...) 的变体
+count = 0
+
+# 1. .background(BgDeepBlue.copy(alpha = Xf)) -> .background(musicColors().background.copy(alpha = Xf))
+import re
+pattern1 = r'\.background\(BgDeepBlue\.copy\(alpha = ([0-9.]+f)\)\)'
+def repl1(m):
+    return f'.background(musicColors().background.copy(alpha = {m.group(1)}))'
+src, n1 = re.subn(pattern1, repl1, src)
+count += n1
+print(f"替换 BgDeepBlue.copy: {n1} 处")
+
+# 2. .background(BgDeepBlue) -> .background(musicColors().background)
+src, n2 = re.subn(r'\.background\(BgDeepBlue\)', '.background(musicColors().background)', src)
+count += n2
+print(f"替换 BgDeepBlue: {n2} 处")
+
+# 3. .background(BgDarker) -> .background(musicColors().background)
+src, n3 = re.subn(r'\.background\(BgDarker\)', '.background(musicColors().background)', src)
+count += n3
+print(f"替换 BgDarker: {n3} 处")
+
+# 加标记（文件末尾）
+src = src.rstrip() + f"\n{MARK} 硬编码黑底已换主题，共 {count} 处\n"
+
+with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", "w", encoding="utf-8") as f:
+    f.write(src)
+print(f"总计替换 {count} 处")
+PYEOF
+
+echo "=== 32 v36 完成 ==="
+
