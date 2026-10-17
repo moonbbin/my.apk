@@ -2252,3 +2252,42 @@ PYEOF
 
 echo "=== 32 v45 完成 ==="
 
+# 32 v46: 同步更新 MusicThemeManager，不用 LaunchedEffect
+
+echo "=== 32 v46: 同步主题状态 ==="
+
+python3 << 'PYEOF'
+import sys
+
+MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+with open(MPATH, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v46]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# 把 LaunchedEffect 改成同步调用
+old = """            androidx.compose.runtime.LaunchedEffect(finalDark41) {
+                MusicThemeManager.setDarkTheme(finalDark41)
+            }"""
+
+new = """            // [32v46] 同步更新，保证 musicColors() 读到最新值
+            MusicThemeManager.setDarkTheme(finalDark41)"""
+
+if old in src:
+    src = src.replace(old, new, 1)
+    print("✓ 已改为同步调用")
+else:
+    print("错误: 未找到 LaunchedEffect 块")
+    sys.exit(1)
+
+src = MARK + "\n" + src
+with open(MPATH, "w", encoding="utf-8") as f:
+    f.write(src)
+print("已写入")
+PYEOF
+
+echo "=== 32 v46 完成 ==="
+
