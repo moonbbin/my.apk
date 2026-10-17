@@ -1384,3 +1384,65 @@ PYEOF
 
 echo "=== 32 v30 完成 ==="
 
+# 32 v31: 修三档切换的"跟随系统"（正确版）
+
+echo "=== 32 v31: 三档切换接通 ==="
+
+python3 << 'PYEOF'
+import re, sys
+
+with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt", encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v31]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# v30 的代码结构：
+# val ctx30 = ...
+# val prefs30 = ...
+# var themeMode30 by ...
+# Column { listOf(...).forEach { ... clickable { ... when(mode) {...} } } }
+#
+# 需要在 clickable 外面（Composable 作用域）获取 sysDark
+# 找到 "var themeMode30 by" 那行，在它后面加 sysDark
+
+old = '''                    var themeMode30 by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(prefs30.getInt("theme_mode", 0)) }'''
+
+new = '''                    var themeMode30 by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(prefs30.getInt("theme_mode", 0)) }
+                    // [32v31] 系统主题（Composable 作用域获取）
+                    val sysDark30 = androidx.compose.foundation.isSystemInDarkTheme()'''
+
+if old not in src:
+    print("错误: 未找到 themeMode30 锚点")
+    sys.exit(1)
+
+src = src.replace(old, new)
+
+# 替换 when (mode) 块
+old_when = '''                                        when (mode) {
+                                            1 -> MusicThemeManager.setDarkTheme(true)
+                                            2 -> MusicThemeManager.setDarkTheme(false)
+                                            else -> { /* 跟随系统 */ }
+                                        }'''
+
+new_when = '''                                        when (mode) {
+                                            1 -> MusicThemeManager.setDarkTheme(true)
+                                            2 -> MusicThemeManager.setDarkTheme(false)
+                                            else -> MusicThemeManager.setDarkTheme(sysDark30)
+                                        }'''
+
+if old_when not in src:
+    print("错误: 未找到 when 锚点")
+    sys.exit(1)
+
+src = src.replace(old_when, new_when)
+
+with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt", "w", encoding="utf-8") as f:
+    f.write(src)
+print("跟随系统已接通")
+PYEOF
+
+echo "=== 32 v31 完成 ==="
+
