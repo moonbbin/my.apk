@@ -1,5 +1,5 @@
 #!/bin/bash
-# 21 - 播放器音质验货（防糊）：v16
+# 21 - 播放器音质验货（防糊）：v18
 # ============================================================================
 # 版本导航（v1→v9 一句话）：
 #   v1：Range 取前 64KB 验货（FLAC 解析 STREAMINFO、MP3 解析帧头），实测档位须≥请求档
@@ -991,3 +991,39 @@ else:
     sys.exit(1)
 PYEOF
 # ===== v16 结束 =====
+
+# ===== v18：play() 保 bitrate =====
+python3 << 'PYEOF'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [v18] keep measuredBitrate on resume"
+if MARK in src:
+    print("跳过（已是 v18）")
+    sys.exit(0)
+
+# 找到 play() 中的 _measuredBitrate.value = 0，注释掉并加说明
+OLD = """            _position.value = 0L
+            _duration.value = 0L
+            _measuredBitrate.value = 0
+            val mediaItem = MediaItem.fromUri(url)"""
+
+NEW = """            _position.value = 0L
+            _duration.value = 0L
+            // [v18] keep measuredBitrate on resume：回列表再进不清除实测码率，徽章持久显示
+            // _measuredBitrate.value = 0
+            val mediaItem = MediaItem.fromUri(url)"""
+
+if OLD in src:
+    src = src.replace(OLD, NEW, 1)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(src)
+    print("v18：play() 已保留 measuredBitrate")
+else:
+    print("错误：未找到 play() 重置锚点")
+    sys.exit(1)
+PYEOF
+# ===== v18 结束 =====
