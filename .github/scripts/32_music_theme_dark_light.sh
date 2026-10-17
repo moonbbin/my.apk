@@ -1114,3 +1114,28 @@ else:
 PYEOF
 echo "=== 32 v25 完成 ==="
 
+# 32 v26: 从 AVBox 原仓库直接覆盖 MainActivity.kt
+
+echo "=== 32 v26: 原版覆盖 MainActivity ==="
+
+MPATH="app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
+URL="https://raw.githubusercontent.com/moonbbin/AVBox/main/app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
+
+if curl -sL "$URL" -o /tmp/MainActivity_avbox.kt; then
+    ORIG_SIZE=$(wc -c < /tmp/MainActivity_avbox.kt)
+    # 验证下载的是 Kotlin 文件（包含 package）
+    if grep -q "^package " /tmp/MainActivity_avbox.kt; then
+        cp /tmp/MainActivity_avbox.kt "$MPATH"
+        echo "已用 AVBox 原版覆盖 ($ORIG_SIZE 字符)"
+        echo "MARK: [32v26] done"
+    else
+        echo "错误: 下载的内容不是有效的 Kotlin 文件"
+        exit 1
+    fi
+else
+    echo "错误: 下载失败"
+    exit 1
+fi
+
+echo "=== 32 v26 完成 ==="
+
