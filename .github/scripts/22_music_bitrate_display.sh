@@ -165,3 +165,55 @@ else:
     sys.exit(1)
 PYEOF
 # ===== v7 结束 =====
+
+# ===== v8：实测档位徽章 =====
+python3 << 'PYEOF'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [v8] detail tier by measured bitrate"
+if MARK in src:
+    print("跳过（已是 v8）")
+    sys.exit(0)
+
+# 找到 v6 的徽章 text 逻辑，在前面插入细档位映射
+# v6 的格式是：text = when { measuredBitrate > 0 -> { ... } ... }
+# 我们在 measuredBitrate > 0 的分支里，把 lbl 的计算换成按码率的细档位
+
+OLD_LBL = '''                                val lbl = when (currentQuality) {
+                                    "master" -> "母带"
+                                    "atmos_plus" -> "全景声+"
+                                    "atmos" -> "全景声"
+                                    "hires" -> "Hi-Res"
+                                    else -> rawLbl
+                                }'''
+
+NEW_LBL = '''                                // [v8] detail tier by measured bitrate：按实测码率给细档位
+                                val lbl = when {
+                                    measuredBitrate >= 1000 -> "无损"
+                                    measuredBitrate >= 800 -> "Hi-Res"
+                                    measuredBitrate >= 500 -> "SQ"
+                                    measuredBitrate >= 320 -> "HQ"
+                                    measuredBitrate > 0 -> "标准"
+                                    else -> when (currentQuality) {
+                                        "master" -> "母带"
+                                        "atmos_plus" -> "全景声+"
+                                        "atmos" -> "全景声"
+                                        "hires" -> "Hi-Res"
+                                        else -> rawLbl
+                                    }
+                                }'''
+
+if OLD_LBL in src:
+    src = src.replace(OLD_LBL, NEW_LBL, 1)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(src)
+    print("v8：徽章已按实测码率分档")
+else:
+    print("错误：未找到 v6 lbl 锚点")
+    sys.exit(1)
+PYEOF
+# ===== v8 结束 =====
