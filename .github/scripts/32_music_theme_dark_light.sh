@@ -595,3 +595,130 @@ for root, dirs, files in os.walk("app/src/main/java"):
 PYEOF2
 echo "=== 32 v15 完成 ==="
 
+# 32 v16: ThemeSettingsPage 加主题循环切换（简化版，无对话框）
+echo "=== 32 v16: 主题切换（循环版）==="
+
+python3 << 'PYEOF'
+import re, os
+
+tpath = None
+for root, dirs, files in os.walk("app/src/main/java"):
+    for fn in files:
+        if fn == "ThemeSettingsPage.kt":
+            tpath = os.path.join(root, fn)
+            break
+    if tpath:
+        break
+
+with open(tpath, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v16]"
+if MARK in src:
+    print("已添加，跳过")
+else:
+    # 1) 加 import（DataStore 相关）
+    imports_needed = [
+        "import androidx.compose.runtime.getValue",
+        "import androidx.compose.runtime.setValue",
+        "import androidx.compose.runtime.collectAsState",
+        "import androidx.datastore.preferences.core.intPreferencesKey",
+        "import androidx.datastore.preferences.core.edit",
+        "import kotlinx.coroutines.launch",
+    ]
+    # 找最后一个 import
+    imports = list(re.finditer(r'^import .+$', src, re.MULTILINE))
+    if imports:
+        pos = imports[-1].end()
+        to_add = [imp for imp in imports_needed if imp not in src]
+        if to_add:
+            src = src[:pos] + "\n" + "\n".join(to_add) + src[pos:]
+            print(f"1) 加 import: {len(to_add)} 个")
+
+    # 2) 在 ThemeSettingsPage 函数内开头加状态和 DataStore 逻辑
+    m = re.search(r'fun\s+ThemeSettingsPage\s*\([^)]*\)\s*\{', src)
+    if m:
+        pos = m.end()
+        code = f'''
+    {MARK} 主题模式状态
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val themeKey = intPreferencesKey("theme_mode")
+    // 直接用 DataStore，不依赖 ThemeViewModel（避免 Hilt 问题）
+    val themeMode by ctx.dataStore.data
+        .map {{ prefs -> prefs[themeKey] ?: 0 }}
+        .collectAsState(initial = 0)
+    val modeLabel = when (themeMode) {{
+        1 -> "深色"
+        2 -> "浅色"
+        else -> "跟随系统"
+    }}
+    fun cycleTheme() {{
+        scope.launch {{
+            ctx.dataStore.edit {{ prefs ->
+                prefs[themeKey] = (themeMode + 1) % 3
+            }}
+        }}
+    }}
+'''
+        src = src[:pos] + code + src[pos:]
+        print("2) 已加主题状态逻辑")
+    else:
+        print("2) 警告: 未找到 ThemeSettingsPage 函数")
+
+    # 3) 在第一个 SettingGroup 前插入主题 Group
+    # 需要 dataStore 扩展：复用 ThemeViewModel.kt 中的定义
+    # 检查是否有 dataStore 定义，没有则加
+    if "val android.content.Context.dataStore" not in src and "Context.dataStore" not in src:
+        # 在文件末尾加 dataStore 定义
+        ds_code = '''
+// [32v16] DataStore
+private val android.content.Context.dataStore by androidx.datastore.preferences.preferencesDataStore(name = "theme_prefs")
+'''
+        src = src.rstrip() + "\n" + ds_code + "\n"
+        print("3) 已加 dataStore 定义")
+
+    with open(tpath, "w", encoding="utf-8") as f:
+        f.write(src)
+
+print("=== 32 v16 完成 ===")
+print("说明: 点击'深色模式'会在 跟随系统->深色->浅色 间循环切换")
+PYEOF
+
+# 追加：插入 SettingItem 到第一个 items listOf
+python3 << 'PYEOF2'
+import re, os
+tpath = None
+for root, dirs, files in os.walk("app/src/main/java"):
+    for fn in files:
+        if fn == "ThemeSettingsPage.kt":
+            tpath = os.path.join(root, fn)
+            break
+    if tpath:
+        break
+with open(tpath, encoding="utf-8") as f:
+    src = f.read()
+# 在第一个 items = listOf( 后插入
+m = re.search(r'items\s*=\s*listOf\(\s*\n', src)
+if m and "// [32v16] theme item" not in src:
+    pos = m.end()
+    # 获取缩进
+    line_start = src.rfind('\n', 0, pos) + 1
+    next_line_end = src.find('\n', pos)
+    next_line = src[pos:next_line_end] if next_line_end != -1 else ""
+    indent = next_line[:len(next_line) - len(next_line.lstrip())] if next_line.strip() else "                "
+    item_code = f'''// [32v16] theme item
+{indent}SettingItem(
+{indent}    title = "深色模式",
+{indent}    subtitle = modeLabel,
+{indent}    action = {{ cycleTheme() }}
+{indent}),
+'''
+    src = src[:pos] + item_code + src[pos:]
+    with open(tpath, "w", encoding="utf-8") as f:
+        f.write(src)
+    print("4) 已插入主题 SettingItem")
+else:
+    print("4) 跳过（已插入或未找到位置）")
+PYEOF2
+
