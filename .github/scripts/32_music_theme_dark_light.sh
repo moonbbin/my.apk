@@ -994,3 +994,51 @@ for h in hits:
     print(" ", h)
 PYEOF
 
+# 32 v23: MainActivity 完全恢复原状（回滚 v14/v20）
+
+echo "=== 32 v23: MainActivity 回滚 ==="
+
+python3 << 'PYEOF'
+import re
+
+mpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
+with open(mpath, encoding="utf-8") as f:
+    src = f.read()
+
+MARK23 = "// [32v23]"
+
+if MARK23 in src:
+    print("已回滚，跳过")
+else:
+    orig_len = len(src)
+    
+    # 删除 v20 加的主题读取块
+    src = re.sub(
+        r'\s*// \[32v20\][^\n]*\n(?:[^\n]*\n)*?.*?LxMusicTheme\(isDarkTheme = isDarkTheme\) \{\{',
+        '\n                AVBoxTheme {',
+        src,
+        count=1
+    )
+    
+    # 删除 v14 的标记
+    src = src.replace("// [32v14] use LxMusicTheme\n                ", "")
+    
+    # 确保 MainScreen 被 AVBoxTheme 包裹（不是 LxMusicTheme）
+    # 找 LxMusicTheme 包裹 MainScreen 的，换回 AVBoxTheme
+    src = re.sub(
+        r'(?:com\.github\.tvbox\.osc\.ui\.activity\.)?LxMusicTheme(?:\(isDarkTheme[^\)]*\))?\s*\{\s*\n(\s*)MainScreen\(\)',
+        r'AVBoxTheme {\n\1MainScreen()',
+        src
+    )
+    
+    # 加标记
+    src = src.replace("AVBoxTheme {", f"{MARK23} restored\n                AVBoxTheme {{", 1)
+    
+    with open(mpath, "w", encoding="utf-8") as f:
+        f.write(src)
+    print(f"MainActivity 已恢复（{orig_len} -> {len(src)} 字符）")
+
+print("=== 32 v23 完成 ===")
+print("主体 MainActivity 恢复原状，主题只留给音乐区")
+PYEOF
+
