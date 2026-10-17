@@ -1,10 +1,10 @@
 #!/bin/bash
-# 32_music_theme_dark_light.sh v2 (2026-10-17): 桥接方案完整实装 (2026-10-17): 全局深色/浅色切换 + 播放页动态取色
+# 32_music_theme_dark_light.sh v3 (2026-10-17): 修复重复 cd avbox (2026-10-17): 桥接方案完整实装 (2026-10-17): 全局深色/浅色切换 + 播放页动态取色
 # 包含：浅色 Token、Theme 双盘、ThemeViewModel(DataStore)、MainActivity 注入、设置页开关、PlayerScreen 动态取色、build.gradle 依赖
 set -e
 cd avbox
 
-echo "=== 32 v2：深色/浅色全局切换 ==="
+echo "=== 32 v3：深色/浅色全局切换 ==="
 
 # ===== Part 1: Color.kt 追加浅色 Token =====
 python3 << 'PYEOF'
@@ -46,11 +46,11 @@ val LightDivider = Color(0xFFE5E5EA)       // 极浅的分割线
     print("Part1 Color.kt：浅色 Token 已追加")
 PYEOF
 
-echo "=== 32 v2 Part1 完成 ==="
-# 32 v2 Part2: ThemeViewModel.kt 新建（DataStore 持久化）
-cd avbox
+echo "=== 32 v3 Part1 完成 ==="
+# 32 v3 Part2: ThemeViewModel.kt 新建（DataStore 持久化）
+# cd avbox (已在 avbox 内，跳过)
 
-echo "=== 32 v2 Part2：ThemeViewModel ==="
+echo "=== 32 v3 Part2：ThemeViewModel ==="
 
 TARGET="app/src/main/java/com/github/tvbox/osc/ui/music/theme/ThemeViewModel.kt"
 mkdir -p "$(dirname "$TARGET")"
@@ -123,11 +123,11 @@ KTEOF
     echo "Part2：ThemeViewModel.kt 已创建"
 fi
 
-echo "=== 32 v2 Part2 完成 ==="
-# 32 v2 Part3: PlayerScreen.kt 新建（动态取色，三处修正版）
-cd avbox
+echo "=== 32 v3 Part2 完成 ==="
+# 32 v3 Part3: PlayerScreen.kt 新建（动态取色，三处修正版）
+# cd avbox (已在 avbox 内，跳过)
 
-echo "=== 32 v2 Part3：PlayerScreen ==="
+echo "=== 32 v3 Part3：PlayerScreen ==="
 
 TARGET="app/src/main/java/com/github/tvbox/osc/ui/music/player/PlayerScreen.kt"
 mkdir -p "$(dirname "$TARGET")"
@@ -318,11 +318,11 @@ KTEOF
     echo "Part3：PlayerScreen.kt 已创建"
 fi
 
-echo "=== 32 v2 Part3 完成 ==="
-# 32 v2 Part4: build.gradle 加依赖
-cd avbox
+echo "=== 32 v3 Part3 完成 ==="
+# 32 v3 Part4: build.gradle 加依赖
+# cd avbox (已在 avbox 内，跳过)
 
-echo "=== 32 v2 Part4：build.gradle 依赖 ==="
+echo "=== 32 v3 Part4：build.gradle 依赖 ==="
 
 python3 << 'PYEOF'
 import sys
@@ -362,14 +362,14 @@ else:
     sys.exit(1)
 PYEOF
 
-echo "=== 32 v2 Part4 完成 ==="
+echo "=== 32 v3 Part4 完成 ==="
 
-echo "=== 32 v2 PartA 完成 ==="
-# 32 v2 PartA2: LxMusicTheme composable 桥接重写
+echo "=== 32 v3 PartA 完成 ==="
+# 32 v3 PartA2: LxMusicTheme composable 桥接重写
 set -e
-cd avbox
+# cd avbox (已在 avbox 内，跳过)
 
-echo "=== 32 v2 PartA2：LxMusicTheme 桥接 ==="
+echo "=== 32 v3 PartA2：LxMusicTheme 桥接 ==="
 
 python3 << 'PYEOF'
 import sys, re
@@ -494,12 +494,12 @@ with open(path, "w", encoding="utf-8") as f:
 print("PartA2：LxMusicTheme 已重写为桥接版")
 PYEOF
 
-echo "=== 32 v2 PartA2 完成 ==="
-# 32 v2 PartB: MainActivity 彻底排查
+echo "=== 32 v3 PartA2 完成 ==="
+# 32 v3 PartB: MainActivity 彻底排查
 set -e
-cd avbox
+# cd avbox (已在 avbox 内，跳过)
 
-echo "=== 32 v2 PartB：MainActivity 排查 ==="
+echo "=== 32 v3 PartB：MainActivity 排查 ==="
 
 MAIN=$(find app/src/main/java -name "MainActivity.kt" 2>/dev/null | head -1)
 if [ -z "$MAIN" ]; then
@@ -557,12 +557,12 @@ else:
     sys.exit(1)
 PYEOF
 
-echo "=== 32 v2 PartB 完成 ==="
-# 32 v2 PartC: 搜 isSystemInDarkTheme 并替换
+echo "=== 32 v3 PartB 完成 ==="
+# 32 v3 PartC: 搜 isSystemInDarkTheme 并替换
 set -e
-cd avbox
+# cd avbox (已在 avbox 内，跳过)
 
-echo "=== 32 v2 PartC：isSystemInDarkTheme 排查 ==="
+echo "=== 32 v3 PartC：isSystemInDarkTheme 排查 ==="
 
 # 只查 music 相关目录，避免动主体其他部分
 TARGET_DIR="app/src/main/java/com/github/tvbox/osc/ui/music"
@@ -589,12 +589,12 @@ if [ "$FOUND" -gt 0 ]; then
     echo "或：MaterialTheme.colorScheme.background.luminance() < 0.5"
 fi
 
-echo "=== 32 v2 PartC 完成 ==="
-# 32 v2 PartD: Modifier.shadow 检查
+echo "=== 32 v3 PartC 完成 ==="
+# 32 v3 PartD: Modifier.shadow 检查
 set -e
-cd avbox
+# cd avbox (已在 avbox 内，跳过)
 
-echo "=== 32 v2 PartD：shadow 检查 ==="
+echo "=== 32 v3 PartD：shadow 检查 ==="
 
 TARGET_DIR="app/src/main/java/com/github/tvbox/osc/ui/music"
 
@@ -615,4 +615,4 @@ if [ "$FOUND" -gt 0 ]; then
     echo "如需修复，考虑用 MaterialTheme.colorScheme.surfaceVariant 做阴影色，或调低 elevation"
 fi
 
-echo "=== 32 v2 PartD 完成 ==="
+echo "=== 32 v3 PartD 完成 ==="
