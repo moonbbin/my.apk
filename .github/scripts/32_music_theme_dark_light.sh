@@ -1214,3 +1214,49 @@ else:
 print("=== 32 v27 完成 ===")
 PYEOF
 
+# 32 v28: 找 MusicThemeManager 定义 + 加三档切换
+
+echo "=== 32 v28: MusicThemeManager 结构 ==="
+
+python3 << 'PYEOF'
+import os, re, sys
+
+# 找 MusicThemeManager 定义
+mpath = None
+for root, dirs, files in os.walk("app/src/main/java"):
+    for fn in files:
+        if "MusicThemeManager" in fn and fn.endswith(".kt"):
+            mpath = os.path.join(root, fn)
+            break
+    if mpath:
+        break
+
+if not mpath:
+    # 搜文件内容
+    for root, dirs, files in os.walk("app/src/main/java"):
+        for fn in files:
+            if fn.endswith(".kt"):
+                fp = os.path.join(root, fn)
+                try:
+                    with open(fp, encoding="utf-8") as f:
+                        c = f.read()
+                    if "object MusicThemeManager" in c or "class MusicThemeManager" in c:
+                        mpath = fp
+                        break
+                except:
+                    pass
+        if mpath:
+            break
+
+if mpath:
+    print(f"文件: {mpath}")
+    with open(mpath, encoding="utf-8") as f:
+        src = f.read()
+    print(f"共 {len(src.split(chr(10)))} 行")
+    print("--- 内容 ---")
+    print(src[:3000])
+else:
+    print("错误: 未找到 MusicThemeManager")
+    sys.exit(1)
+PYEOF
+
