@@ -1297,3 +1297,90 @@ for root, dirs, files in os.walk("app/src/main/java"):
 PYEOF
 echo "=== 32 v29 完成 ==="
 
+# 32 v30: 给 LxThemeSettingsActivity.kt 加三档切换（补丁已生成的源文件）
+
+echo "=== 32 v30: 主题页三档切换 ==="
+
+TPATH="app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt"
+if [ ! -f "$TPATH" ]; then
+    echo "错误: 未找到 $TPATH（12 号脚本未生成？）"
+    exit 1
+fi
+
+python3 << 'PYEOF'
+import re, sys
+
+with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt", encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v30]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# 锚点：Switch( ... checked = isDark, ... onCheckedChange = { MusicThemeManager.setDarkTheme(it) }
+# 找到 Switch 块
+m = re.search(
+    r'(                    Switch\(\n'
+    r'                        modifier = Modifier\.scale\(0\.85f\),\n'
+    r'                        checked = isDark,\n'
+    r'                        onCheckedChange = \{ MusicThemeManager\.setDarkTheme\(it\) \},\n'
+    r'                        colors = SwitchDefaults\.colors\(\n'
+    r'                            checkedThumbColor = musicColors\(\)\.textPrimary,\n'
+    r'                            checkedTrackColor = musicColors\(\)\.accent\n'
+    r'                        \)\n'
+    r'                    \))',
+    src
+)
+if not m:
+    print("错误: 未找到 Switch 锚点")
+    sys.exit(1)
+
+old_switch = m.group(1)
+
+new_ui = '''                    // [32v30] 三档主题切换：跟随系统/深色/浅色
+                    val ctx30 = androidx.compose.ui.platform.LocalContext.current
+                    val prefs30 = ctx30.getSharedPreferences("theme_prefs", android.content.Context.MODE_PRIVATE)
+                    var themeMode30 by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(prefs30.getInt("theme_mode", 0)) }
+                    androidx.compose.foundation.layout.Column {
+                        listOf("跟随系统" to 0, "深色" to 1, "浅色" to 2).forEach { (label, mode) ->
+                            androidx.compose.foundation.layout.Row(
+                                modifier = androidx.compose.ui.Modifier
+                                    .clickable {
+                                        prefs30.edit().putInt("theme_mode", mode).apply()
+                                        themeMode30 = mode
+                                        when (mode) {
+                                            1 -> MusicThemeManager.setDarkTheme(true)
+                                            2 -> MusicThemeManager.setDarkTheme(false)
+                                            else -> { /* 跟随系统 */ }
+                                        }
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.RadioButton(
+                                    selected = themeMode30 == mode,
+                                    onClick = null,
+                                    colors = androidx.compose.material3.RadioButtonDefaults.colors(
+                                        selectedColor = musicColors().accent
+                                    )
+                                )
+                                androidx.compose.foundation.layout.Spacer(modifier = androidx.compose.ui.Modifier.width(8.dp))
+                                androidx.compose.material3.Text(
+                                    text = label,
+                                    color = musicColors().textPrimary,
+                                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }'''
+
+src = src.replace(old_switch, new_ui)
+
+with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt", "w", encoding="utf-8") as f:
+    f.write(src)
+print("三档切换已插入")
+PYEOF
+
+echo "=== 32 v30 完成 ==="
+
