@@ -1066,3 +1066,51 @@ for root, dirs, files in os.walk("app/src/main/java"):
 PYEOF
 echo "=== 32 v24 完成 ==="
 
+# 32 v25: 硬恢复 MainActivity（简化版）
+
+echo "=== 32 v25: 硬恢复 MainActivity ==="
+
+python3 << 'PYEOF'
+mpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
+with open(mpath, encoding="utf-8") as f:
+    src = f.read()
+
+# 直接用字符串替换：找到 setContent { 到其匹配的 } 
+# 策略：找到 "setContent {"，然后向后数括号找到匹配的 "}"
+idx = src.find("setContent {")
+if idx == -1:
+    idx = src.find("setContent{")
+if idx == -1:
+    print("错误: 未找到 setContent")
+else:
+    # 从 { 开始数
+    start = src.find("{", idx)
+    depth = 0
+    end = -1
+    for i in range(start, len(src)):
+        if src[i] == '{':
+            depth += 1
+        elif src[i] == '}':
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+    
+    if end != -1:
+        # 获取缩进（setContent 所在行的缩进）
+        line_start = src.rfind("\n", 0, idx) + 1
+        indent = src[line_start:idx]
+        # indent 是 "        " 之类的，内容缩进再加 4 空格
+        inner = indent + "    "
+        new_inner = f"\n{inner}AVBoxTheme {{\n{inner}    MainScreen()\n{inner}}}\n{indent}"
+        src = src[:start+1] + new_inner + src[end:]
+        
+        with open(mpath, "w", encoding="utf-8") as f:
+            f.write(src)
+        print("MainActivity 已硬恢复")
+        print("MARK: [32v25] done")
+    else:
+        print("错误: 括号不匹配")
+PYEOF
+echo "=== 32 v25 完成 ==="
+
