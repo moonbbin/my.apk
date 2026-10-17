@@ -2113,3 +2113,49 @@ PYEOF
 
 echo "=== 32 v42 完成 ==="
 
+# 32 v43: 清 12 脚本页面的硬编码黑底（主题设置页等）
+
+echo "=== 32 v43: 清设置页黑底 ==="
+
+python3 << 'PYEOF'
+import sys, os
+
+files = [
+    "app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt",
+    "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlaybackSettingsActivity.kt",
+]
+
+MARK = "// [32v43]"
+done_count = 0
+
+for fp in files:
+    if not os.path.exists(fp):
+        print(f"跳过不存在: {fp}")
+        continue
+    with open(fp, encoding="utf-8") as f:
+        src = f.read()
+    if MARK in src:
+        print(f"已处理: {fp}")
+        continue
+    
+    orig = len(src)
+    # 删掉 .background(Color(0xFF000000))
+    src = src.replace(".background(Color(0xFF000000))", "/*[32v43]*/")
+    # 删掉 .background(Color.Black)
+    src = src.replace(".background(Color.Black)", "/*[32v43]*/")
+    
+    if len(src) != orig:
+        # 加标记
+        src = MARK + "\n" + src
+        with open(fp, "w", encoding="utf-8") as f:
+            f.write(src)
+        print(f"✓ 已清: {fp}")
+        done_count += 1
+    else:
+        print(f"  无黑底: {fp}")
+
+print(f"共处理 {done_count} 个文件")
+PYEOF
+
+echo "=== 32 v43 完成 ==="
+
