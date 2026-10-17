@@ -1506,3 +1506,74 @@ PYEOF
 
 echo "=== 32 v32 完成 ==="
 
+# 32 v33: 清掉 MusicThemeManager 里的 bgFollowCover
+
+echo "=== 32 v33: 清 bgFollowCover 代码 ==="
+
+LPATH="app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+if [ ! -f "$LPATH" ]; then
+    echo "错误: 未找到 $LPATH"
+    exit 1
+fi
+
+python3 << 'PYEOF'
+import re, sys
+
+with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt", encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v33]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+orig_len = len(src)
+
+# 1. 删除 KEY 常量（如 KEY_BG_FOLLOW）
+# 找 private const val KEY_... = "...bg..." 相关
+src = re.sub(r'\n\s*private const val KEY_[A-Z_]*BG[A-Z_]*\s*=\s*"[^"]*"\n', '\n', src)
+src = re.sub(r'\n\s*private const val KEY_[A-Z_]*FOLLOW[A-Z_]*\s*=\s*"[^"]*"\n', '\n', src)
+
+# 2. 删除 bgFollowCover StateFlow 定义
+# 匹配：val bgFollowCover ... 或 _bgFollowCover ...
+src = re.sub(r'\n\s*(private\s+)?val\s+_?bgFollowCover[^\n]*\n', '\n', src)
+
+# 3. 删除 setBgFollowCover 函数
+# 匹配 fun setBgFollowCover(...) { ... }
+m = re.search(r'\n\s*fun\s+setBgFollowCover\s*\([^)]*\)\s*\{', src)
+if m:
+    start = m.start()
+    # 数括号找到函数结束
+    brace_start = src.find('{', m.start())
+    depth = 0
+    end = -1
+    for i in range(brace_start, len(src)):
+        if src[i] == '{':
+            depth += 1
+        elif src[i] == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    if end != -1:
+        src = src[:start] + f"\n    {MARK} setBgFollowCover 已删除\n" + src[end:]
+
+# 4. 如果还有残留的 bgFollowCover 引用（非定义），报错
+remaining = [line for line in src.split('\n') if 'bgFollowCover' in line and MARK not in line]
+if remaining:
+    print(f"警告: 还有 {len(remaining)} 处残留引用：")
+    for line in remaining[:5]:
+        print(f"  {line.strip()[:80]}")
+    # 不 exit 1，让构建继续（可能是注释）
+else:
+    print("bgFollowCover 已清干净")
+
+print(f"长度: {orig_len} -> {len(src)}")
+
+with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt", "w", encoding="utf-8") as f:
+    f.write(src)
+print("已写入")
+PYEOF
+
+echo "=== 32 v33 完成 ==="
+
