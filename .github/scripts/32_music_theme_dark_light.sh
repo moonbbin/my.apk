@@ -1042,3 +1042,27 @@ print("=== 32 v23 完成 ===")
 print("主体 MainActivity 恢复原状，主题只留给音乐区")
 PYEOF
 
+# 32 v24: 打印 MusicHomeActivity setContent 结构（只看不改）
+echo "=== 32 v24: MusicHomeActivity 结构 ==="
+python3 << 'PYEOF'
+import os, re
+for root, dirs, files in os.walk("app/src/main/java"):
+    for fn in files:
+        if fn == "MusicHomeActivity.kt":
+            fp = os.path.join(root, fn)
+            with open(fp, encoding="utf-8") as f:
+                lines = f.readlines()
+            print(f"文件: {fp}, 共 {len(lines)} 行")
+            for i, line in enumerate(lines, 1):
+                if 'setContent' in line or 'AVBoxTheme' in line or 'LxMusicTheme' in line:
+                    # 打印上下文
+                    s = max(0, i-3)
+                    e = min(len(lines), i+8)
+                    print(f"--- 第 {i} 行附近 ---")
+                    for j in range(s, e):
+                        print(f"{j+1:4d}: {lines[j]}", end="")
+                    print()
+            break
+PYEOF
+echo "=== 32 v24 完成 ==="
+
