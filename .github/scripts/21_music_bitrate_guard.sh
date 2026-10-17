@@ -1,5 +1,5 @@
 #!/bin/bash
-# 21 - 播放器音质验货（防糊）：v16.1
+# 21 - 播放器音质验货（防糊）：v16
 # ============================================================================
 # 版本导航（v1→v9 一句话）：
 #   v1：Range 取前 64KB 验货（FLAC 解析 STREAMINFO、MP3 解析帧头），实测档位须≥请求档
@@ -960,7 +960,7 @@ PYEOF
 
 echo "=== 完成 ==="
 
-# ===== v16.1：切歌重置进度 =====
+# ===== v16：切歌清错误+重置进度 =====
 python3 << 'PYEOF'
 import sys
 
@@ -968,27 +968,26 @@ path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
-MARK = "// [v16.1] reset progress on new song"
+MARK = "// [v16] clear error and reset progress on new song"
 if MARK in src:
-    print("跳过（已是 v16.1）")
+    print("跳过（已是 v16）")
     sys.exit(0)
 
-OLD = '''    fun probeAndSetQuality(url: String) {
-        // [v16] clear error on new song'''
-
-NEW = '''    fun probeAndSetQuality(url: String) {
-        // [v16.1] reset progress on new song：切歌时进度条归零
+# 全新文件或 v15：找到 probeAndSetQuality，在开头加清理逻辑
+OLD = "    fun probeAndSetQuality(url: String) {"
+NEW = """    fun probeAndSetQuality(url: String) {
+        // [v16] clear error and reset progress on new song：切歌时清错误、进度归零
+        _error.value = null
         _position.value = 0L
-        _duration.value = 0L
-        // [v16] clear error on new song'''
+        _duration.value = 0L"""
 
 if OLD in src:
     src = src.replace(OLD, NEW, 1)
     with open(path, "w", encoding="utf-8") as f:
         f.write(src)
-    print("v16.1：已在 probeAndSetQuality 入口重置进度")
+    print("v16：已在 probeAndSetQuality 入口添加清理逻辑")
 else:
-    print("错误：未找到 v16 锚点")
+    print("错误：未找到 probeAndSetQuality 锚点")
     sys.exit(1)
 PYEOF
-# ===== v16.1 结束 =====
+# ===== v16 结束 =====
