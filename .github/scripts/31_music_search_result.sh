@@ -104,11 +104,11 @@ PYEOF
 
 echo "31 完成"
 
-# ===== v4：状态栏避让 =====
+# ===== v4：状态栏避让（修复版） =====
 python3 << 'PYEOF'
 import sys
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchResultScreen.kt"
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchResultScreen.kt"
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
@@ -117,7 +117,6 @@ if MARK in src:
     print("跳过（已是 v4）")
     sys.exit(0)
 
-# 1. 加 import
 OLD_IMPORT = "import androidx.compose.foundation.layout.size"
 NEW_IMPORT = "import androidx.compose.foundation.layout.size\nimport androidx.compose.foundation.layout.statusBarsPadding // [v4] 状态栏避让"
 if OLD_IMPORT in src:
@@ -127,7 +126,6 @@ else:
     print("错误：未找到 import 锚点")
     sys.exit(1)
 
-# 2. 顶层 Column 加 statusBarsPadding
 OLD_COL = """    Column(
         modifier = Modifier
             .fillMaxSize()
