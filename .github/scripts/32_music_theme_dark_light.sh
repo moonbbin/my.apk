@@ -1994,3 +1994,132 @@ PYEOF
 
 echo "=== 32 v40 完成 ==="
 
+# 32 v41: MusicHomeActivity 主题接线重写版（合成 v35-v40，不用脆弱正则）
+
+echo "=== 32 v41: 主题接线重写版 ==="
+
+python3 << 'PYEOF'
+import sys
+
+MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+with open(MPATH, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v41]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+orig_len = len(src)
+
+# --- 1. Scaffold containerColor ---
+src = src.replace(
+    "containerColor = BgDeepBlue,",
+    "containerColor = musicColors().background, " + MARK,
+    1
+)
+print("1. Scaffold 背景 done")
+
+# --- 2. NavigationBar BgDarker -> musicColors().card ---
+# 找到 NavigationBar 块内的 containerColor = BgDarker
+src = src.replace(
+    "containerColor = BgDarker",
+    "containerColor = musicColors().card",
+    1
+)
+print("2. NavigationBar 背景 done")
+
+# --- 3. 5 处 .background(BgDeepBlue) ---
+count = 0
+# 处理 .background(BgDeepBlue.copy(...))
+import re
+src, n1 = re.subn(r'\.background\(BgDeepBlue\.copy\(alpha=([0-9.]+)f\)\)', r'.background(musicColors().background.copy(alpha=\1f))', src)
+count += n1
+src, n2 = re.subn(r'\.background\(BgDeepBlue\)', '.background(musicColors().background)', src)
+count += n2
+src, n3 = re.subn(r'\.background\(BgDarker\)', '.background(musicColors().background)', src)
+count += n3
+print(f"3. 背景替换 {count} 处 done")
+
+# --- 4. TopAppBar 透明 ---
+src = src.replace(
+    "containerColor = CardBlue",
+    "containerColor = androidx.compose.ui.graphics.Color.Transparent",
+    1
+)
+print("4. TopAppBar 透明 done")
+
+# --- 5. setContent 套 LxMusicTheme（数括号法，不依赖精确格式） ---
+# 找 "setContent" 后面紧跟 "{" 的（跳过 import 区的误命中）
+import re
+m = re.search(r'setContent\s*\{', src)
+if not m:
+    print("错误: 找不到 setContent {")
+    sys.exit(1)
+idx = m.start()
+
+# 往后找第一个 "{"
+brace_start = src.find("{", idx)
+if brace_start == -1:
+    print("错误: setContent 后无 {")
+    sys.exit(1)
+
+# 数括号找到匹配的 "}"
+depth = 0
+brace_end = -1
+for i in range(brace_start, len(src)):
+    if src[i] == "{":
+        depth += 1
+    elif src[i] == "}":
+        depth -= 1
+        if depth == 0:
+            brace_end = i
+            break
+
+if brace_end == -1:
+    print("错误: 括号不匹配")
+    sys.exit(1)
+
+print(f"5. setContent 块: {brace_start} -> {brace_end} ({brace_end - brace_start} 字符)")
+
+# 提取原块内容（去掉外层括号）
+inner = src[brace_start + 1:brace_end]
+
+# 检查是否已经包了 LxMusicTheme（避免重复）
+if "LxMusicTheme" in inner:
+    print("   已有 LxMusicTheme，跳过包裹")
+else:
+    # 构造新块
+    new_inner = """
+            // [32v41] 桥接主题
+            val win41 = window
+            val prefs41 = getSharedPreferences("theme_prefs", MODE_PRIVATE)
+            val mode41 = prefs41.getInt("theme_mode", 0)
+            val sysDark41 = androidx.compose.foundation.isSystemInDarkTheme()
+            val finalDark41 = when (mode41) {
+                1 -> true
+                2 -> false
+                else -> sysDark41
+            }
+            androidx.compose.runtime.LaunchedEffect(finalDark41) {
+                MusicThemeManager.setDarkTheme(finalDark41)
+            }
+            LxMusicTheme(isDarkTheme = finalDark41) {
+                androidx.compose.runtime.SideEffect {
+                    val ctrl = androidx.core.view.WindowCompat.getInsetsController(win41, win41.decorView)
+                    ctrl.isAppearanceLightStatusBars = !finalDark41
+                    ctrl.isAppearanceLightNavigationBars = !finalDark41
+                }
+""" + inner + """
+            }
+        """
+    src = src[:brace_start + 1] + new_inner + src[brace_end:]
+    print("   已包裹 LxMusicTheme")
+
+with open(MPATH, "w", encoding="utf-8") as f:
+    f.write(src)
+print(f"已写入 ({orig_len} -> {len(src)} 字符)")
+PYEOF
+
+echo "=== 32 v41 完成 ==="
+
