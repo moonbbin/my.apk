@@ -1787,3 +1787,53 @@ PYEOF
 
 echo "=== 32 v36 完成 ==="
 
+# 32 v37: TopAppBar 透明 + 状态栏检查
+
+echo "=== 32 v37: TopAppBar 接主题 ==="
+
+MPATH="app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+
+python3 << 'PYEOF'
+import sys
+
+with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v37]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# 3. TopAppBar: containerColor = CardBlue -> Color.Transparent（透出 Scaffold 背景）
+old = "colors = TopAppBarDefaults.topAppBarColors(containerColor = CardBlue),"
+new = f"colors = TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color.Transparent), {MARK}"
+if old not in src:
+    print("错误: 未找到 TopAppBar colors 锚点")
+    sys.exit(1)
+src = src.replace(old, new, 1)
+print("TopAppBar 已透明")
+
+with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", "w", encoding="utf-8") as f:
+    f.write(src)
+print("已写入")
+PYEOF
+
+echo ""
+echo "=== 5. 状态栏检查（只查不改） ==="
+# 检查 MusicHomeActivity 是否设置状态栏
+python3 << 'PYEOF2'
+with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", encoding="utf-8") as f:
+    src = f.read()
+if "isAppearanceLightStatusBars" in src:
+    print("MusicHomeActivity 里有 isAppearanceLightStatusBars")
+    # 打印相关行
+    for i, line in enumerate(src.split('\n'), 1):
+        if 'isAppearanceLightStatusBars' in line:
+            print(f"  行 {i}: {line.strip()[:80]}")
+else:
+    print("MusicHomeActivity 里没有 isAppearanceLightStatusBars（状态栏由 MainActivity 控制）")
+    print("注意：按'只做音乐专区'规则，MainActivity 不碰，状态栏反转需用户确认是否改主体")
+PYEOF2
+
+echo "=== 32 v37 完成 ==="
+
