@@ -4,7 +4,7 @@
 set -e
 cd avbox
 
-echo "=== 32 v5：深色/浅色全局切换 ==="
+echo "=== 32 v6：深色/浅色全局切换 ==="
 
 # ===== Part 1: Color.kt 追加浅色 Token =====
 python3 << 'PYEOF'
@@ -64,75 +64,63 @@ with open(path, "w", encoding="utf-8") as f:
 print("PartA2：LxMusicTheme 桥接已创建")
 PYEOF
 
-echo "=== 32 v5 PartA2 完成 ==="
-# 32 v5 PartB: MainActivity 彻底排查
-set -e
-# cd avbox (已在 avbox 内，跳过)
+echo "=== 32 v6 PartA2 完成 ==="
+# 32 v6: PartB 详细打印 MainActivity setContent 结构
+echo "=== 32 v6 PartB: MainActivity 详细结构 ==="
 
-echo "=== 32 v5 PartB：MainActivity 排查 ==="
-
-MAIN=$(find app/src/main/java -name "MainActivity.kt" 2>/dev/null | head -1)
-if [ -z "$MAIN" ]; then
-    echo "错误：未找到 MainActivity.kt"
+MAIN="app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
+if [ ! -f "$MAIN" ]; then
+    echo "错误：找不到 MainActivity.kt"
+    # 尝试 find
+    find app/src/main/java -name "MainActivity.kt" 2>/dev/null | head -5
     exit 1
 fi
-echo "文件：$MAIN"
 
-python3 << PYEOF
-import sys, re
+echo "文件: $MAIN"
+echo ""
+echo "--- setContent 上下文 (前后 30 行) ---"
 
-path = "$MAIN"
+python3 << 'PYEOF'
+import re
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
 with open(path, encoding="utf-8") as f:
-    src = f.read()
+    lines = f.readlines()
 
-# 1. 检查是否已用新版
-if "LxMusicTheme(isDarkTheme" in src:
-    print("PartB：已用 LxMusicTheme(isDarkTheme=)，跳过")
-    sys.exit(0)
-
-# 2. 找 setContent
-if "setContent" not in src:
-    print("错误：未找到 setContent")
-    sys.exit(1)
-
-print("找到 setContent")
-
-# 3. 找主题包裹：LxMusicTheme( (旧版，无参数)、MaterialTheme、AppTheme 等
-patterns = [
-    r'LxMusicTheme\s*\{',
-    r'LxMusicTheme\s*\(',
-    r'MaterialTheme\s*\{',
-    r'MaterialTheme\s*\(',
-]
-
-found = []
-for pat in patterns:
-    for m in re.finditer(pat, src):
-        # 取上下文
-        start = max(0, m.start() - 50)
-        end = min(len(src), m.end() + 100)
-        ctx = src[start:end].replace('\n', ' ')[:120]
-        found.append((m.group(0), ctx))
-
-if found:
-    print(f"找到 {len(found)} 个可能的主题包裹：")
-    for pat, ctx in found[:10]:
-        print(f"  - {pat}: ...{ctx}...")
-    print("")
-    print("错误：MainActivity 主题结构需手动确认，未自动替换")
-    print("请检查以上位置，确认后手动改为 LxMusicTheme(isDarkTheme = isDark)")
-    sys.exit(1)
+# 找 setContent
+for i, line in enumerate(lines):
+    if "setContent" in line:
+        print(f"找到 setContent 在第 {i+1} 行:")
+        print("")
+        # 打印前后 30 行，带行号
+        start = max(0, i - 10)
+        end = min(len(lines), i + 40)
+        for j in range(start, end):
+            prefix = ">>>" if j == i else "   "
+            print(f"{prefix} {j+1:4d}: {lines[j]}", end="")
+        print("")
+        print("--- setContent 块结束 ---")
+        break
 else:
-    print("未找到明显的主题包裹，需手动检查 setContent 结构")
-    sys.exit(1)
+    print("未找到 setContent")
+
+# 找所有可能的主题包裹
+print("")
+print("--- 主题相关调用 ---")
+for i, line in enumerate(lines):
+    if re.search(r'(LxMusicTheme|MaterialTheme|TVBoxTheme|AppTheme|MyTheme)\s*[\{\(]', line):
+        print(f"第 {i+1} 行: {line.strip()}")
 PYEOF
 
-echo "=== 32 v5 PartB 完成 ==="
-# 32 v5 PartC: 搜 isSystemInDarkTheme 并替换
+echo ""
+echo "=== 32 v6 PartB 完成（仅排查，不修改）==="
+# 不退出 1，让构建继续，先看到结构
+
+# 32 v6 PartC: 搜 isSystemInDarkTheme 并替换
 set -e
 # cd avbox (已在 avbox 内，跳过)
 
-echo "=== 32 v5 PartC：isSystemInDarkTheme 排查 ==="
+echo "=== 32 v6 PartC：isSystemInDarkTheme 排查 ==="
 
 # 只查 music 相关目录，避免动主体其他部分
 TARGET_DIR="app/src/main/java/com/github/tvbox/osc/ui/music"
@@ -159,12 +147,12 @@ if [ "$FOUND" -gt 0 ]; then
     echo "或：MaterialTheme.colorScheme.background.luminance() < 0.5"
 fi
 
-echo "=== 32 v5 PartC 完成 ==="
-# 32 v5 PartD: Modifier.shadow 检查
+echo "=== 32 v6 PartC 完成 ==="
+# 32 v6 PartD: Modifier.shadow 检查
 set -e
 # cd avbox (已在 avbox 内，跳过)
 
-echo "=== 32 v5 PartD：shadow 检查 ==="
+echo "=== 32 v6 PartD：shadow 检查 ==="
 
 TARGET_DIR="app/src/main/java/com/github/tvbox/osc/ui/music"
 
@@ -185,4 +173,4 @@ if [ "$FOUND" -gt 0 ]; then
     echo "如需修复，考虑用 MaterialTheme.colorScheme.surfaceVariant 做阴影色，或调低 elevation"
 fi
 
-echo "=== 32 v5 PartD 完成 ==="
+echo "=== 32 v6 PartD 完成 ==="
