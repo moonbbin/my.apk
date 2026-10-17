@@ -577,3 +577,21 @@ print("说明: MainActivity 已换 LxMusicTheme（跟随系统）。")
 print("设置页开关需在 groups 构建处加 SettingItem，待定位调用点后处理。")
 PYEOF
 
+
+echo "=== 32 v15: ThemeSettingsPage 全文 ==="
+python3 << 'PYEOF2'
+import os
+for root, dirs, files in os.walk("app/src/main/java"):
+    for fn in files:
+        if fn == "ThemeSettingsPage.kt":
+            fp = os.path.join(root, fn)
+            with open(fp, encoding="utf-8") as f:
+                lines = f.readlines()
+            print(f"文件: {fp}, 共 {len(lines)} 行")
+            print("=" * 50)
+            for i, line in enumerate(lines, 1):
+                print(f"{i:3d}: {line}", end="")
+            break
+PYEOF2
+echo "=== 32 v15 完成 ==="
+
