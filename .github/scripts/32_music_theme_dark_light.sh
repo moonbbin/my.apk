@@ -454,3 +454,70 @@ with open(lpath, "w", encoding="utf-8") as f:
 print("=== 32 v12 完成 ===")
 PYEOF
 
+# 32 v13: 打印真实文件结构（只看不改）
+echo "=== 32 v13: 结构侦查 ==="
+
+python3 << 'PYEOF'
+import re
+
+# ===== SettingsScreen.kt =====
+spath = "app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+print("=" * 60)
+print("SettingsScreen.kt 结构")
+print("=" * 60)
+try:
+    with open(spath, encoding="utf-8") as f:
+        ssrc = f.read()
+    lines = ssrc.split('\n')
+    print(f"总行数: {len(lines)}")
+    print()
+
+    # 找 SettingItem 数据类定义
+    print("--- SettingItem 定义 ---")
+    for i, line in enumerate(lines):
+        if re.search(r'(data\s+class|class)\s+SettingItem', line):
+            for j in range(max(0,i-2), min(len(lines), i+15)):
+                print(f"{j+1:4d}: {lines[j]}")
+            break
+    print()
+
+    # 找 SettingGroup 使用
+    print("--- SettingGroup 使用示例 ---")
+    for i, line in enumerate(lines):
+        if 'SettingGroup(' in line and 'class' not in line:
+            for j in range(max(0,i-3), min(len(lines), i+10)):
+                print(f"{j+1:4d}: {lines[j]}")
+            print("...")
+            break
+    print()
+
+    # 找设置列表构建位置
+    print("--- 包含 SettingGroup 的函数 ---")
+    for i, line in enumerate(lines):
+        if 'fun ' in line and 'Setting' in line:
+            print(f"{i+1:4d}: {line.strip()}")
+except FileNotFoundError:
+    print(f"未找到: {spath}")
+
+print()
+print("=" * 60)
+print("MainActivity.kt setContent 结构")
+print("=" * 60)
+mpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
+try:
+    with open(mpath, encoding="utf-8") as f:
+        msrc = f.read()
+    lines = msrc.split('\n')
+    for i, line in enumerate(lines):
+        if 'setContent' in line:
+            print(f"setContent 在第 {i+1} 行")
+            for j in range(max(0,i-5), min(len(lines), i+30)):
+                print(f"{j+1:4d}: {lines[j]}")
+            break
+except FileNotFoundError:
+    print(f"未找到: {mpath}")
+
+print()
+print("=== 32 v13 侦查完成 ===")
+PYEOF
+
