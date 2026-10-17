@@ -2042,3 +2042,74 @@ PYEOF
 
 echo "=== 32 v41 完成 ==="
 
+# 32 v42: 清掉 Tab 根节点的硬编码黑底
+
+echo "=== 32 v42: 清 Tab 黑底 ==="
+
+python3 << 'PYEOF'
+import re, sys
+
+MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+with open(MPATH, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v42]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+orig = len(src)
+
+# 1. SearchTabLanding 的 LazyColumn: .fillMaxSize().background(BgDeepBlue) -> .fillMaxSize()
+# 精确匹配，避免误伤
+src = src.replace(
+    ".fillMaxSize()\n            .background(BgDeepBlue),",
+    ".fillMaxSize(), " + MARK,
+    1
+)
+print("1. SearchTabLanding done")
+
+# 2. PlaylistBrowser 的 Column
+src = src.replace(
+    ".fillMaxSize()\n            .background(BgDeepBlue)\n    ) {\n        Text(\n            text = \"歌单\"",
+    ".fillMaxSize()\n    ) {\n        Text(\n            text = \"歌单\"",
+    1
+)
+print("2. PlaylistBrowser done")
+
+# 3. PlaylistDetailScreen 的根（找它的 background）
+# 先定位 PlaylistDetailScreen 函数
+idx = src.find("fun PlaylistDetailScreen(")
+if idx != -1:
+    # 在函数体内找第一个 .background(BgDeepBlue)
+    chunk_start = idx
+    chunk_end = src.find("\nfun ", idx + 10)
+    if chunk_end == -1:
+        chunk_end = len(src)
+    chunk = src[chunk_start:chunk_end]
+    bg_idx = chunk.find(".background(BgDeepBlue)")
+    if bg_idx != -1:
+        # 找到包含它的 modifier 行，删掉 .background(BgDeepBlue)
+        # 简单：直接替换
+        old_bg = ".background(BgDeepBlue)"
+        # 只在 PlaylistDetailScreen 范围内替换第一个
+        new_chunk = chunk.replace(old_bg, "/*[32v42]*/", 1)
+        src = src[:chunk_start] + new_chunk + src[chunk_end:]
+        print("3. PlaylistDetailScreen done")
+    else:
+        print("3. PlaylistDetailScreen 未找到黑底")
+else:
+    print("3. 未找到 PlaylistDetailScreen")
+
+# 4. 通用：清掉剩余的 .background(BgDeepBlue)（根节点级别的）
+# 注意：不要清掉卡片内部的渐变背景，只清 fillMaxSize 级别的
+count = src.count(".background(BgDeepBlue)")
+print(f"剩余 .background(BgDeepBlue): {count} 处")
+
+with open(MPATH, "w", encoding="utf-8") as f:
+    f.write(src)
+print(f"已写入 ({orig} -> {len(src)})")
+PYEOF
+
+echo "=== 32 v42 完成 ==="
+
