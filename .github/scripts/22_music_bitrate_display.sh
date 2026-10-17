@@ -359,3 +359,34 @@ else:
     sys.exit(1)
 PYEOF
 # ===== v11 结束 =====
+
+# ===== v12：有数据才显示 =====
+python3 << 'PYEOF'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [v12]"
+if MARK in src:
+    print("跳过（已是 v12）")
+    sys.exit(0)
+
+# 找到 v11 的 if，替换为有数据判断
+# v11 修正版是：if (currentQuality.isNotEmpty() || title.isNotEmpty()) {
+OLD = "            if (currentQuality.isNotEmpty() || title.isNotEmpty()) {"
+NEW = """            // [v12] 有数据才显示：避免空框
+            val hasBadgeData = currentQuality.isNotEmpty() || measuredBitrate > 0 || bitrate > 0
+            if (hasBadgeData) {"""
+
+if OLD in src:
+    src = src.replace(OLD, NEW, 1)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(src)
+    print("v12：已改为有数据才显示")
+else:
+    print("错误：未找到锚点")
+    sys.exit(1)
+PYEOF
+# ===== v12 结束 =====
