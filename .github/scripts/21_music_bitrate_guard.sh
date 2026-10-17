@@ -1027,3 +1027,46 @@ else:
     sys.exit(1)
 PYEOF
 # ===== v18 结束 =====
+
+# 21 v19: 切歌时清空音质状态，修复徽章不刷新
+# 背景: v18 注释了 play() 中的 _measuredBitrate.value=0，导致切歌时旧徽章残留
+# 修复: 在 probeAndSetQuality(url) 入口（新歌才触发）清空质量状态
+echo "=== 21 v19: 切歌清空音质状态 ==="
+
+python3 << 'PYEOF'
+import re
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [21v19] clear quality on new song"
+if MARK in src:
+    print("21 v19: 已应用，跳过")
+else:
+    # 找 probeAndSetQuality(url: String) 函数入口
+    # v16 已经在这里加了 _error/_position/_duration 的清空，我们在同一位置加质量状态清空
+    pattern = r'(fun\s+probeAndSetQuality\s*\(\s*url\s*:\s*String\s*\)\s*\{)'
+    m = re.search(pattern, src)
+    if not m:
+        print("错误: 未找到 probeAndSetQuality(url: String)")
+        exit(1)
+
+    insert_pos = m.end()
+    clear_code = f'''
+        {MARK}
+        _currentQuality.value = ""
+        _measuredBitrate.value = 0
+        // _bitrate 是 ExoPlayer 估值，由播放器回调更新，这里也清零避免旧值残留
+        try {{ _bitrate.value = 0 }} catch (_: Exception) {{}}
+'''
+
+    src = src[:insert_pos] + clear_code + src[insert_pos:]
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(src)
+    print("21 v19: 已在 probeAndSetQuality 入口清空 _currentQuality/_measuredBitrate/_bitrate")
+
+print("=== 21 v19 完成 ===")
+PYEOF
+
