@@ -4,7 +4,7 @@
 set -e
 cd avbox
 
-echo "=== 32 v10：深色/浅色全局切换 ==="
+echo "=== 32 v11：深色/浅色全局切换 ==="
 
 # ===== Part 1: Color.kt 追加浅色 Token =====
 python3 << 'PYEOF'
@@ -64,10 +64,10 @@ with open(path, "w", encoding="utf-8") as f:
 print("PartA2：LxMusicTheme 桥接已创建")
 PYEOF
 
-echo "=== 32 v10 PartA2 完成 ==="
+echo "=== 32 v11 PartA2 完成 ==="
 
-# 32 v10: 修复 LxMusicTheme.kt 的 import 缺失
-echo "=== 32 v10 PartA3: 补 Import ==="
+# 32 v11: 修复 LxMusicTheme.kt 的 import 缺失
+echo "=== 32 v11 PartA3: 补 Import ==="
 
 python3 << 'PYEOF'
 import re
@@ -110,11 +110,11 @@ else:
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(src)
-print("=== 32 v10 PartA3 完成 ===")
+print("=== 32 v11 PartA3 完成 ===")
 PYEOF
 
-# 32 v10: PartB 详细打印 MainActivity setContent 结构
-echo "=== 32 v10 PartB: MainActivity 详细结构 ==="
+# 32 v11: PartB 详细打印 MainActivity setContent 结构
+echo "=== 32 v11 PartB: MainActivity 详细结构 ==="
 
 MAIN="app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
 if [ ! -f "$MAIN" ]; then
@@ -161,14 +161,14 @@ for i, line in enumerate(lines):
 PYEOF
 
 echo ""
-echo "=== 32 v10 PartB 完成（仅排查，不修改）==="
+echo "=== 32 v11 PartB 完成（仅排查，不修改）==="
 # 不退出 1，让构建继续，先看到结构
 
-# 32 v10 PartC: 搜 isSystemInDarkTheme 并替换
+# 32 v11 PartC: 搜 isSystemInDarkTheme 并替换
 set -e
 # cd avbox (已在 avbox 内，跳过)
 
-echo "=== 32 v10 PartC：isSystemInDarkTheme 排查 ==="
+echo "=== 32 v11 PartC：isSystemInDarkTheme 排查 ==="
 
 # 只查 music 相关目录，避免动主体其他部分
 TARGET_DIR="app/src/main/java/com/github/tvbox/osc/ui/music"
@@ -195,12 +195,12 @@ if [ "$FOUND" -gt 0 ]; then
     echo "或：MaterialTheme.colorScheme.background.luminance() < 0.5"
 fi
 
-echo "=== 32 v10 PartC 完成 ==="
-# 32 v10 PartD: Modifier.shadow 检查
+echo "=== 32 v11 PartC 完成 ==="
+# 32 v11 PartD: Modifier.shadow 检查
 set -e
 # cd avbox (已在 avbox 内，跳过)
 
-echo "=== 32 v10 PartD：shadow 检查 ==="
+echo "=== 32 v11 PartD：shadow 检查 ==="
 
 TARGET_DIR="app/src/main/java/com/github/tvbox/osc/ui/music"
 
@@ -221,10 +221,10 @@ if [ "$FOUND" -gt 0 ]; then
     echo "如需修复，考虑用 MaterialTheme.colorScheme.surfaceVariant 做阴影色，或调低 elevation"
 fi
 
-echo "=== 32 v10 PartD 完成 ==="
+echo "=== 32 v11 PartD 完成 ==="
 
-# 32 v10: BrandGreen -> PlayerGreen (实际存在的常量名)
-echo "=== 32 v10: 修复 BrandGreen ==="
+# 32 v11: BrandGreen -> PlayerGreen (实际存在的常量名)
+echo "=== 32 v11: 修复 BrandGreen ==="
 
 python3 << 'PYEOF'
 path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
@@ -245,11 +245,11 @@ print("Import 已修正")
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(src)
-print("=== 32 v10 完成 ===")
+print("=== 32 v11 完成 ===")
 PYEOF
 
-# 32 v10: PlayerGreen 改为 public
-echo "=== 32 v10: PlayerGreen public ==="
+# 32 v11: PlayerGreen 改为 public
+echo "=== 32 v11: PlayerGreen public ==="
 
 python3 << 'PYEOF'
 path = "app/src/main/java/com/github/tvbox/osc/ui/music/theme/Color.kt"
@@ -273,11 +273,11 @@ for name in ['DetailGreen', 'SearchAccent', 'AccentBlue', 'ErrorRed', 'TextOnAcc
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(src_new)
-print("=== 32 v10 完成 ===")
+print("=== 32 v11 完成 ===")
 PYEOF
 
-# 32 v10: 按用户要求 - Color.kt private->internal，确保 BrandGreen 存在；LxMusicTheme 统一用 BrandGreen
-echo "=== 32 v10: 主题 Token 可见性修复 ==="
+# 32 v11: 按用户要求 - Color.kt private->internal，确保 BrandGreen 存在；LxMusicTheme 统一用 BrandGreen
+echo "=== 32 v11: 主题 Token 可见性修复 ==="
 
 python3 << 'PYEOF'
 import re
@@ -337,6 +337,70 @@ if "import com.github.tvbox.osc.ui.music.theme.BrandGreen" not in lsrc:
 with open(lpath, "w", encoding="utf-8") as f:
     f.write(lsrc)
 
-print("=== 32 v10 完成 ===")
+print("=== 32 v11 完成 ===")
+PYEOF
+
+# 32 v11: 按用户三步要求 - Color.kt 加 BrandGreen(0xFF34C759)，确保可见性；LxMusicTheme 确保 import
+echo "=== 32 v11: BrandGreen 三步修复 ==="
+
+python3 << 'PYEOF'
+import re
+
+# ===== 1) Color.kt: 确保 BrandGreen = Color(0xFF34C759)，非 private =====
+cpath = "app/src/main/java/com/github/tvbox/osc/ui/music/theme/Color.kt"
+with open(cpath, encoding="utf-8") as f:
+    csrc = f.read()
+
+# 1a) 所有 private val -> internal val
+csrc, n1 = re.subn(r'\bprivate\s+val\s+', 'internal val ', csrc)
+print(f"1) Color.kt: private val -> internal val: {n1} 处")
+
+# 1b) 检查 BrandGreen 是否存在
+has_brand = re.search(r'\bval\s+BrandGreen\s*=', csrc)
+if not has_brand:
+    # 加到文件末尾（或最后一个 val 后）
+    # 找最后一个 val 定义
+    vals = list(re.finditer(r'^(?:internal\s+)?val\s+\w+\s*=\s*Color\(0xFF[0-9A-Fa-f]+\)', csrc, re.MULTILINE))
+    if vals:
+        pos = vals[-1].end()
+        csrc = csrc[:pos] + "\ninternal val BrandGreen = Color(0xFF34C759)" + csrc[pos:]
+        print("1) Color.kt: 已加 internal val BrandGreen = Color(0xFF34C759)")
+    else:
+        csrc = csrc.rstrip() + "\n\ninternal val BrandGreen = Color(0xFF34C759)\n"
+        print("1) Color.kt: 已追加 BrandGreen 到末尾")
+else:
+    # 确保不是 private
+    csrc = re.sub(r'\bprivate\s+val\s+BrandGreen\s*=', 'internal val BrandGreen =', csrc)
+    print("1) Color.kt: BrandGreen 已存在，确保为 internal")
+
+with open(cpath, "w", encoding="utf-8") as f:
+    f.write(csrc)
+
+# ===== 2) LxMusicTheme.kt: PlayerGreen -> BrandGreen =====
+lpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+with open(lpath, encoding="utf-8") as f:
+    lsrc = f.read()
+
+cnt = lsrc.count("PlayerGreen")
+lsrc = lsrc.replace("PlayerGreen", "BrandGreen")
+print(f"2) LxMusicTheme.kt: PlayerGreen -> BrandGreen: {cnt} 处")
+
+# ===== 3) 确保 import =====
+# 移除旧的 PlayerGreen import（如果还有）
+lsrc = lsrc.replace("import com.github.tvbox.osc.ui.music.theme.PlayerGreen\n", "")
+# 确保有 BrandGreen import
+if "import com.github.tvbox.osc.ui.music.theme.BrandGreen" not in lsrc:
+    imports = list(re.finditer(r'^import .+$', lsrc, re.MULTILINE))
+    if imports:
+        pos = imports[-1].end()
+        lsrc = lsrc[:pos] + "\nimport com.github.tvbox.osc.ui.music.theme.BrandGreen" + lsrc[pos:]
+        print("3) LxMusicTheme.kt: 已加 BrandGreen import")
+else:
+    print("3) LxMusicTheme.kt: BrandGreen import 已存在")
+
+with open(lpath, "w", encoding="utf-8") as f:
+    f.write(lsrc)
+
+print("=== 32 v11 完成 ===")
 PYEOF
 
