@@ -130,3 +130,38 @@ print("v6 完成: " + path)
 PYEOF
 
 echo "=== 完成 ==="
+
+# ===== v7：切歌清歌词 =====
+python3 << 'PYEOF'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [v7] clear lyric on title change"
+if MARK in src:
+    print("跳过（已是 v7）")
+    sys.exit(0)
+
+# 在 LaunchedEffect(lyricKey) 后面加一个按 title 触发的清空
+OLD = '''    LaunchedEffect(lyricKey) {
+        lyricLines = emptyList()'''
+
+NEW = '''    // [v7] clear lyric on title change：title 变就清空歌词，防止残留
+    LaunchedEffect(title) {
+        lyricLines = emptyList()
+    }
+    LaunchedEffect(lyricKey) {
+        lyricLines = emptyList()'''
+
+if OLD in src:
+    src = src.replace(OLD, NEW, 1)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(src)
+    print("v7：已加 title 变化清歌词")
+else:
+    print("错误：未找到 LaunchedEffect(lyricKey) 锚点")
+    sys.exit(1)
+PYEOF
+# ===== v7 结束 =====
