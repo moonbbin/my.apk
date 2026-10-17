@@ -1691,3 +1691,49 @@ else:
 print("=== 32 v34 完成 ===")
 PYEOF
 
+# 32 v35: MusicHomeActivity 硬编码背景改走主题
+
+echo "=== 32 v35: 音乐首页背景接主题 ==="
+
+MPATH="app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+if [ ! -f "$MPATH" ]; then
+    echo "错误: 未找到 $MPATH"
+    exit 1
+fi
+
+python3 << 'PYEOF'
+import sys
+
+with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v35]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# 1. Scaffold 的 containerColor: BgDeepBlue -> musicColors().background
+old1 = "        containerColor = BgDeepBlue,"
+new1 = f"        containerColor = musicColors().background, {MARK}"
+if old1 not in src:
+    print("错误: 未找到 Scaffold containerColor 锚点")
+    sys.exit(1)
+src = src.replace(old1, new1, 1)
+print("Scaffold 背景已接主题")
+
+# 2. NavigationBar 的 containerColor: BgDarker -> musicColors().card
+old2 = "                NavigationBar(containerColor = BgDarker) {"
+new2 = f"                NavigationBar(containerColor = musicColors().card) {{ {MARK}"
+if old2 in src:
+    src = src.replace(old2, new2, 1)
+    print("NavigationBar 背景已接主题")
+else:
+    print("警告: 未找到 NavigationBar 锚点，跳过")
+
+with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", "w", encoding="utf-8") as f:
+    f.write(src)
+print("已写入")
+PYEOF
+
+echo "=== 32 v35 完成 ==="
+
