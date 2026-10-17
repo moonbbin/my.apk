@@ -1951,3 +1951,48 @@ PYEOF
 
 echo "=== 32 v38 完成 ==="
 
+# 32 v39: 修 window 作用域问题
+
+echo "=== 32 v39: 修 window 作用域 ==="
+
+python3 << 'PYEOF'
+import re, sys
+
+with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", encoding="utf-8") as f:
+    src = f.read()
+
+# v38 插入的代码有 bug：SideEffect 里用 window 拿不到
+# 修复：在 setContent 开头就 capture window
+old_bug = """            // [32v39] 桥接主题 + 状态栏
+            val prefs39 = getSharedPreferences("theme_prefs", MODE_PRIVATE)"""
+
+# 实际上 v38 用的是 [32v38] 标记，先检查
+if "// [32v38]" in src:
+    print("找到 v38 代码，修复 window 作用域")
+    # 在 val prefs39 之前加 val win39 = window
+    src = src.replace(
+        "            // [32v38] 用桥接主题包裹，isDarkTheme 从 MusicThemeManager 读\n            val isDark38 by",
+        "            // [32v38] 用桥接主题包裹，isDarkTheme 从 MusicThemeManager 读\n            val win38 = window\n            val isDark38 by",
+        1
+    )
+    # 把 SideEffect 里的 val win = window 改成用 win38
+    src = src.replace(
+        "                    val win = window\n                    val ctrl = androidx.core.view.WindowCompat.getInsetsController(win, win.decorView)",
+        "                    val ctrl = androidx.core.view.WindowCompat.getInsetsController(win38, win38.decorView)",
+        1
+    )
+    print("✓ window 作用域已修")
+elif "// [32v39]" in src:
+    print("v39 已处理，跳过")
+    sys.exit(0)
+else:
+    print("未找到 v38 标记，v38 可能没应用")
+    sys.exit(1)
+
+with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", "w", encoding="utf-8") as f:
+    f.write(src)
+print("已写入")
+PYEOF
+
+echo "=== 32 v39 完成 ==="
+
