@@ -1849,8 +1849,12 @@ import re, sys
 
 # === 修复点 2: 先检查 musicColors() 定义 ===
 print("--- 检查 musicColors() ---")
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt", encoding="utf-8") as f:
-    lsrc = f.read()
+try:
+    with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt", encoding="utf-8") as f:
+        lsrc = f.read()
+except FileNotFoundError:
+    print("警告: LxMusicTheme.kt 不存在，跳过 musicColors 检查")
+    lsrc = ""
 
 # 找 fun musicColors
 m = re.search(r'fun musicColors\(\)[^\n]*\n((?:.*\n){0,5})', lsrc)
