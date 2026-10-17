@@ -4,7 +4,7 @@
 set -e
 cd avbox
 
-echo "=== 32 v6：深色/浅色全局切换 ==="
+echo "=== 32 v7：深色/浅色全局切换 ==="
 
 # ===== Part 1: Color.kt 追加浅色 Token =====
 python3 << 'PYEOF'
@@ -64,9 +64,57 @@ with open(path, "w", encoding="utf-8") as f:
 print("PartA2：LxMusicTheme 桥接已创建")
 PYEOF
 
-echo "=== 32 v6 PartA2 完成 ==="
-# 32 v6: PartB 详细打印 MainActivity setContent 结构
-echo "=== 32 v6 PartB: MainActivity 详细结构 ==="
+echo "=== 32 v7 PartA2 完成 ==="
+
+# 32 v7: 修复 LxMusicTheme.kt 的 import 缺失
+echo "=== 32 v7 PartA3: 补 Import ==="
+
+python3 << 'PYEOF'
+import re
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+# 需要确保的 import 列表
+required_imports = [
+    "import androidx.compose.foundation.isSystemInDarkTheme",
+    "import androidx.compose.material3.darkColorScheme",
+    "import androidx.compose.material3.lightColorScheme",
+    "import androidx.compose.material3.MaterialTheme",
+    "import androidx.compose.runtime.Composable",
+    "import androidx.compose.runtime.CompositionLocalProvider",
+    "import androidx.compose.ui.graphics.Color",
+    "import com.github.tvbox.osc.ui.music.theme.BrandGreen",
+    "import com.github.tvbox.osc.ui.music.theme.ErrorRed",
+    "import com.github.tvbox.osc.ui.music.theme.TextOnAccent",
+]
+
+# 找最后一个 import 的位置
+imports = list(re.finditer(r'^import .+$', src, re.MULTILINE))
+if imports:
+    pos = imports[-1].end()
+    to_add = []
+    for imp in required_imports:
+        if imp not in src:
+            to_add.append(imp)
+    if to_add:
+        src = src[:pos] + "\n" + "\n".join(to_add) + src[pos:]
+        print(f"已补 {len(to_add)} 个 import:")
+        for imp in to_add:
+            print(f"  + {imp}")
+    else:
+        print("所有 import 已存在")
+else:
+    print("警告：未找到任何 import")
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("=== 32 v7 PartA3 完成 ===")
+PYEOF
+
+# 32 v7: PartB 详细打印 MainActivity setContent 结构
+echo "=== 32 v7 PartB: MainActivity 详细结构 ==="
 
 MAIN="app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
 if [ ! -f "$MAIN" ]; then
@@ -113,14 +161,14 @@ for i, line in enumerate(lines):
 PYEOF
 
 echo ""
-echo "=== 32 v6 PartB 完成（仅排查，不修改）==="
+echo "=== 32 v7 PartB 完成（仅排查，不修改）==="
 # 不退出 1，让构建继续，先看到结构
 
-# 32 v6 PartC: 搜 isSystemInDarkTheme 并替换
+# 32 v7 PartC: 搜 isSystemInDarkTheme 并替换
 set -e
 # cd avbox (已在 avbox 内，跳过)
 
-echo "=== 32 v6 PartC：isSystemInDarkTheme 排查 ==="
+echo "=== 32 v7 PartC：isSystemInDarkTheme 排查 ==="
 
 # 只查 music 相关目录，避免动主体其他部分
 TARGET_DIR="app/src/main/java/com/github/tvbox/osc/ui/music"
@@ -147,12 +195,12 @@ if [ "$FOUND" -gt 0 ]; then
     echo "或：MaterialTheme.colorScheme.background.luminance() < 0.5"
 fi
 
-echo "=== 32 v6 PartC 完成 ==="
-# 32 v6 PartD: Modifier.shadow 检查
+echo "=== 32 v7 PartC 完成 ==="
+# 32 v7 PartD: Modifier.shadow 检查
 set -e
 # cd avbox (已在 avbox 内，跳过)
 
-echo "=== 32 v6 PartD：shadow 检查 ==="
+echo "=== 32 v7 PartD：shadow 检查 ==="
 
 TARGET_DIR="app/src/main/java/com/github/tvbox/osc/ui/music"
 
@@ -173,4 +221,4 @@ if [ "$FOUND" -gt 0 ]; then
     echo "如需修复，考虑用 MaterialTheme.colorScheme.surfaceVariant 做阴影色，或调低 elevation"
 fi
 
-echo "=== 32 v6 PartD 完成 ==="
+echo "=== 32 v7 PartD 完成 ==="
