@@ -1,5 +1,5 @@
 #!/bin/bash
-# 31_music_search_result.sh v3 (2026-10-16): 去掉 SolidBrush 修复编译失败；强制重写文件
+# 31_music_search_result.sh v4 (2026-10-17): 顶部状态栏避让
 set -e
 cd "$(dirname "$0")/../.." 2>/dev/null || true
 BASE="avbox"
@@ -103,3 +103,50 @@ print("接线成功")
 PYEOF
 
 echo "31 完成"
+
+# ===== v4：状态栏避让 =====
+python3 << 'PYEOF'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchResultScreen.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [v4] statusBarsPadding"
+if MARK in src:
+    print("跳过（已是 v4）")
+    sys.exit(0)
+
+# 1. 加 import
+OLD_IMPORT = "import androidx.compose.foundation.layout.size"
+NEW_IMPORT = "import androidx.compose.foundation.layout.size\nimport androidx.compose.foundation.layout.statusBarsPadding // [v4] 状态栏避让"
+if OLD_IMPORT in src:
+    src = src.replace(OLD_IMPORT, NEW_IMPORT, 1)
+    print("v4：已加 import")
+else:
+    print("错误：未找到 import 锚点")
+    sys.exit(1)
+
+# 2. 顶层 Column 加 statusBarsPadding
+OLD_COL = """    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {"""
+NEW_COL = """    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding(), // [v4] 状态栏避让
+    ) {"""
+
+if OLD_COL in src:
+    src = src.replace(OLD_COL, NEW_COL, 1)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(src)
+    print("v4：顶层 Column 已加 statusBarsPadding")
+else:
+    print("错误：未找到顶层 Column 锚点")
+    sys.exit(1)
+PYEOF
+# ===== v4 结束 =====
