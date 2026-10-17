@@ -332,7 +332,7 @@ else:
 PYEOF
 # ===== v10 结束 =====
 
-# ===== v11：徽章可见性修复 =====
+# ===== v11：徽章可见性修复（修正版） =====
 python3 << 'PYEOF'
 import sys
 
@@ -347,14 +347,13 @@ if MARK in src:
 
 OLD = "            if (currentQuality.isNotEmpty()) {"
 NEW = """            // [v11] badge visible by title：用 title 判断，避免重建时 quality 短暂为空导致徽章消失
-            val titleForBadge by LxPlayerManager.currentTitle.collectAsState()
-            if (currentQuality.isNotEmpty() || titleForBadge.isNotEmpty()) {"""
+            if (currentQuality.isNotEmpty() || title.isNotEmpty()) {"""
 
 if OLD in src:
     src = src.replace(OLD, NEW, 1)
     with open(path, "w", encoding="utf-8") as f:
         f.write(src)
-    print("v11：徽章可见条件已改")
+    print("v11 修正版：已应用（复用 title 变量）")
 else:
     print("错误：未找到徽章可见锚点")
     sys.exit(1)
