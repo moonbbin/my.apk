@@ -2159,3 +2159,45 @@ PYEOF
 
 echo "=== 32 v43 完成 ==="
 
+# 32 v44: 粗暴清掉所有 .background(BgDeepBlue)
+
+echo "=== 32 v44: 全局清黑底 ==="
+
+python3 << 'PYEOF'
+import sys
+
+MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+with open(MPATH, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v44]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# 简单粗暴：把所有 .background(BgDeepBlue) 换成主题背景
+# 保留语法有效，不断链
+count = src.count(".background(BgDeepBlue)")
+src = src.replace(".background(BgDeepBlue)", ".background(musicColors().background)")
+
+# 也处理 .background(BgDeepBlue.copy(...))
+import re
+src, n = re.subn(
+    r'\.background\(BgDeepBlue\.copy\(alpha=([0-9.]+)f\)\)',
+    r'.background(musicColors().background.copy(alpha=\1f))',
+    src
+)
+count += n
+
+print(f"替换 {count} 处 BgDeepBlue -> musicColors().background")
+
+# 加标记
+src = MARK + "\n" + src
+
+with open(MPATH, "w", encoding="utf-8") as f:
+    f.write(src)
+print("已写入")
+PYEOF
+
+echo "=== 32 v44 完成 ==="
+
