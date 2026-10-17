@@ -331,3 +331,32 @@ else:
     sys.exit(1)
 PYEOF
 # ===== v10 结束 =====
+
+# ===== v11：徽章可见性修复 =====
+python3 << 'PYEOF'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [v11] badge visible by title"
+if MARK in src:
+    print("跳过（已是 v11）")
+    sys.exit(0)
+
+OLD = "            if (currentQuality.isNotEmpty()) {"
+NEW = """            // [v11] badge visible by title：用 title 判断，避免重建时 quality 短暂为空导致徽章消失
+            val titleForBadge by LxPlayerManager.currentTitle.collectAsState()
+            if (currentQuality.isNotEmpty() || titleForBadge.isNotEmpty()) {"""
+
+if OLD in src:
+    src = src.replace(OLD, NEW, 1)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(src)
+    print("v11：徽章可见条件已改")
+else:
+    print("错误：未找到徽章可见锚点")
+    sys.exit(1)
+PYEOF
+# ===== v11 结束 =====
