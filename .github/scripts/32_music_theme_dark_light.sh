@@ -1139,3 +1139,78 @@ fi
 
 echo "=== 32 v26 完成 ==="
 
+# 32 v27: 打印 LxThemeSettingsActivity 结构 + 清理 ThemeSettingsPage 错加的代码
+
+echo "=== 32 v27: 真正的主题页结构 ==="
+
+python3 << 'PYEOF'
+import os, re
+
+# 1) 打印 LxThemeSettingsActivity.kt 中"深色主题"附近的结构
+for root, dirs, files in os.walk("app/src/main/java"):
+    for fn in files:
+        if fn == "LxThemeSettingsActivity.kt":
+            fp = os.path.join(root, fn)
+            with open(fp, encoding="utf-8") as f:
+                lines = f.readlines()
+            print(f"文件: {fp}, 共 {len(lines)} 行")
+            for i, line in enumerate(lines, 1):
+                if "深色主题" in line:
+                    s = max(0, i-15)
+                    e = min(len(lines), i+15)
+                    print(f"--- '深色主题' 在第 {i} 行，上下文 ---")
+                    for j in range(s, e):
+                        print(f"{j+1:4d}: {lines[j]}", end="")
+                    print()
+            break
+
+print()
+print("=== 清理 ThemeSettingsPage.kt 错加的代码 ===")
+
+# 2) 清理 ThemeSettingsPage.kt 中的 v16-v19 代码
+tpath = None
+for root, dirs, files in os.walk("app/src/main/java"):
+    for fn in files:
+        if fn == "ThemeSettingsPage.kt":
+            tpath = os.path.join(root, fn)
+            break
+    if tpath:
+        break
+
+if tpath:
+    with open(tpath, encoding="utf-8") as f:
+        src = f.read()
+    orig = len(src)
+    # 删除 [32v16], [32v19] 标记的代码块
+    # v16 加的状态代码
+    src = re.sub(r'\n\s*// \[32v16\][^\n]*\n', '\n', src)
+    src = re.sub(r'\n\s*// \[32v19\][^\n]*\n', '\n', src)
+    # 删除 themeModeState 相关（v19 加的）
+    # 谨慎：只删明确是 v19 加的行
+    lines = src.split('\n')
+    new_lines = []
+    skip = False
+    for line in lines:
+        if '[32v19]' in line or '[32v16]' in line:
+            skip = True
+            continue
+        # v19 加的 theme 相关变量（通过特征识别）
+        if 'themeModeState' in line or 'themeModeLabel' in line or 'cycleThemeMode' in line:
+            continue
+        if 'themeCtx' in line or 'themePrefs' in line:
+            continue
+        new_lines.append(line)
+    src = '\n'.join(new_lines)
+    # 删除 theme item
+    src = re.sub(r'// \[32v19\] theme item\n(?:[^\n]*\n)*?.*?action = \{ cycleThemeMode\(\) \}[^\n]*\n[^\n]*\),\n', '', src)
+    src = re.sub(r'// \[32v16\] theme item\n(?:[^\n]*\n)*?.*?action = \{ cycleTheme\(\) \}[^\n]*\n[^\n]*\),\n', '', src)
+    
+    with open(tpath, "w", encoding="utf-8") as f:
+        f.write(src)
+    print(f"ThemeSettingsPage.kt 已清理 ({orig} -> {len(src)} 字符)")
+else:
+    print("未找到 ThemeSettingsPage.kt")
+
+print("=== 32 v27 完成 ===")
+PYEOF
+
