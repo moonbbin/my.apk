@@ -4488,3 +4488,49 @@ with open(fp, "w", encoding="utf-8") as f:
 print("=== 32 v81 完成 ===")
 PYEOF
 
+# 32 v82: 按行删多余 color=
+
+echo "=== 32 v82 ==="
+
+python3 << 'PYEOF'
+import sys
+
+fp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlaybackSettingsActivity.kt"
+MARK = "// [32v82]"
+
+with open(fp, encoding="utf-8") as f:
+    lines = f.read().splitlines()
+
+if MARK in "\n".join(lines):
+    print("已处理")
+    sys.exit(0)
+
+# 删除只包含 "color = musicColors().card," 的行（注意：不是 "colors ="）
+# 这种行是 v72 误加的
+new_lines = []
+removed = 0
+for l in lines:
+    stripped = l.strip()
+    # 精确匹配：行内容是 "color = musicColors().card,"（允许前后空格）
+    # 但排除 "colors ="（注意 s）
+    if stripped == "color = musicColors().card,":
+        removed += 1
+        print(f"  删除行: {l[:60]}")
+        continue
+    new_lines.append(l)
+
+if removed > 0:
+    content = "\n".join(new_lines)
+    content = MARK + "\n" + content
+    with open(fp, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"  ✓ 删除了 {removed} 行")
+else:
+    print("  - 未找到单独的 color= 行")
+    # 打印第 85-90 行看看
+    for i in range(84, min(90, len(lines))):
+        print(f"    行{i+1}: {lines[i][:70]}")
+
+print("=== 32 v82 完成 ===")
+PYEOF
+
