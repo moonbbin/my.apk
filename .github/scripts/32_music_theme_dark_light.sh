@@ -2720,3 +2720,95 @@ PYEOF
 
 echo "=== 32 v55 完成 ==="
 
+# 32 v56: 暴力替换 25 页面颜色
+
+echo "=== 32 v56: 暴力替换 ==="
+
+python3 << 'PYEOF'
+import os, re, sys
+
+BASE = "app/src/main/java/com/github/tvbox/osc/ui/music"
+MARK = "// [32v56]"
+IMPORT = "import com.github.tvbox.osc.ui.activity.musicColors"
+
+def add_import(src):
+    if IMPORT in src:
+        return src
+    m = list(re.finditer(r'^import .+$', src, re.MULTILINE))
+    if m:
+        pos = m[-1].end()
+        return src[:pos] + '\n' + IMPORT + src[pos:]
+    return src
+
+# 映射表：colorScheme -> musicColors()
+replacements = [
+    # 文字
+    (r'MaterialTheme\.colorScheme\.onSurface\b', 'musicColors().textPrimary'),
+    (r'MaterialTheme\.colorScheme\.onBackground\b', 'musicColors().textPrimary'),
+    (r'MaterialTheme\.colorScheme\.onSurfaceVariant\b', 'musicColors().textSecondary'),
+    # 背景/卡片
+    (r'MaterialTheme\.colorScheme\.background\b', 'musicColors().background'),
+    (r'MaterialTheme\.colorScheme\.surface\b', 'musicColors().card'),
+    (r'MaterialTheme\.colorScheme\.surfaceVariant\b', 'musicColors().cardSecondary'),
+    (r'MaterialTheme\.colorScheme\.surfaceContainer\b', 'musicColors().card'),
+    (r'MaterialTheme\.colorScheme\.surfaceContainerHigh\b', 'musicColors().cardSecondary'),
+    # 边框
+    (r'MaterialTheme\.colorScheme\.outline\b', 'musicColors().divider'),
+    (r'MaterialTheme\.colorScheme\.outlineVariant\b', 'musicColors().divider'),
+]
+
+done = 0
+total_repl = 0
+for root, dirs, files in os.walk(BASE):
+    for fn in files:
+        if not fn.endswith(".kt"):
+            continue
+        fp = os.path.join(root, fn)
+        with open(fp, encoding="utf-8") as f:
+            src = f.read()
+        if MARK in src:
+            continue
+        
+        orig = src
+        count = 0
+        for pat, repl in replacements:
+            src, n = re.subn(pat, repl, src)
+            count += n
+        
+        # 硬编码白 -> textPrimary (只在 Text 的 color 上下文)
+        # 保守：替换 color = Color.White
+        src, n = re.subn(r'color\s*=\s*Color\.White\b', 'color = musicColors().textPrimary', src)
+        count += n
+        
+        if count > 0:
+            src = add_import(src)
+            src = MARK + "\n" + src
+            with open(fp, "w", encoding="utf-8") as f:
+                f.write(src)
+            print(f"✓ {os.path.basename(fp)}: {count} 处")
+            done += 1
+            total_repl += count
+
+print(f"共处理 {done} 个文件，{total_repl} 处替换")
+
+# 2. 修 MusicHomeActivity 的 PlaylistDetailScreen 头部黑底
+MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+with open(MPATH, encoding="utf-8") as f:
+    src = f.read()
+if MARK not in src:
+    # 找残留的 BgDeepBlue
+    n = len(re.findall(r'BgDeepBlue', src))
+    if n > 0:
+        src = re.sub(r'BgDeepBlue', 'musicColors().background', src)
+        # BgDeepBlue.copy(...) 的情况
+        src = re.sub(r'musicColors\(\)\.background\.copy\(', 'musicColors().background.copy(', src)
+        src = MARK + "\n" + src
+        with open(MPATH, "w", encoding="utf-8") as f:
+            f.write(src)
+        print(f"✓ MusicHomeActivity: 清除 {n} 处 BgDeepBlue 残留")
+    else:
+        print("MusicHomeActivity: 无 BgDeepBlue 残留")
+PYEOF
+
+echo "=== 32 v56 完成 ==="
+
