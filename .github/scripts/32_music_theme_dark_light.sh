@@ -4387,3 +4387,66 @@ for fname in ["LxPlaybackSettingsActivity.kt", "LxQualitySettingsActivity.kt",
 print("=== 32 v79 完成 ===")
 PYEOF
 
+# 32 v80: 逐行去重
+
+echo "=== 32 v80 ==="
+
+python3 << 'PYEOF'
+import sys
+
+BASE = "app/src/main/java/com/github/tvbox/osc/ui/activity/"
+MARK = "// [32v80]"
+
+for fname in ["LxPlaybackSettingsActivity.kt", "LxQualitySettingsActivity.kt",
+              "LxLyricSettingsActivity.kt", "LxFavoritesActivity.kt"]:
+    fp = BASE + fname
+    try:
+        with open(fp, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except:
+        continue
+    if MARK in "\n".join(lines):
+        print(f"  {fname}: 已处理")
+        continue
+    
+    # 找到所有 "val win72 = window" 的行号
+    win_lines = [i for i, l in enumerate(lines) if "val win72 = window" in l]
+    dark_lines = [i for i, l in enumerate(lines) if "val isDark72 by MusicThemeManager.isDarkTheme" in l]
+    
+    if len(win_lines) <= 1 and len(dark_lines) <= 1:
+        print(f"  {fname}: 无重复")
+    else:
+        print(f"  {fname}: 发现重复 (win72 x{len(win_lines)})，删除多余")
+        # 删除从第二个 win72 开始到对应的 SideEffect 结束块
+        # 简化：删除所有包含 win72/isDark72/SideEffect+isAppearanceLightStatusBars 的行（保留第一组）
+        # 更稳妥：只保留第一组，删除其余组的 4 行（win72, isDark72, SideEffect{, ...})
+        to_delete = set()
+        # 保留第一组，删除后面的
+        for idx in win_lines[1:]:
+            # 删除 win72 行、下一行(isDark72)、再下 3 行(SideEffect块)
+            for j in range(idx, min(idx+5, len(lines))):
+                # 检查是否是注入块的一部分
+                if j < len(lines) and ("win72" in lines[j] or "isDark72" in lines[j] or "isAppearanceLightStatusBars" in lines[j] or "SideEffect" in lines[j]):
+                    to_delete.add(j)
+        # 也删除多余的 isDark72
+        for idx in dark_lines[1:]:
+            to_delete.add(idx)
+            # 往上找 win72，往下找 SideEffect
+        new_lines = [l for i, l in enumerate(lines) if i not in to_delete]
+        # 修 Card(color=) -> colors=
+        content = "\n".join(new_lines)
+        if "Card(\n                color = musicColors().card," in content:
+            content = content.replace(
+                "Card(\n                color = musicColors().card,",
+                "Card(\n                colors = CardDefaults.cardColors(containerColor = musicColors().card),"
+            )
+            print(f"  {fname}: ✓ Card 已修正")
+        # 加 MARK
+        content = MARK + "\n" + content
+        with open(fp, "w", encoding="utf-8") as f:
+            f.write(content)
+        print(f"  {fname}: ✓ 已去重")
+
+print("=== 32 v80 完成 ===")
+PYEOF
+
