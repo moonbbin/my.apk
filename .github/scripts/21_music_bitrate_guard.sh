@@ -1070,3 +1070,60 @@ else:
 print("=== 21 v19 完成 ===")
 PYEOF
 
+
+echo "=== 21 v20 ==="
+
+python3 << 'PYEOF'
+import re, sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+MARK = "// [21v20] clear only on url change"
+
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+if MARK in src:
+    print("21 v20: 已应用，跳过")
+    sys.exit(0)
+
+# 找到 v19 的清空块，替换为条件清空
+old_clear = """        // [21v19] clear quality on new song
+        _currentQuality.value = ""
+        _measuredBitrate.value = 0
+        // _bitrate 是 ExoPlayer 估值，由播放器回调更新，这里也清零避免旧值残留
+        try { _bitrate.value = 0 } catch (_: Exception) {}"""
+
+new_clear = """        // [21v20] clear only on url change
+        if (_lastProbeUrl != url) {
+            _currentQuality.value = ""
+            _measuredBitrate.value = 0
+            try { _bitrate.value = 0 } catch (_: Exception) {}
+            _lastProbeUrl = url
+        }"""
+
+if old_clear in src:
+    src = src.replace(old_clear, new_clear, 1)
+    print("✓ v19 清空逻辑已改为条件清空")
+else:
+    print("✗ 未找到 v19 清空块")
+    sys.exit(1)
+
+# 确保 _lastProbeUrl 字段存在（在 _currentQuality 附近声明）
+if "_lastProbeUrl" not in src or "private var _lastProbeUrl" not in src:
+    # 找到 _currentQuality 的声明位置
+    m = re.search(r'(private val _currentQuality[^\n]+\n)', src)
+    if m:
+        decl = m.group(1)
+        new_decl = decl + '    private var _lastProbeUrl: String? = null\n'
+        src = src.replace(decl, new_decl, 1)
+        print("✓ _lastProbeUrl 字段已添加")
+    else:
+        print("✗ 未找到 _currentQuality 声明")
+        sys.exit(1)
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+
+print("=== 21 v20 完成 ===")
+PYEOF
+
