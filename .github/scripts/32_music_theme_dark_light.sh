@@ -2594,16 +2594,40 @@ PYEOF
 
 echo "=== 32 v50 完成 ==="
 
-# 32 v52: 加 LxMusicTheme 调试快照
+# 32 v53: 统一主题值源
 
-echo "====== [32-debug] LxMusicTheme 函数快照 ======"
-F="app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
-echo "--- 版本标记 ---"
-grep -o "\[32v[0-9]*\]" "$F" | sort -u
-echo "--- LxMusicTheme 函数（前40行）---"
-grep -A 40 "fun LxMusicTheme(" "$F" | head -45
-echo "--- materialColorScheme 映射检查 ---"
-grep -c "outlineVariant" "$F"
-grep -c "surfaceContainer" "$F"
-echo "====== [32-debug] 快照结束 ======"
+echo "=== 32 v53: 统一值源 ==="
+
+python3 << 'PYEOF'
+import sys, re
+
+MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+with open(MPATH, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v53]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# 把 LxMusicTheme(isDarkTheme = finalDark41) 改为读 Manager 的值
+# 确保与 musicColors() 同源
+old = "LxMusicTheme(isDarkTheme = finalDark41)"
+new = "LxMusicTheme(isDarkTheme = MusicThemeManager.isDarkTheme.value)"
+
+if old in src:
+    src = src.replace(old, new, 1)
+    print("✓ 已统一值源")
+    src = MARK + "\n" + src
+    with open(MPATH, "w", encoding="utf-8") as f:
+        f.write(src)
+else:
+    print("警告: 未找到 LxMusicTheme 调用")
+    # 试试其他格式
+    m = re.search(r'LxMusicTheme\(isDarkTheme\s*=\s*[^)]+\)', src)
+    if m:
+        print(f"找到: {m.group(0)[:60]}")
+PYEOF
+
+echo "=== 32 v53 完成 ==="
 
