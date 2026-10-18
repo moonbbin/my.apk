@@ -9,30 +9,37 @@ cd avbox
 echo "=== 34 v3: 播放页沉浸式定向补丁 ==="
 
 TARGET="app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
-GRADLE="app/build.gradle"
 
 if [ ! -f "$TARGET" ]; then
     echo "✗ 文件不存在: $TARGET"
     exit 1
 fi
 
-# === 0. 加 Palette 依赖 ===
-if grep -q "androidx.palette:palette" "$GRADLE"; then
+# === 0. 加 Palette 依赖（自动找 build.gradle） ===
+GRADLE_FILE=$(find . -maxdepth 2 -name "build.gradle" -path "*/app/*" 2>/dev/null | head -1)
+if [ -z "$GRADLE_FILE" ]; then
+    GRADLE_FILE=$(find . -maxdepth 2 -name "build.gradle" 2>/dev/null | head -1)
+fi
+if [ -z "$GRADLE_FILE" ]; then
+    echo "❌ 找不到 build.gradle"; exit 1
+fi
+echo "→ 找到 $GRADLE_FILE"
+if grep -q "androidx.palette:palette" "$GRADLE_FILE"; then
     echo "→ Palette 依赖已存在，跳过"
 else
     echo "→ 添加 Palette 依赖"
-    python3 -c "
+    python3 << PYEOF2
 import re
-with open('$GRADLE', encoding='utf-8') as f:
+with open("$GRADLE_FILE", encoding='utf-8') as f:
     s = f.read()
 m = re.search(r'dependencies\s*\{', s)
 if not m:
     print('❌ 未找到 dependencies 块'); exit(1)
-s = s[:m.end()] + '\n    implementation \"androidx.palette:palette:1.0.0\"' + s[m.end():]
-open('$GRADLE','w').write(s)
+s = s[:m.end()] + '\n    implementation "androidx.palette:palette:1.0.0"' + s[m.end():]
+open("$GRADLE_FILE",'w').write(s)
 print('✓ Palette 依赖已加')
 assert 'androidx.palette:palette' in s
-"
+PYEOF2
 fi
 
 python3 << 'PYEOF'
