@@ -3,11 +3,11 @@
 # 本脚本为 SearchScreen.kt 的唯一最终控制权，后续所有搜索页修改均在此进行。
 # 注意：25_music_pages_wire.sh 也会写 SearchScreen.kt，但本脚本编号更大（33 > 25），
 # 构建时后运行，覆盖生效。25 的写入仅作为兜底。
-# [33v2] 补 Color import
+# [33v3] 修根背景（musicColors().background）、分割线弱化（alpha 0.5f）
 set -e
 cd avbox
 
-echo "=== 33 v2: 搜索页视觉微调 ==="
+echo "=== 33 v3: 搜索页视觉微调 ==="
 
 TARGET="app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchScreen.kt"
 
@@ -78,7 +78,7 @@ fun SearchScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background) // 细节1：背景 background
+            .background(musicColors().background)
             .padding(horizontal = 16.dp), // 细节1：左右 16dp
     ) {
         Spacer(modifier = Modifier.height(16.dp))
@@ -217,7 +217,7 @@ private fun HotSearchItem(
         )
     }
         HorizontalDivider(
-            color = musicColors().divider,
+            color = musicColors().divider.copy(alpha = 0.5f),
             thickness = 0.5.dp,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
@@ -241,5 +241,5 @@ fun SearchScreenPreview() {
 }
 KOTLIN_EOF
 
-echo "✓ SearchScreen.kt 已全量覆盖（33v2）"
-echo "=== 33 v2 完成 ==="
+echo "✓ SearchScreen.kt 已全量覆盖（33v3）"
+echo "=== 33 v3 完成 ==="
