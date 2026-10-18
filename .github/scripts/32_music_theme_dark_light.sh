@@ -4820,3 +4820,218 @@ KOTLIN_EOF
 echo "✓ LxPlaybackSettingsActivity.kt 已全量覆盖 (方案A)"
 echo "=== 32 v84 完成 ==="
 
+# 32 v85: PlaybackSettingsActivity 方案A全量覆盖（删bgFollowCover）
+
+echo "=== 32 v85 ==="
+
+TARGET="app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlaybackSettingsActivity.kt"
+
+if [ ! -f "$TARGET" ]; then
+    echo "✗ 文件不存在: $TARGET"
+    exit 1
+fi
+
+cat << 'KOTLIN_EOF' > "$TARGET"
+// [32v85]
+package com.github.tvbox.osc.ui.activity
+
+import android.content.Context
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+
+/**
+ * 播放设置页
+ * SharedPreferences("player_settings"):
+
+ * 音量归一化走 LxPlayerManager（原有逻辑保留）
+ */
+class LxPlaybackSettingsActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        MusicThemeManager.init(this)
+        setContent {
+            val isDark84 by MusicThemeManager.isDarkTheme
+            val win84 = window
+            androidx.compose.runtime.SideEffect {
+                androidx.core.view.WindowCompat.getInsetsController(win84, win84.decorView).isAppearanceLightStatusBars = !isDark84
+            }
+            LxMusicTheme(isDarkTheme = isDark84) {
+                PlaybackSettingsScreen(onBack = { finish() })
+            }
+        }
+    }
+}
+
+@Composable
+fun PlaybackSettingsScreen(onBack: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember { context.getSharedPreferences("player_settings", Context.MODE_PRIVATE) }
+    var loudnessOn by remember { mutableStateOf<Boolean>(LxPlayerManager.isLoudnessOn()) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(musicColors().background)
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "‹",
+                style = MaterialTheme.typography.headlineLarge,
+                color = musicColors().textPrimary,
+                modifier = Modifier
+                    .clickable { onBack() }
+                    .padding(8.dp)
+            )
+            Text(
+                text = "播放设置",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = musicColors().textPrimary,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = musicColors().card),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+        // 音量归一化（原有）
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "音量归一化",
+                    color = musicColors().textPrimary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = "自动平衡不同歌曲的音量",
+                    color = musicColors().textPrimary.copy(alpha = 0.6f),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            Switch(
+                modifier = Modifier.scale(0.85f),
+                checked = loudnessOn,
+                onCheckedChange = {
+                    loudnessOn = it
+                    LxPlayerManager.setLoudnessNormalization(it)
+                },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = musicColors().textPrimary,
+                    checkedTrackColor = musicColors().accent
+                )
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Divider(color = musicColors().textPrimary.copy(alpha = 0.1f))
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // ===== 主题设置 =====
+        Text(
+            text = "主题外观",
+            color = musicColors().textPrimary,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        // 深色/浅色切换
+        val isDark by MusicThemeManager.isDarkTheme
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "深色主题",
+                    color = musicColors().textPrimary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = if (isDark) "黑绿 Spotify 风" else "浅色 Sollin 风",
+                    color = musicColors().textPrimary.copy(alpha = 0.6f),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            Switch(
+                modifier = Modifier.scale(0.85f),
+                checked = isDark,
+                onCheckedChange = { MusicThemeManager.setDarkTheme(it) },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = musicColors().textPrimary,
+                    checkedTrackColor = musicColors().accent
+                )
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // 播放器样式
+        val playerStyle by MusicThemeManager.playerStyle
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "播放界面样式",
+                color = musicColors().textPrimary,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                listOf(
+                    PlayerStyle.CLASSIC to "经典",
+                    PlayerStyle.PHOTO_LYRIC to "写真歌词"
+                ).forEach { (style, label) ->
+                    val selected = playerStyle == style
+                    androidx.compose.material3.FilterChip(
+                        selected = selected,
+                        onClick = { MusicThemeManager.setPlayerStyle(style) },
+                        label = { Text(label, color = if (selected) musicColors().accentText else musicColors().textPrimary) },
+                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = musicColors().accent,
+                            containerColor = musicColors().cardSecondary
+                        ),
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+    }
+}
+}
+}
+KOTLIN_EOF
+
+echo "✓ LxPlaybackSettingsActivity.kt 已全量覆盖 (方案A)"
+echo "=== 32 v85 完成 ==="
+
