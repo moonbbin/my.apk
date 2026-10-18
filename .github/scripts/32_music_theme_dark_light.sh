@@ -3175,22 +3175,12 @@ if not os.path.exists(cpath):
 with open(cpath, encoding="utf-8") as f:
     src = f.read()
 if "OverlayScrimBlack" not in src:
-    # 在文件末尾或 BrandGreen 附近添加
-    # 找最后一个 val 定义
-    m = list(re.finditer(r'^val \w+ = Color\(0x[0-9A-Fa-f]+\)', src, re.MULTILINE))
-    if m:
-        pos = m[-1].end()
-        # 检查是否已有 internal 修饰
-        line_start = src.rfind('\n', 0, m[-1].start()) + 1
-        prefix = "internal " if "internal val" in src[line_start:m[-1].start()+20] else ""
-        add = f"\n{prefix}val OverlayScrimBlack = Color(0xFF000000).copy(alpha = 0.6f)\n{prefix}val OverlayTextWhite = Color(0xFFFFFFFF)"
-        src = src[:pos] + add + src[pos:]
-        with open(cpath, "w", encoding="utf-8") as f:
-            f.write(src)
-        print(f"  ✓ 已加 Overlay 常量 ({cpath})")
-    else:
-        print("  ✗ 未找到插入点")
-        sys.exit(1)
+    # 直接追加到文件末尾
+    add = "\n// [32v62] Overlay 常量\nval OverlayScrimBlack = Color(0xFF000000).copy(alpha = 0.6f)\nval OverlayTextWhite = Color(0xFFFFFFFF)\n"
+    src = src.rstrip() + add
+    with open(cpath, "w", encoding="utf-8") as f:
+        f.write(src)
+    print(f"  ✓ 已加 Overlay 常量 ({cpath})")
 else:
     print("  ✓ 已存在，跳过")
 
