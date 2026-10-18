@@ -3,11 +3,11 @@
 # 本脚本为 SearchScreen.kt 的唯一最终控制权，后续所有搜索页修改均在此进行。
 # 注意：25_music_pages_wire.sh 也会写 SearchScreen.kt，但本脚本编号更大（33 > 25），
 # 构建时后运行，覆盖生效。25 的写入仅作为兜底。
-# [33v3] 修根背景（musicColors().background）、分割线弱化（alpha 0.5f）
+# [33v4] 榜单序号三重组合（颜色+字重+透明度），火苗图标accent
 set -e
 cd avbox
 
-echo "=== 33 v3: 搜索页视觉微调 ==="
+echo "=== 33 v4: 搜索页视觉微调 ==="
 
 TARGET="app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchScreen.kt"
 
@@ -58,7 +58,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
@@ -147,7 +149,7 @@ fun SearchScreen(
             Icon(
                 imageVector = Icons.Filled.Whatshot,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface, // 细节3：图标 onSurface
+                tint = musicColors().accent,
                 modifier = Modifier.size(20.dp),
             )
             Text(
@@ -187,16 +189,20 @@ private fun HotSearchItem(
             .clickable(onClick = onClick), // 细节4：整行点击
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // 左侧序号：前三 primary，其余 onSurfaceVariant（不用红橙黄）
+        // 左侧序号：三重组合（颜色+字重+透明度），1/2/3名与后面拉开视觉断层
         Text(
             text = rank.toString(),
-            style = MaterialTheme.typography.bodyLarge,
+            style = when (rank) {
+                1 -> MaterialTheme.typography.bodyLarge.copy(fontSize = 22.sp, fontWeight = FontWeight.Black)
+                2, 3 -> MaterialTheme.typography.bodyLarge.copy(fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                else -> MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, fontWeight = FontWeight.Normal)
+            },
             color = when (rank) {
                 1 -> musicColors().accent
-                2, 3 -> musicColors().textSecondary
-                else -> musicColors().textHint
+                2, 3 -> musicColors().textPrimary
+                else -> musicColors().textHint.copy(alpha = 0.6f)
             },
-            fontWeight = if (rank == 1) FontWeight.Bold else FontWeight.Normal,
+            textAlign = TextAlign.Center,
             modifier = Modifier.width(32.dp),
         )
         // 中间歌名：单行省略
@@ -241,5 +247,5 @@ fun SearchScreenPreview() {
 }
 KOTLIN_EOF
 
-echo "✓ SearchScreen.kt 已全量覆盖（33v3）"
-echo "=== 33 v3 完成 ==="
+echo "✓ SearchScreen.kt 已全量覆盖（33v4）"
+echo "=== 33 v4 完成 ==="
