@@ -3297,3 +3297,123 @@ else:
     print("  - 未找到播放历史页文件")
 PYEOF2
 
+# 32 v63: 播放量标签+搜索状态栏+源设置
+
+echo "=== 32 v63: 三处 ==="
+
+python3 << 'PYEOF'
+import os, re, sys, glob
+
+MARK = "// [32v63]"
+
+# 1. 播放量标签：确保 Overlay 常量被使用
+print("1. PlaylistScreen 播放量标签")
+found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
+if found:
+    fp = found[0]
+    with open(fp, encoding="utf-8") as f:
+        s = f.read()
+    if MARK not in s:
+        # 直接替换：scrim 背景
+        s = s.replace("color = Color.Black.copy(alpha = 0.55f),", "color = OverlayScrimBlack,")
+        # 图标和文字：在播放量标签的 Row 内
+        # 更稳妥：替换所有在 Surface(OverlayScrimBlack) 后的 Color.White
+        # 简单做法：全局替换播放量相关的 Color.White（该文件内只有播放量用 White）
+        # 检查：文件内 Color.White 出现次数
+        whites = s.count("Color.White")
+        print(f"  文件内 Color.White 共 {whites} 处")
+        # 只替换 tint 和 color = Color.White（播放量标签的）
+        # 播放量标签的特征：紧跟在 OverlayScrimBlack 之后
+        # 用正则：找到 OverlayScrimBlack 块内的 Color.White
+        def repl_badge(m):
+            block = m.group(0)
+            block = block.replace("tint = Color.White", "tint = OverlayTextWhite")
+            block = block.replace("color = Color.White,", "color = OverlayTextWhite,")
+            return block
+        # 匹配从 OverlayScrimBlack 到下一个 Surface 或函数结束
+        s = re.sub(r'color = OverlayScrimBlack,.*?(?=\n                \}|\n            \})', repl_badge, s, flags=re.DOTALL)
+        # 确保 import
+        if "import" in s and "OverlayScrimBlack" not in s.split("package")[0]:
+            # 找 Color.kt 包名
+            for cfp in glob.glob("app/src/main/java/**/Color.kt", recursive=True):
+                with open(cfp, encoding="utf-8") as cf:
+                    cs = cf.read()
+                pm = re.search(r'^package (.+)$', cs, re.MULTILINE)
+                if pm and "OverlayScrimBlack" in cs:
+                    pkg = pm.group(1)
+                    m2 = list(re.finditer(r'^import .+$', s, re.MULTILINE))
+                    if m2:
+                        pos2 = m2[-1].end()
+                        s = s[:pos2] + f'\nimport {pkg}.OverlayScrimBlack\nimport {pkg}.OverlayTextWhite' + s[pos2:]
+                        print(f"  ✓ 已加 import ({pkg})")
+                    break
+        s = MARK + "\n" + s
+        with open(fp, "w", encoding="utf-8") as f:
+            f.write(s)
+        print("  ✓ 播放量标签已用 Overlay 常量")
+    else:
+        print("  ✓ 已处理，跳过")
+else:
+    print("  ✗ 未找到 PlaylistScreen")
+
+# 2. 搜索 Activity 状态栏
+print("2. LxMusicSearchActivity 状态栏")
+sp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicSearchActivity.kt"
+if os.path.exists(sp):
+    with open(sp, encoding="utf-8") as f:
+        s = f.read()
+    if MARK not in s:
+        # 在 setContent 内加 SideEffect（仿 v41）
+        # 找 setContent {
+        m = re.search(r'setContent\s*\{', s)
+        if m:
+            pos = m.end()
+            # 找 setContent 块的缩进
+            ls = s.rfind('\n', 0, m.start()) + 1
+            indent = s[ls:m.start()]
+            # 在 setContent { 后插入
+            inject = f"""
+{indent}    // [32v63] 状态栏图标随主题
+{indent}    val win63 = window
+{indent}    val isDark63 by MusicThemeManager.isDarkTheme
+{indent}    androidx.compose.runtime.SideEffect {{
+{indent}        val controller = androidx.core.view.WindowCompat.getInsetsController(win63, win63.decorView)
+{indent}        controller.isAppearanceLightStatusBars = !isDark63
+{indent}    }}
+"""
+            s = s[:pos] + inject + s[pos:]
+            s = MARK + "\n" + s
+            with open(sp, "w", encoding="utf-8") as f:
+                f.write(s)
+            print("  ✓ 已加状态栏 SideEffect")
+        else:
+            print("  ✗ 未找到 setContent")
+            sys.exit(1)
+    else:
+        print("  ✓ 已处理，跳过")
+else:
+    print(f"  ✗ 未找到 {sp}")
+
+# 3. 源设置页根背景强制
+print("3. LxSourceSettings 根背景")
+ssp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+with open(ssp, encoding="utf-8") as f:
+    s = f.read()
+if MARK not in s:
+    # 强制替换所有硬编码黑背景
+    orig = s
+    s = re.sub(r'\.background\(Color\(0xFF000000\)\)', '.background(musicColors().background)', s)
+    s = re.sub(r'\.background\(Color\.Black\)', '.background(musicColors().background)', s)
+    if s != orig:
+        print("  ✓ 根背景已强制")
+    else:
+        print("  - 未找到硬编码背景")
+    s = MARK + "\n" + s
+    with open(ssp, "w", encoding="utf-8") as f:
+        f.write(s)
+else:
+    print("  ✓ 已处理，跳过")
+
+print("=== 32 v63 完成 ===")
+PYEOF
+
