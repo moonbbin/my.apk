@@ -3417,3 +3417,58 @@ else:
 print("=== 32 v63 完成 ===")
 PYEOF
 
+# 32 v64: TabRow 黑底
+
+echo "=== 32 v64: TabRow ==="
+
+python3 << 'PYEOF'
+import os, sys
+
+MARK = "// [32v64]"
+sp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+
+with open(sp, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# 1. TabRow 加 containerColor
+old1 = "TabRow(selectedTabIndex = tabIndex) {"
+new1 = "TabRow(selectedTabIndex = tabIndex, containerColor = Color.Transparent) {"
+if old1 in s:
+    s = s.replace(old1, new1, 1)
+    print("  ✓ TabRow containerColor=Transparent")
+else:
+    print("  ✗ 未找到 TabRow")
+    sys.exit(1)
+
+# 2. Tab 文字颜色
+# "URL 导入" tab (tabIndex == 0)
+old2 = 'text = { Text("URL 导入") }'
+new2 = 'text = { Text("URL 导入", color = if (tabIndex == 0) musicColors().primary else musicColors().textSecondary) }'
+if old2 in s:
+    s = s.replace(old2, new2, 1)
+    print("  ✓ URL导入文字颜色")
+else:
+    print("  ✗ 未找到 URL导入")
+    sys.exit(1)
+
+# "本地文件" tab (tabIndex == 1)
+old3 = 'text = { Text("本地文件") }'
+new3 = 'text = { Text("本地文件", color = if (tabIndex == 1) musicColors().primary else musicColors().textSecondary) }'
+if old3 in s:
+    s = s.replace(old3, new3, 1)
+    print("  ✓ 本地文件文字颜色")
+else:
+    print("  ✗ 未找到 本地文件")
+    sys.exit(1)
+
+s = MARK + "\n" + s
+with open(sp, "w", encoding="utf-8") as f:
+    f.write(s)
+
+print("=== 32 v64 完成 ===")
+PYEOF
+
