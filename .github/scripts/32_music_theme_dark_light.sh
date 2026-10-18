@@ -2594,3 +2594,16 @@ PYEOF
 
 echo "=== 32 v50 完成 ==="
 
+# 32 v52: 加 LxMusicTheme 调试快照
+
+echo "====== [32-debug] LxMusicTheme 函数快照 ======"
+F="app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+echo "--- 版本标记 ---"
+grep -o "\[32v[0-9]*\]" "$F" | sort -u
+echo "--- LxMusicTheme 函数（前40行）---"
+grep -A 40 "fun LxMusicTheme(" "$F" | head -45
+echo "--- materialColorScheme 映射检查 ---"
+grep -c "outlineVariant" "$F"
+grep -c "surfaceContainer" "$F"
+echo "====== [32-debug] 快照结束 ======"
+
