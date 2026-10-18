@@ -4121,3 +4121,64 @@ if '还没有' in s5:
 print("=== 32 v72 完成 ===")
 PYEOF
 
+# 32 v73: HistoryActivity 正则修复
+
+echo "=== 32 v73 ==="
+
+python3 << 'PYEOF'
+import re, sys
+
+MARK = "// [32v73]"
+fp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxHistoryActivity.kt"
+
+with open(fp, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# 用正则找 setContent { MaterialTheme { HistoryScreen ... } }
+# 兼容各种空白
+m = re.search(r'setContent\s*\{\s*MaterialTheme\s*\{\s*HistoryScreen\s*\{[^}]*\}\s*\}\s*\}', s)
+if m:
+    old = m.group(0)
+    print(f"  找到: {old[:60]}...")
+    new = "setContent { val isDark73 by MusicThemeManager.isDarkTheme; LxMusicTheme(isDarkTheme = isDark73) { HistoryScreen { finish() } } }"
+    s = s.replace(old, new, 1)
+    print("  ✓ LxMusicTheme")
+else:
+    print("  ✗ 正则也未命中")
+    # 打印实际的 setContent 周边
+    for i, l in enumerate(s.splitlines(), 1):
+        if 'setContent' in l:
+            print(f"  实际行{i}: {repr(l[:100])}")
+    sys.exit(1)
+
+# 根背景
+if "Color(0xFF000000)" in s:
+    # HistoryActivity 的背景是单行 Column(Modifier.fillMaxSize().background(...))
+    s = s.replace("background(Color(0xFF000000))", "background(musicColors().background)", 1)
+    print("  ✓ 根背景")
+
+# 状态栏
+if "isAppearanceLightStatusBars" not in s:
+    m2 = re.search(r'setContent\s*\{', s)
+    if m2:
+        pos = m2.end()
+        inject = "\n    val win73 = window\n    val isDark73b by MusicThemeManager.isDarkTheme\n    androidx.compose.runtime.SideEffect {\n        androidx.core.view.WindowCompat.getInsetsController(win73, win73.decorView).isAppearanceLightStatusBars = !isDark73b\n    }"
+        s = s[:pos] + inject + s[pos:]
+        print("  ✓ 状态栏")
+
+# 空状态文字
+if 'color = musicColors().textPrimary.copy(alpha = 0.5f)' in s:
+    s = s.replace('color = musicColors().textPrimary.copy(alpha = 0.5f)', 'color = musicColors().textSecondary', 1)
+    print("  ✓ 空状态文字")
+
+s = MARK + "\n" + s
+with open(fp, "w", encoding="utf-8") as f:
+    f.write(s)
+
+print("=== 32 v73 完成 ===")
+PYEOF
+
