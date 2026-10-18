@@ -3152,3 +3152,158 @@ if MARK not in s45:
 print("=== 32 v60 完成 ===")
 PYEOF
 
+# 32 v62: 播放量标签+历史页+TabRow
+
+echo "=== 32 v62: 三处 ==="
+
+python3 << 'PYEOF'
+import os, re, sys, glob
+
+MARK = "// [32v62]"
+
+# 1. Color.kt 加 Overlay 常量
+print("1. Color.kt Overlay 常量")
+cpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/Color.kt"
+# 可能在 theme 包
+if not os.path.exists(cpath):
+    found = glob.glob("app/src/main/java/**/Color.kt", recursive=True)
+    if found:
+        cpath = found[0]
+    else:
+        print("  ✗ 未找到 Color.kt")
+        sys.exit(1)
+with open(cpath, encoding="utf-8") as f:
+    src = f.read()
+if "OverlayScrimBlack" not in src:
+    # 在文件末尾或 BrandGreen 附近添加
+    # 找最后一个 val 定义
+    m = list(re.finditer(r'^val \w+ = Color\(0x[0-9A-Fa-f]+\)', src, re.MULTILINE))
+    if m:
+        pos = m[-1].end()
+        # 检查是否已有 internal 修饰
+        line_start = src.rfind('\n', 0, m[-1].start()) + 1
+        prefix = "internal " if "internal val" in src[line_start:m[-1].start()+20] else ""
+        add = f"\n{prefix}val OverlayScrimBlack = Color(0xFF000000).copy(alpha = 0.6f)\n{prefix}val OverlayTextWhite = Color(0xFFFFFFFF)"
+        src = src[:pos] + add + src[pos:]
+        with open(cpath, "w", encoding="utf-8") as f:
+            f.write(src)
+        print(f"  ✓ 已加 Overlay 常量 ({cpath})")
+    else:
+        print("  ✗ 未找到插入点")
+        sys.exit(1)
+else:
+    print("  ✓ 已存在，跳过")
+
+# 2. PlaylistScreen 播放量标签用常量
+print("2. PlaylistScreen 播放量标签")
+found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
+if found:
+    fp = found[0]
+    with open(fp, encoding="utf-8") as f:
+        s = f.read()
+    if MARK not in s:
+        # 替换 scrim 背景
+        if "Color.Black.copy(alpha = 0.55f)" in s:
+            s = s.replace("Color.Black.copy(alpha = 0.55f)", "OverlayScrimBlack")
+            print("  ✓ scrim→OverlayScrimBlack")
+        # 替换图标 tint 和文字 color（只在播放量标签范围内）
+        # 找到播放量标签的 Surface 块，替换其中的 Color.White
+        # 简单：替换该文件中的特定两处（图标和文字在播放量胶囊内）
+        # 用更精准的方式：先定位到播放量标签注释
+        idx = s.find("右下角半透明胶囊播放量标签")
+        if idx > 0:
+            # 从注释开始找接下来的 30 行，替换 Color.White
+            chunk_start = idx
+            chunk_end = s.find("}", s.find("}", chunk_start) + 1)  # 粗略
+            # 更简单：直接替换该区域内的 Color.White
+            # 我们知道图标 tint 和文字 color 都在播放量标签内
+            # 先做全局替换，但 OverlayTextWhite 只用于播放量标签
+            # 为安全，只替换播放量标签附近的
+            before = s[:idx]
+            after = s[idx:idx+2000]  # 取 2000 字符
+            after = after.replace("tint = Color.White", "tint = OverlayTextWhite")
+            after = after.replace("color = Color.White,", "color = OverlayTextWhite,")
+            s = before + after + s[idx+2000:]
+            print("  ✓ 图标/文字→OverlayTextWhite")
+        # 加 import（如果常量在不同包）
+        # Overlay 常量与 PlaylistScreen 可能不同包，需要 import
+        # 检查 Color.kt 的包名
+        with open(cpath, encoding="utf-8") as cf:
+            cs = cf.read()
+        pm = re.search(r'^package (.+)$', cs, re.MULTILINE)
+        if pm:
+            pkg = pm.group(1)
+            imp = f"import {pkg}.OverlayScrimBlack\nimport {pkg}.OverlayTextWhite"
+            if "OverlayScrimBlack" not in s or "import" not in s[s.find("OverlayScrimBlack")-200:s.find("OverlayScrimBlack")]:
+                # 加 import
+                m2 = list(re.finditer(r'^import .+$', s, re.MULTILINE))
+                if m2:
+                    pos2 = m2[-1].end()
+                    s = s[:pos2] + '\n' + imp + s[pos2:]
+                    print("  ✓ 已加 import")
+        s = MARK + "\n" + s
+        with open(fp, "w", encoding="utf-8") as f:
+            f.write(s)
+    else:
+        print("  ✓ 已处理，跳过")
+else:
+    print("  ✗ 未找到 PlaylistScreen.kt")
+
+# 3. 导入弹窗 TabRow
+print("3. LxSourceSettings TabRow")
+sp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+with open(sp, encoding="utf-8") as f:
+    s = f.read()
+if MARK not in s:
+    # TabRow 背景 -> Transparent
+    # 找 TabRow(
+    if "TabRow(" in s:
+        # 在 TabRow 后加 containerColor
+        s = re.sub(r'TabRow\(\n(        selectedTabIndex)',
+                   r'TabRow(\n        containerColor = Color.Transparent,\n\1', s, count=1)
+        print("  ✓ TabRow containerColor=Transparent")
+    # Tab 文字颜色：selected 用 primary，unselected 用 textSecondary
+    # 找 text = { Text("URL 导入") } 等
+    # 简化：替换 Tab 的 text 颜色
+    # 实际 Tab 的 text 参数是 @Composable，需要看具体结构
+    # 先做 containerColor，文字颜色需要更精准的锚点
+    s = MARK + "\n" + s
+    with open(sp, "w", encoding="utf-8") as f:
+        f.write(s)
+else:
+    print("  ✓ 已处理，跳过")
+
+print("=== 32 v62 完成 ===")
+PYEOF
+
+# 4. 播放历史页（按内容搜索）
+echo "4. 播放历史页搜索"
+python3 << 'PYEOF2'
+import os, re, glob
+MARK = "// [32v62]"
+# 搜索包含"还没有播放记录"的文件
+for fp in glob.glob("app/src/main/java/**/*.kt", recursive=True):
+    try:
+        with open(fp, encoding="utf-8") as f:
+            s = f.read()
+        if "还没有播放记录" in s and MARK not in s:
+            print(f"  找到: {fp}")
+            # 根背景 -> musicColors().background
+            # 找 .background(Color(0xFF000000)) 或类似
+            orig = s
+            s = re.sub(r'\.background\(Color\(0xFF000000\)\)', '.background(musicColors().background)', s)
+            s = re.sub(r'\.background\(Color\.Black\)', '.background(musicColors().background)', s)
+            if s != orig:
+                s = MARK + "\n" + s
+                with open(fp, "w", encoding="utf-8") as f:
+                    f.write(s)
+                print(f"  ✓ 已修复背景")
+            else:
+                print(f"  - 未找到硬编码背景")
+            break
+    except:
+        pass
+else:
+    print("  - 未找到播放历史页文件")
+PYEOF2
+
