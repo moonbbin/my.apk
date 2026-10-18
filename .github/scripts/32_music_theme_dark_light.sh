@@ -2999,3 +2999,153 @@ PYEOF
 
 echo "=== 32 v59 完成 ==="
 
+# 32 v60: 5处精准修复
+
+echo "=== 32 v60: 精准5修 ==="
+
+python3 << 'PYEOF'
+import os, re, sys
+
+MARK = "// [32v60]"
+
+def patch_file(path, patches):
+    """patches: list of (old, new, desc)"""
+    if not os.path.exists(path):
+        print(f"跳过(无文件): {path}")
+        return 0
+    with open(path, encoding="utf-8") as f:
+        src = f.read()
+    if MARK in src:
+        print(f"跳过(已处理): {os.path.basename(path)}")
+        return 0
+    count = 0
+    for old, new, desc in patches:
+        if old in src:
+            src = src.replace(old, new, 1)
+            print(f"  ✓ {desc}")
+            count += 1
+        else:
+            print(f"  ✗ 未找到: {desc}")
+            sys.exit(1)
+    src = MARK + "\n" + src
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(src)
+    return count
+
+# 1. 歌手详情页
+print("1. LxArtistDetailActivity.kt")
+p1 = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxArtistDetailActivity.kt"
+# 先读文件找 setContent 位置，注入主题预设
+with open(p1, encoding="utf-8") as f:
+    s1 = f.read()
+if MARK not in s1:
+    # 注入主题预设（在 setContent 之前）
+    m = re.search(r'setContent\s*\{', s1)
+    if not m:
+        print("  ✗ 未找到 setContent")
+        sys.exit(1)
+    pos = m.start()
+    ls = s1.rfind('\n', 0, pos) + 1
+    indent = s1[ls:pos]
+    inject = f"""{indent}// [32v60] 预设主题
+{indent}run {{
+{indent}    val p60 = getSharedPreferences("theme_prefs", MODE_PRIVATE)
+{indent}    val mode60 = p60.getInt("theme_mode", 0)
+{indent}    val dark60 = when (mode60) {{
+{indent}        1 -> true
+{indent}        2 -> false
+{indent}        else -> (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+{indent}    }}
+{indent}    MusicThemeManager.setDarkTheme(dark60)
+{indent}}}
+"""
+    s1 = s1[:ls] + inject + s1[ls:]
+    # MaterialTheme -> LxMusicTheme
+    s1 = s1.replace("setContent {\n            MaterialTheme {",
+                    "setContent {\n            val isDark60 by MusicThemeManager.isDarkTheme\n            LxMusicTheme(isDarkTheme = isDark60) {", 1)
+    # 根背景 DetailBg -> musicColors().background
+    s1 = s1.replace(".background(DetailBg)", ".background(musicColors().background)", 1)
+    s1 = MARK + "\n" + s1
+    with open(p1, "w", encoding="utf-8") as f:
+        f.write(s1)
+    print("  ✓ 主题预设+LxMusicTheme+根背景")
+
+# 2. 歌单卡片
+print("2. PlaylistScreen.kt")
+p2 = "app/src/main/java/com/github/tvbox/osc/ui/music/playlist/PlaylistScreen.kt"
+# 可能在不同子目录，搜索
+import glob
+found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
+if found:
+    p2 = found[0]
+    patch_file(p2, [
+        ("MaterialTheme.colorScheme.surfaceContainerLow", "musicColors().card", "surfaceContainerLow→card"),
+    ])
+else:
+    print("  ✗ 未找到 PlaylistScreen.kt")
+    sys.exit(1)
+
+# 3. 切换榜单弹窗 (RankScreen ModalBottomSheet)
+print("3. RankScreen.kt")
+p3 = "app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt"
+with open(p3, encoding="utf-8") as f:
+    s3 = f.read()
+if MARK not in s3:
+    # ModalBottomSheet 加 containerColor
+    old_sheet = "ModalBottomSheet(\n            onDismissRequest = { showSheet = false },\n            sheetState = sheetState,"
+    new_sheet = "ModalBottomSheet(\n            onDismissRequest = { showSheet = false },\n            sheetState = sheetState,\n            containerColor = musicColors().card,"
+    if old_sheet in s3:
+        s3 = s3.replace(old_sheet, new_sheet, 1)
+        print("  ✓ ModalBottomSheet containerColor")
+    else:
+        print("  ✗ 未找到 ModalBottomSheet")
+        sys.exit(1)
+    s3 = MARK + "\n" + s3
+    with open(p3, "w", encoding="utf-8") as f:
+        f.write(s3)
+
+# 4+5. 音乐源管理页 + 导入弹窗 (同一文件)
+print("4+5. LxSourceSettings.kt")
+p45 = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+with open(p45, encoding="utf-8") as f:
+    s45 = f.read()
+if MARK not in s45:
+    # 4. AlertDialog 加 containerColor
+    # 找 "导入音乐源" 的 AlertDialog
+    m = re.search(r'AlertDialog\(\n        onDismissRequest = \{ if \(!importing\) onDismiss\(\) \},', s45)
+    if m:
+        pos = m.start()
+        # 在 AlertDialog( 后插入 containerColor
+        insert_pos = s45.find('(', pos) + 1
+        s45 = s45[:insert_pos] + '\n        containerColor = musicColors().card,' + s45[insert_pos:]
+        print("  ✓ AlertDialog containerColor")
+    else:
+        print("  ✗ 未找到导入 AlertDialog")
+        sys.exit(1)
+    # 5. onCreate 主题预设 + LxMusicTheme（仿 v59）
+    m2 = re.search(r'setContent\s*\{', s45)
+    if m2:
+        pos2 = m2.start()
+        ls2 = s45.rfind('\n', 0, pos2) + 1
+        indent2 = s45[ls2:pos2]
+        inject2 = f"""{indent2}// [32v60] 预设主题
+{indent2}run {{
+{indent2}    val p60 = getSharedPreferences("theme_prefs", MODE_PRIVATE)
+{indent2}    val mode60 = p60.getInt("theme_mode", 0)
+{indent2}    val dark60 = when (mode60) {{
+{indent2}        1 -> true
+{indent2}        2 -> false
+{indent2}        else -> (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+{indent2}    }}
+{indent2}    MusicThemeManager.setDarkTheme(dark60)
+{indent2}}}
+"""
+        s45 = s45[:ls2] + inject2 + s45[ls2:]
+        print("  ✓ onCreate 主题预设")
+    s45 = MARK + "\n" + s45
+    with open(p45, "w", encoding="utf-8") as f:
+        f.write(s45)
+
+print("=== 32 v60 完成 ===")
+PYEOF
+
