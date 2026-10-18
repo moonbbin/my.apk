@@ -2338,3 +2338,54 @@ PYEOF
 
 echo "=== 32 v47 完成 ==="
 
+# 32 v48: 25号页面根背景换 musicColors
+
+echo "=== 32 v48: 25页面背景 ==="
+
+python3 << 'PYEOF'
+import os, re, sys
+
+BASE = "app/src/main/java/com/github/tvbox/osc/ui/music"
+MARK = "// [32v48]"
+done = 0
+
+for root, dirs, filenames in os.walk(BASE):
+    for fn in filenames:
+        if not fn.endswith(".kt"):
+            continue
+        fp = os.path.join(root, fn)
+        with open(fp, encoding="utf-8") as f:
+            src = f.read()
+        if MARK in src:
+            continue
+        
+        # 只替换 .background(MaterialTheme.colorScheme.background)
+        # 这是页面的根背景
+        new_src, n = re.subn(
+            r'\.background\(MaterialTheme\.colorScheme\.background\)',
+            '.background(musicColors().background)',
+            src
+        )
+        
+        if n > 0:
+            # 加 import
+            # musicColors 在 ui.activity 包
+            if 'import com.github.tvbox.osc.ui.activity.musicColors' not in new_src:
+                # 找最后一个 import 的位置
+                m = list(re.finditer(r'^import .+$', new_src, re.MULTILINE))
+                if m:
+                    pos = m[-1].end()
+                    new_src = new_src[:pos] + '\nimport com.github.tvbox.osc.ui.activity.musicColors' + new_src[pos:]
+            new_src = MARK + "\n" + new_src
+            with open(fp, "w", encoding="utf-8") as f:
+                f.write(new_src)
+            print(f"✓ {fp}: {n} 处")
+            done += 1
+
+print(f"共处理 {done} 个文件")
+if done == 0:
+    print("警告: 未找到目标")
+PYEOF
+
+echo "=== 32 v48 完成 ==="
+
