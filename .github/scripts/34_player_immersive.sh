@@ -2,11 +2,11 @@
 # 34_player_immersive.sh - 播放页沉浸式海报取色背景（定向补丁）
 # 本脚本为 LxPlayerActivity.kt 沉浸式背景的唯一控制权。
 # 方案B：Python 精确定向替换，不动业务逻辑（Slider/播放控制/22徽标/歌词滚动）。
-# [34v6] 修：补Palette依赖、加toArgb import、修海报Box语法
+# [34v7] 修：补Palette依赖、加toArgb import、修海报Box语法
 set -e
 cd avbox
 
-echo "=== 34 v6: 播放页沉浸式定向补丁 ==="
+echo "=== 34 v7: 播放页沉浸式定向补丁 ==="
 
 TARGET="app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
 
@@ -52,7 +52,7 @@ try:
     if not m:
         print("❌ 替换失败：未找到锚点 animatedTint块"); raise SystemExit(1)
     lumi_code = m.group(1) + """
-    // [34v6] 智能文字反转：基于背景亮度
+    // [34v7] 智能文字反转：基于背景亮度
     val bgLuminance = remember(animatedTint) {
         ColorUtils.calculateLuminance(animatedTint.toArgb())
     }
@@ -72,7 +72,7 @@ try:
             .fillMaxSize()
             .background(musicColors().background)
     ) {"""
-    new_bg = """    // [34v6] 沉浸式动态背景：取色 + 黑遮罩防刺眼
+    new_bg = """    // [34v7] 沉浸式动态背景：取色 + 黑遮罩防刺眼
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -101,17 +101,19 @@ try:
                             )
                         )
                     )"""
-    new_rainbow = """                    .background(musicColors().cardSecondary) // [34v6] 纯色兜底"""
+    new_rainbow = """                    .background(musicColors().cardSecondary) // [34v7] 纯色兜底"""
     assert_replace(old_rainbow, new_rainbow, "海报彩虹背景")
 
     # === 5. 海报 Box：加悬浮（保留 contentAlignment） ===
-    old_box = """            Box(
-                modifier = Modifier
-                    .size(280.dp)
-                    .align(Alignment.CenterHorizontally)
-                    .clip(RoundedCornerShape(if (_isDarkCover) 12.dp else 24.dp)),
-                contentAlignment = Alignment.Center
-            ) {"""
+    old_box = None
+    for _m in ["[34v7]", "[34v5]"]:
+        _c = "            Box(\n                modifier = Modifier\n                    .size(280.dp)\n                    .align(Alignment.CenterHorizontally)\n                    .clip(RoundedCornerShape(if (_isDarkCover) 12.dp else 24.dp))\n                    .background(musicColors().cardSecondary) // " + _m + " \u7eaf\u8272\u515c\u5e95,\n                contentAlignment = Alignment.Center\n            ) {"
+        if _c in s:
+            old_box = _c
+            break
+    if old_box is None:
+        print("❌ 替换失败：未找到锚点 海报Box悬浮")
+        raise SystemExit(1)
     new_box = """            Box(
                 modifier = Modifier
                     .size(280.dp)
@@ -140,13 +142,13 @@ try:
     new_artist = """                    Text(
                         text = displayArtist,
                         style = MaterialTheme.typography.labelSmall,
-                        color = secondaryTextColor, // [34v6] 智能反转"""
+                        color = secondaryTextColor, // [34v7] 智能反转"""
     assert_replace(old_artist, new_artist, "歌手名颜色")
 
     # === 7. 系统栏动态反转 ===
     old_sys = """    LaunchedEffect(Unit) {
         while (true) {"""
-    new_sys = """    // [34v6] 系统栏根据背景亮度反转
+    new_sys = """    // [34v7] 系统栏根据背景亮度反转
     val sysWindow = (context as? Activity)?.window
     LaunchedEffect(isDarkBg) {
         sysWindow?.let {
@@ -158,7 +160,7 @@ try:
         while (true) {"""
     assert_replace(old_sys, new_sys, "系统栏反转")
 
-    # [34v6] 跳过 Palette，保留原版 extractCoverTint 平均取色
+    # [34v7] 跳过 Palette，保留原版 extractCoverTint 平均取色
 
     with open(path, 'w', encoding='utf-8') as f:
         f.write(s)
