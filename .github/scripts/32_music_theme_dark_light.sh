@@ -3472,3 +3472,37 @@ with open(sp, "w", encoding="utf-8") as f:
 print("=== 32 v64 完成 ===")
 PYEOF
 
+# 32 v65: primary -> accent
+
+echo "=== 32 v65: 修正 ==="
+
+python3 << 'PYEOF'
+import sys
+
+MARK = "// [32v65]"
+sp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+
+with open(sp, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# v64 写的 musicColors().primary -> musicColors().accent
+if "musicColors().primary" in s:
+    s = s.replace("musicColors().primary", "musicColors().accent")
+    print("  ✓ primary→accent")
+    s = MARK + "\n" + s
+    with open(sp, "w", encoding="utf-8") as f:
+        f.write(s)
+else:
+    print("  - 未找到 musicColors().primary")
+    # 可能 v64 没跑，检查是否有 TabRow 需要修
+    if 'TabRow(selectedTabIndex = tabIndex) {' in s:
+        print("  ! v64 未生效，需要先跑 v64")
+        sys.exit(1)
+
+print("=== 32 v65 完成 ===")
+PYEOF
+
