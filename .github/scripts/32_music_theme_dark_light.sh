@@ -5546,3 +5546,143 @@ KOTLIN_EOF
 echo "✓ LxPlaybackSettingsActivity.kt 主题外观已删除"
 echo "=== 32 v88 完成 ==="
 
+# 32 v89: ThemeSettings 重做三档 UI
+
+echo "=== 32 v89 ==="
+
+TARGET="app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt"
+
+if [ ! -f "$TARGET" ]; then
+    echo "✗ 文件不存在: $TARGET"
+    exit 1
+fi
+
+cat << 'KOTLIN_EOF' > "$TARGET"
+// [32v89]
+package com.github.tvbox.osc.ui.activity
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+
+/**
+ * 主题外观设置页
+ */
+class LxThemeSettingsActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        MusicThemeManager.init(this)
+        setContent {
+            val isDark89 by MusicThemeManager.isDarkTheme
+            val win89 = window
+            androidx.compose.runtime.SideEffect {
+                androidx.core.view.WindowCompat.getInsetsController(win89, win89.decorView).isAppearanceLightStatusBars = !isDark89
+            }
+            LxMusicTheme(isDarkTheme = isDark89) {
+                ThemeSettingsScreen(onBack = { finish() })
+            }
+        }
+    }
+}
+
+@Composable
+fun ThemeSettingsScreen(onBack: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(musicColors().background)
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "‹",
+                style = MaterialTheme.typography.headlineLarge,
+                color = musicColors().textPrimary,
+                modifier = Modifier
+                    .clickable { onBack() }
+                    .padding(8.dp)
+            )
+            Text(
+                text = "主题外观",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = musicColors().textPrimary,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = musicColors().card),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                    // [32v30] 三档主题切换：跟随系统/深色/浅色
+                    val ctx30 = androidx.compose.ui.platform.LocalContext.current
+                    val prefs30 = ctx30.getSharedPreferences("theme_prefs", android.content.Context.MODE_PRIVATE)
+                    var themeMode30 by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(prefs30.getInt("theme_mode", 0)) }
+                    androidx.compose.foundation.layout.Column {
+                        listOf("跟随系统" to 0, "深色" to 1, "浅色" to 2).forEach { (label, mode) ->
+                            androidx.compose.foundation.layout.Row(
+                                modifier = androidx.compose.ui.Modifier
+                                    .clickable {
+                                        prefs30.edit().putInt("theme_mode", mode).apply()
+                                        themeMode30 = mode
+                                        when (mode) {
+                                            1 -> MusicThemeManager.setDarkTheme(true)
+                                            2 -> MusicThemeManager.setDarkTheme(false)
+                                            else -> { /* 跟随系统 */ }
+                                        }
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.RadioButton(
+                                    selected = themeMode30 == mode,
+                                    onClick = null,
+                                    colors = androidx.compose.material3.RadioButtonDefaults.colors(
+                                        selectedColor = musicColors().accent
+                                    )
+                                )
+                                androidx.compose.foundation.layout.Spacer(modifier = androidx.compose.ui.Modifier.width(8.dp))
+                                androidx.compose.material3.Text(
+                                    text = label,
+                                    color = musicColors().textPrimary,
+                                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Divider(color = musicColors().textPrimary.copy(alpha = 0.1f))
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 背景随封面变
+            }
+        }
+    }
+}
+KOTLIN_EOF
+
+echo "✓ LxThemeSettingsActivity.kt 已重做"
+echo "=== 32 v89 完成 ==="
+
