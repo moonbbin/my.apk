@@ -3995,189 +3995,6 @@ else:
 print("=== 32 v71 完成 ===")
 PYEOF
 
-# 32 v72: 5个二级页面统一修复
-
-echo "=== 32 v72 ==="
-
-python3 << 'PYEOF'
-import re, sys
-
-MARK = "// [32v72]"
-BASE = "app/src/main/java/com/github/tvbox/osc/ui/activity/"
-
-def fix_activity(filename, setcontent_old, setcontent_new, bg_old_list):
-    fp = BASE + filename
-    with open(fp, encoding="utf-8") as f:
-        s = f.read()
-    if MARK in s:
-        print(f"  {filename}: 已处理，跳过")
-        return
-    # 1. setContent -> LxMusicTheme
-    if setcontent_old in s:
-        s = s.replace(setcontent_old, setcontent_new, 1)
-        print(f"  {filename}: ✓ LxMusicTheme")
-    else:
-        if "LxMusicTheme" in s:
-            print(f"  {filename}: ✓ 已有LxMusicTheme")
-        else:
-            print(f"  {filename}: ✗ setContent锚点未命中")
-            sys.exit(1)
-    # 2. 根背景
-    for old_bg in bg_old_list:
-        if old_bg in s:
-            s = s.replace(old_bg, ".background(musicColors().background)", 1)
-            print(f"  {filename}: ✓ 根背景")
-            break
-    # 3. 状态栏 SideEffect（在 setContent { 后插入）
-    if "isAppearanceLightStatusBars" not in s:
-        # 找到 setContent { 的位置
-        m = re.search(r'setContent\s*\{', s)
-        if m:
-            pos = m.end()
-            # 获取缩进
-            ls = s.rfind('\n', 0, m.start()) + 1
-            indent = s[ls:m.start()]
-            inject = f"\n{indent}    val win72 = window\n{indent}    val isDark72 by MusicThemeManager.isDarkTheme\n{indent}    androidx.compose.runtime.SideEffect {{\n{indent}        androidx.core.view.WindowCompat.getInsetsController(win72, win72.decorView).isAppearanceLightStatusBars = !isDark72\n{indent}    }}"
-            s = s[:pos] + inject + s[pos:]
-            print(f"  {filename}: ✓ 状态栏")
-    s = MARK + "\n" + s
-    with open(fp, "w", encoding="utf-8") as f:
-        f.write(s)
-
-# 1. LxPlaybackSettingsActivity
-print("1. 播放设置")
-fix_activity(
-    "LxPlaybackSettingsActivity.kt",
-    "setContent {\n            MaterialTheme {\n                PlaybackSettingsScreen(onBack = { finish() })\n            }\n        }",
-    "setContent {\n            val isDark72 by MusicThemeManager.isDarkTheme\n            LxMusicTheme(isDarkTheme = isDark72) {\n                PlaybackSettingsScreen(onBack = { finish() })\n            }\n        }",
-    [".background(Color(0xFF000000))"]
-)
-# 卡片颜色（单独处理）
-fp1 = BASE + "LxPlaybackSettingsActivity.kt"
-with open(fp1, encoding="utf-8") as f:
-    s1 = f.read()
-# 找设置卡片的 Card，确保 color
-# 如果 Card 没有 color 参数，加上（谨慎：只处理第一个 Card）
-if "Card(" in s1 and "color = musicColors().card" not in s1:
-    # 在第一个 Card( 后加 color
-    s1 = s1.replace("Card(", "Card(\n                color = musicColors().card,", 1)
-    print("  播放设置: ✓ 卡片color")
-    with open(fp1, "w", encoding="utf-8") as f:
-        f.write(s1)
-
-# 2. LxHistoryActivity
-print("2. 播放历史")
-# v72 HistoryActivity 已移至 v76 全量覆盖，此处跳过
-print("  LxHistoryActivity.kt: 跳过（v76处理）")
-# 空状态文字 -> textSecondary
-fp2 = BASE + "LxHistoryActivity.kt"
-with open(fp2, encoding="utf-8") as f:
-    s2 = f.read()
-if 'color = musicColors().textPrimary.copy(alpha = 0.5f)' in s2 and '还没有播放记录' in s2:
-    s2 = s2.replace('color = musicColors().textPrimary.copy(alpha = 0.5f)', 'color = musicColors().textSecondary', 1)
-    print("  播放历史: ✓ 空状态文字")
-    with open(fp2, "w", encoding="utf-8") as f:
-        f.write(s2)
-
-# 3. LxQualitySettingsActivity
-print("3. 音质说明")
-fix_activity(
-    "LxQualitySettingsActivity.kt",
-    "setContent {\n            MaterialTheme {\n                QualitySettingsScreen(onBack = { finish() })\n            }\n        }",
-    "setContent {\n            val isDark72 by MusicThemeManager.isDarkTheme\n            LxMusicTheme(isDarkTheme = isDark72) {\n                QualitySettingsScreen(onBack = { finish() })\n            }\n        }",
-    [".background(Color(0xFF000000))"]
-)
-
-# 4. LxLyricSettingsActivity
-print("4. 歌词设置")
-fix_activity(
-    "LxLyricSettingsActivity.kt",
-    "setContent {\n            MaterialTheme {\n                LyricSettingsScreen(onBack = { finish() })\n            }\n        }",
-    "setContent {\n            val isDark72 by MusicThemeManager.isDarkTheme\n            LxMusicTheme(isDarkTheme = isDark72) {\n                LyricSettingsScreen(onBack = { finish() })\n            }\n        }",
-    [".background(Color(0xFF000000))"]
-)
-
-# 5. LxFavoritesActivity
-print("5. 我的喜欢")
-fix_activity(
-    "LxFavoritesActivity.kt",
-    "setContent {\n            MaterialTheme {\n                FavoritesScreen(onBack = { finish() })\n            }\n        }",
-    "setContent {\n            val isDark72 by MusicThemeManager.isDarkTheme\n            LxMusicTheme(isDarkTheme = isDark72) {\n                FavoritesScreen(onBack = { finish() })\n            }\n        }",
-    [".background(Color(0xFF000000))"]
-)
-# 空状态（如果有）
-fp5 = BASE + "LxFavoritesActivity.kt"
-with open(fp5, encoding="utf-8") as f:
-    s5 = f.read()
-# 找"还没有"相关的 Text，改成 textSecondary（如果用的是 textPrimary）
-if '还没有' in s5:
-    # 通用：把空状态的 textPrimary.copy 改成 textSecondary
-    pass  # 已在上面 MARK，跳过细节
-
-print("=== 32 v72 完成 ===")
-PYEOF
-
-# 32 v73: 已移至 v76，此处跳过
-echo "=== 32 v73 === (跳过)"
-
-# 32 v75: HistoryActivity QingfengMusicTheme -> LxMusicTheme
-
-echo "=== 32 v75 ==="
-
-python3 << 'PYEOF'
-import re, sys
-
-MARK = "// [32v75]"
-fp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxHistoryActivity.kt"
-
-with open(fp, encoding="utf-8") as f:
-    s = f.read()
-
-if MARK in s:
-    print("已处理，跳过")
-    sys.exit(0)
-
-# QingfengMusicTheme -> LxMusicTheme
-m = re.search(r'setContent\s*\{\s*QingfengMusicTheme\s*\{\s*HistoryScreen\s*\{[^}]*\}\s*\}\s*\}', s)
-if m:
-    old = m.group(0)
-    new = "setContent { val isDark75 by MusicThemeManager.isDarkTheme; LxMusicTheme(isDarkTheme = isDark75) { HistoryScreen { finish() } } }"
-    s = s.replace(old, new, 1)
-    print("  ✓ QingfengMusicTheme→LxMusicTheme")
-else:
-    print("  ✗ 未找到 QingfengMusicTheme")
-    sys.exit(1)
-
-# 根背景
-if "background(Color(0xFF000000))" in s:
-    s = s.replace("background(Color(0xFF000000))", "background(musicColors().background)", 1)
-    print("  ✓ 根背景")
-
-# 状态栏
-if "isAppearanceLightStatusBars" not in s:
-    m2 = re.search(r'setContent\s*\{', s)
-    if m2:
-        pos = m2.end()
-        inject = "\n    val win75 = window\n    val isDark75b by MusicThemeManager.isDarkTheme\n    androidx.compose.runtime.SideEffect {\n        androidx.core.view.WindowCompat.getInsetsController(win75, win75.decorView).isAppearanceLightStatusBars = !isDark75b\n    }"
-        s = s[:pos] + inject + s[pos:]
-        print("  ✓ 状态栏")
-
-# 空状态文字
-if 'color = musicColors().textPrimary.copy(alpha = 0.5f)' in s:
-    s = s.replace('color = musicColors().textPrimary.copy(alpha = 0.5f)', 'color = musicColors().textSecondary', 1)
-    print("  ✓ 空状态文字")
-
-# 去掉 debug 版的 MARK（如果有）
-s = s.replace("// [32v72]\n", "")
-s = s.replace("// [32v73]\n", "")
-
-s = MARK + "\n" + s
-with open(fp, "w", encoding="utf-8") as f:
-    f.write(s)
-
-print("=== 32 v75 完成 ===")
-PYEOF
-
 # 32 v76: LxHistoryActivity 全量覆盖（方案A）
 
 echo "=== 32 v76: HistoryActivity 全量覆盖 ==="
@@ -4329,496 +4146,6 @@ echo "  ✓ LxHistoryActivity.kt 已全量覆盖 (// [32v76])"
 sed -i '1i // [32v76]' "$TARGET"
 
 echo "=== 32 v76 完成 ==="
-
-# 32 v79: 修 Conflicting declarations + Card color
-
-echo "=== 32 v79 ==="
-
-python3 << 'PYEOF'
-import re, sys, glob
-
-MARK = "// [32v79]"
-BASE = "app/src/main/java/com/github/tvbox/osc/ui/activity/"
-
-# 1. 去重：删除重复注入的 win72/isDark72
-for fname in ["LxPlaybackSettingsActivity.kt", "LxQualitySettingsActivity.kt",
-              "LxLyricSettingsActivity.kt", "LxFavoritesActivity.kt",
-              "LxThemeSettingsActivity.kt", "LxSourceSettings.kt"]:
-    fp = BASE + fname
-    try:
-        with open(fp, encoding="utf-8") as f:
-            s = f.read()
-    except:
-        continue
-    # 统计 win72 出现次数
-    c_win = s.count("val win72 = window")
-    c_dark = s.count("val isDark72 by MusicThemeManager.isDarkTheme")
-    if c_win > 1 or c_dark > 1:
-        print(f"  {fname}: 发现重复注入 (win72 x{c_win}, isDark72 x{c_dark})，去重")
-        # 只保留第一个，删除后续的
-        # 找到所有的注入块并删除多余的
-        # 注入块格式：
-        #     val win72 = window
-        #     val isDark72 by MusicThemeManager.isDarkTheme
-        #     androidx.compose.runtime.SideEffect {
-        #         ...
-        #     }
-        pattern = r'\n    val win72 = window\n    val isDark72 by MusicThemeManager\.isDarkTheme\n    androidx\.compose\.runtime\.SideEffect \{\n        androidx\.core\.view\.WindowCompat\.getInsetsController\(win72, win72\.decorView\)\.isAppearanceLightStatusBars = !isDark72\n    \}'
-        matches = list(re.finditer(pattern, s))
-        if len(matches) > 1:
-            # 从后往前删除，保留第一个
-            for m in reversed(matches[1:]):
-                s = s[:m.start()] + s[m.end():]
-            print(f"  {fname}: ✓ 已去重")
-            with open(fp, "w", encoding="utf-8") as f:
-                f.write(s)
-    # 2. 修 Card(color=...) -> colors=CardDefaults...
-    # 错误写法：Card(\n                color = musicColors().card,
-    if "Card(\n                color = musicColors().card," in s:
-        s = s.replace(
-            "Card(\n                color = musicColors().card,",
-            "Card(\n                colors = CardDefaults.cardColors(containerColor = musicColors().card),",
-            1
-        )
-        print(f"  {fname}: ✓ Card color 已修正")
-        with open(fp, "w", encoding="utf-8") as f:
-            f.write(s)
-
-print("=== 32 v79 完成 ===")
-PYEOF
-
-# 32 v80: 逐行去重
-
-echo "=== 32 v80 ==="
-
-python3 << 'PYEOF'
-import sys
-
-BASE = "app/src/main/java/com/github/tvbox/osc/ui/activity/"
-MARK = "// [32v80]"
-
-for fname in ["LxPlaybackSettingsActivity.kt", "LxQualitySettingsActivity.kt",
-              "LxLyricSettingsActivity.kt", "LxFavoritesActivity.kt"]:
-    fp = BASE + fname
-    try:
-        with open(fp, encoding="utf-8") as f:
-            lines = f.read().splitlines()
-    except:
-        continue
-    if MARK in "\n".join(lines):
-        print(f"  {fname}: 已处理")
-        continue
-    
-    # 找到所有 "val win72 = window" 的行号
-    win_lines = [i for i, l in enumerate(lines) if "val win72 = window" in l]
-    dark_lines = [i for i, l in enumerate(lines) if "val isDark72 by MusicThemeManager.isDarkTheme" in l]
-    
-    if len(win_lines) <= 1 and len(dark_lines) <= 1:
-        print(f"  {fname}: 无重复")
-    else:
-        print(f"  {fname}: 发现重复 (win72 x{len(win_lines)})，删除多余")
-        # 删除从第二个 win72 开始到对应的 SideEffect 结束块
-        # 简化：删除所有包含 win72/isDark72/SideEffect+isAppearanceLightStatusBars 的行（保留第一组）
-        # 更稳妥：只保留第一组，删除其余组的 4 行（win72, isDark72, SideEffect{, ...})
-        to_delete = set()
-        # 保留第一组，删除后面的
-        for idx in win_lines[1:]:
-            # 删除 win72 行、下一行(isDark72)、再下 3 行(SideEffect块)
-            for j in range(idx, min(idx+5, len(lines))):
-                # 检查是否是注入块的一部分
-                if j < len(lines) and ("win72" in lines[j] or "isDark72" in lines[j] or "isAppearanceLightStatusBars" in lines[j] or "SideEffect" in lines[j]):
-                    to_delete.add(j)
-        # 也删除多余的 isDark72
-        for idx in dark_lines[1:]:
-            to_delete.add(idx)
-            # 往上找 win72，往下找 SideEffect
-        new_lines = [l for i, l in enumerate(lines) if i not in to_delete]
-        # 修 Card(color=) -> colors=
-        content = "\n".join(new_lines)
-        if "Card(\n                color = musicColors().card," in content:
-            content = content.replace(
-                "Card(\n                color = musicColors().card,",
-                "Card(\n                colors = CardDefaults.cardColors(containerColor = musicColors().card),"
-            )
-            print(f"  {fname}: ✓ Card 已修正")
-        # 加 MARK
-        content = MARK + "\n" + content
-        with open(fp, "w", encoding="utf-8") as f:
-            f.write(content)
-        print(f"  {fname}: ✓ 已去重")
-
-print("=== 32 v80 完成 ===")
-PYEOF
-
-# 32 v81: 删重复的 Card color
-
-echo "=== 32 v81 ==="
-
-python3 << 'PYEOF'
-import sys
-
-fp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlaybackSettingsActivity.kt"
-MARK = "// [32v81]"
-
-with open(fp, encoding="utf-8") as f:
-    s = f.read()
-
-if MARK in s:
-    print("已处理")
-    sys.exit(0)
-
-# 删除 v72 加错的 "color = musicColors().card,"（保留正确的 colors=CardDefaults）
-# 错误行：Card(\n                color = musicColors().card,
-# 正确行：colors = CardDefaults.cardColors(containerColor = musicColors().card),
-if "color = musicColors().card," in s:
-    # 只删除单独的 color= 行，不碰 colors=
-    # 用正则确保前面不是 "colors"
-    import re
-    # 匹配 "color = musicColors().card," 但前面不是 "s" (避免匹配 "colors")
-    # 简单：替换 "Card(\n                color = musicColors().card," 为 "Card("
-    s = s.replace("Card(\n                color = musicColors().card,", "Card(", 1)
-    print("  ✓ 已删除多余的 color=")
-else:
-    print("  - 未找到多余的 color=")
-
-s = MARK + "\n" + s
-with open(fp, "w", encoding="utf-8") as f:
-    f.write(s)
-
-print("=== 32 v81 完成 ===")
-PYEOF
-
-# 32 v82: 按行删多余 color=
-
-echo "=== 32 v82 ==="
-
-python3 << 'PYEOF'
-import sys
-
-fp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlaybackSettingsActivity.kt"
-MARK = "// [32v82]"
-
-with open(fp, encoding="utf-8") as f:
-    lines = f.read().splitlines()
-
-if MARK in "\n".join(lines):
-    print("已处理")
-    sys.exit(0)
-
-# 删除只包含 "color = musicColors().card," 的行（注意：不是 "colors ="）
-# 这种行是 v72 误加的
-new_lines = []
-removed = 0
-for l in lines:
-    stripped = l.strip()
-    # 精确匹配：行内容是 "color = musicColors().card,"（允许前后空格）
-    # 但排除 "colors ="（注意 s）
-    if stripped == "color = musicColors().card,":
-        removed += 1
-        print(f"  删除行: {l[:60]}")
-        continue
-    new_lines.append(l)
-
-if removed > 0:
-    content = "\n".join(new_lines)
-    content = MARK + "\n" + content
-    with open(fp, "w", encoding="utf-8") as f:
-        f.write(content)
-    print(f"  ✓ 删除了 {removed} 行")
-else:
-    print("  - 未找到单独的 color= 行")
-    # 打印第 85-90 行看看
-    for i in range(84, min(90, len(lines))):
-        print(f"    行{i+1}: {lines[i][:70]}")
-
-print("=== 32 v82 完成 ===")
-PYEOF
-
-# 32 v83: 子串删 color=
-
-echo "=== 32 v83 ==="
-
-python3 << 'PYEOF'
-import sys, re
-
-fp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlaybackSettingsActivity.kt"
-MARK = "// [32v83]"
-
-with open(fp, encoding="utf-8") as f:
-    s = f.read()
-
-if MARK in s:
-    print("已处理")
-    sys.exit(0)
-
-# 删除 "color = musicColors().card," 子串（注意前面是 "color " 不是 "colors "）
-# 用正则确保不误删 "colors ="
-# 匹配：前面是 "(" 或 "," 或换行+空格，后面是 "color = musicColors().card,"
-orig = s
-# 找到 "color = musicColors().card," 但前面不是 "s"
-# 简单：先把 "colors =" 临时替换掉，删完再换回来
-s = s.replace("colors = CardDefaults", "___COLORS_PLACEHOLDER___")
-if "color = musicColors().card," in s:
-    s = s.replace("color = musicColors().card,", "", 1)
-    print("  ✓ 已删除多余的 color=")
-else:
-    print("  - 未找到")
-s = s.replace("___COLORS_PLACEHOLDER___", "colors = CardDefaults")
-
-if s != orig:
-    s = MARK + "\n" + s
-    with open(fp, "w", encoding="utf-8") as f:
-        f.write(s)
-    print("  ✓ 已写入")
-else:
-    print("  - 无变化")
-
-print("=== 32 v83 完成 ===")
-PYEOF
-
-# 32 v84: PlaybackSettingsActivity 方案A全量覆盖
-
-echo "=== 32 v84 ==="
-
-TARGET="app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlaybackSettingsActivity.kt"
-
-if [ ! -f "$TARGET" ]; then
-    echo "✗ 文件不存在: $TARGET"
-    exit 1
-fi
-
-cat << 'KOTLIN_EOF' > "$TARGET"
-// [32v84]
-package com.github.tvbox.osc.ui.activity
-
-import android.content.Context
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.core.view.WindowCompat
-
-/**
- * 播放设置页
- * SharedPreferences("player_settings"):
-
- * 音量归一化走 LxPlayerManager（原有逻辑保留）
- */
-class LxPlaybackSettingsActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        MusicThemeManager.init(this)
-        setContent {
-            val isDark84 by MusicThemeManager.isDarkTheme
-            val win84 = window
-            androidx.compose.runtime.SideEffect {
-                androidx.core.view.WindowCompat.getInsetsController(win84, win84.decorView).isAppearanceLightStatusBars = !isDark84
-            }
-            LxMusicTheme(isDarkTheme = isDark84) {
-                PlaybackSettingsScreen(onBack = { finish() })
-            }
-        }
-    }
-}
-
-@Composable
-fun PlaybackSettingsScreen(onBack: () -> Unit) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val prefs = remember { context.getSharedPreferences("player_settings", Context.MODE_PRIVATE) }
-    var loudnessOn by remember { mutableStateOf<Boolean>(LxPlayerManager.isLoudnessOn()) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(musicColors().background)
-            .padding(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "‹",
-                style = MaterialTheme.typography.headlineLarge,
-                color = musicColors().textPrimary,
-                modifier = Modifier
-                    .clickable { onBack() }
-                    .padding(8.dp)
-            )
-            Text(
-                text = "播放设置",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = musicColors().textPrimary,
-                modifier = Modifier.padding(start = 8.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = musicColors().card),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-        // 音量归一化（原有）
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "音量归一化",
-                    color = musicColors().textPrimary,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = "自动平衡不同歌曲的音量",
-                    color = musicColors().textPrimary.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-            Switch(
-                modifier = Modifier.scale(0.85f),
-                checked = loudnessOn,
-                onCheckedChange = {
-                    loudnessOn = it
-                    LxPlayerManager.setLoudnessNormalization(it)
-                },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = musicColors().textPrimary,
-                    checkedTrackColor = musicColors().accent
-                )
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-        Divider(color = musicColors().textPrimary.copy(alpha = 0.1f))
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // ===== 主题设置 =====
-        Text(
-            text = "主题外观",
-            color = musicColors().textPrimary,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        // 深色/浅色切换
-        val isDark by MusicThemeManager.isDarkTheme
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "深色主题",
-                    color = musicColors().textPrimary,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = if (isDark) "黑绿 Spotify 风" else "浅色 Sollin 风",
-                    color = musicColors().textPrimary.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-            Switch(
-                modifier = Modifier.scale(0.85f),
-                checked = isDark,
-                onCheckedChange = { MusicThemeManager.setDarkTheme(it) },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = musicColors().textPrimary,
-                    checkedTrackColor = musicColors().accent
-                )
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // 播放器样式
-        val playerStyle by MusicThemeManager.playerStyle
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = "播放界面样式",
-                color = musicColors().textPrimary,
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(modifier = Modifier.fillMaxWidth()) {
-                listOf(
-                    PlayerStyle.CLASSIC to "经典",
-                    PlayerStyle.PHOTO_LYRIC to "写真歌词"
-                ).forEach { (style, label) ->
-                    val selected = playerStyle == style
-                    androidx.compose.material3.FilterChip(
-                        selected = selected,
-                        onClick = { MusicThemeManager.setPlayerStyle(style) },
-                        label = { Text(label, color = if (selected) musicColors().accentText else musicColors().textPrimary) },
-                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = musicColors().accent,
-                            containerColor = musicColors().cardSecondary
-                        ),
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // 背景随封面变
-        val bgFollow by MusicThemeManager.bgFollowCover
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "背景随封面变化",
-                    color = musicColors().textPrimary,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = "使用封面主色调渲染背景",
-                    color = musicColors().textPrimary.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-            Switch(
-                modifier = Modifier.scale(0.85f),
-                checked = bgFollow,
-                onCheckedChange = { MusicThemeManager.setBgFollowCover(it) },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = musicColors().textPrimary,
-                    checkedTrackColor = musicColors().accent
-                )
-            )
-        }
-    }
-}
-}
-}
-
-KOTLIN_EOF
-
-echo "✓ LxPlaybackSettingsActivity.kt 已全量覆盖 (方案A)"
-echo "=== 32 v84 完成 ==="
 
 # 32 v85: PlaybackSettingsActivity 方案A全量覆盖（删bgFollowCover）
 
@@ -5035,3 +4362,852 @@ KOTLIN_EOF
 echo "✓ LxPlaybackSettingsActivity.kt 已全量覆盖 (方案A)"
 echo "=== 32 v85 完成 ==="
 
+# 32 v86: 四页面方案A全量覆盖 + 死代码清理
+echo "=== 32 v86 ==="
+
+BASE="app/src/main/java/com/github/tvbox/osc/ui/activity/"
+
+# --- LxQualitySettingsActivity ---
+TARGET="$BASE/LxQualitySettingsActivity.kt"
+if [ ! -f "$TARGET" ]; then
+    echo "✗ 文件不存在: $TARGET"
+    exit 1
+fi
+cat << 'KOTLIN_EOF' > "$TARGET"
+// [32v86]
+package com.github.tvbox.osc.ui.activity
+
+import android.content.Context
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.compose.ui.unit.sp
+
+/**
+ * 音质设置页
+ * 设置项存 SharedPreferences("music_quality"):
+ * - music_quality: String, 音质档位 (128k/320k/flac/flac24bit, 默认 flac24bit)
+ *
+ * 播放时按此偏好从高到低尝试，失败自动降级。
+ */
+class LxQualitySettingsActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        MusicThemeManager.init(this)
+        setContent {
+            val isDark86 by MusicThemeManager.isDarkTheme
+            val win86 = window
+            androidx.compose.runtime.SideEffect {
+                androidx.core.view.WindowCompat.getInsetsController(win86, win86.decorView).isAppearanceLightStatusBars = !isDark86
+            }
+            LxMusicTheme(isDarkTheme = isDark86) {
+                QualitySettingsScreen(onBack = { finish() })
+            }
+        }
+    }
+}
+
+@Composable
+fun QualitySettingsScreen(onBack: () -> Unit) {
+    val options = listOf(
+        "flac24bit" to Pair("Hi-Res 音质", "24-bit FLAC，最高品质"),
+        "flac" to Pair("无损音质", "FLAC 格式"),
+        "320k" to Pair("高音质", "大部分音源支持"),
+        "128k" to Pair("标准音质", "所有音源都支持")
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(musicColors().background)
+            .padding(12.dp)
+    ) {
+        // 顶部栏
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "‹",
+                style = MaterialTheme.typography.headlineLarge,
+                color = musicColors().textPrimary,
+                modifier = Modifier
+                    .clickable { onBack() }
+                    .padding(8.dp)
+            )
+            Text(
+                text = "音质说明",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = musicColors().textPrimary,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = musicColors().card),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+        Text(
+            text = "App 默认按以下顺序自动选择音质，失败自动降级",
+            color = musicColors().textPrimary.copy(alpha = 0.6f),
+            style = MaterialTheme.typography.bodySmall
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        options.forEachIndexed { index, (value, labelPair) ->
+            val (title, desc) = labelPair
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp, horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${index + 1}",
+                    color = musicColors().accent,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(end = 12.dp)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "$title · $value",
+                        color = musicColors().textPrimary,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = desc,
+                        color = musicColors().textPrimary.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
+        }
+        }
+    }
+}
+
+KOTLIN_EOF
+echo "  ✓ LxQualitySettingsActivity 已全量覆盖"
+
+# --- LxLyricSettingsActivity ---
+TARGET="$BASE/LxLyricSettingsActivity.kt"
+if [ ! -f "$TARGET" ]; then
+    echo "✗ 文件不存在: $TARGET"
+    exit 1
+fi
+cat << 'KOTLIN_EOF' > "$TARGET"
+// [32v86]
+package com.github.tvbox.osc.ui.activity
+
+import android.content.Context
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.compose.ui.unit.sp
+
+/**
+ * 歌词设置页
+ * 设置项存 SharedPreferences("lyric_settings"):
+ * - lyric_text_size: Float, 字体大小 (12-24, 默认16)
+ * - lyric_color: Int, 字体颜色 (默认 0x99FFFFFF)
+ * - lyric_highlight: Int, 高亮颜色 (默认 0xFF1DB954)
+ * - lyric_lines: Int, 显示行数 (1-5, 默认3)
+ * 逐字高亮存 SharedPreferences("player_settings"):
+ * - karaoke_enabled: Boolean, 逐字高亮开关 (默认 true)
+ * - karaoke_color: String, 高亮颜色 green/yellow/cyan (默认 green)
+ */
+class LxLyricSettingsActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        MusicThemeManager.init(this)
+        setContent {
+            val isDark86 by MusicThemeManager.isDarkTheme
+            val win86 = window
+            androidx.compose.runtime.SideEffect {
+                androidx.core.view.WindowCompat.getInsetsController(win86, win86.decorView).isAppearanceLightStatusBars = !isDark86
+            }
+            LxMusicTheme(isDarkTheme = isDark86) {
+                LyricSettingsScreen(onBack = { finish() })
+            }
+        }
+    }
+}
+
+@Composable
+fun LyricSettingsScreen(onBack: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember {
+        context.getSharedPreferences("lyric_settings", Context.MODE_PRIVATE)
+    }
+    val playerPrefs = remember {
+        context.getSharedPreferences("player_settings", Context.MODE_PRIVATE)
+    }
+
+    var textSize by remember { mutableStateOf(prefs.getFloat("lyric_text_size", 16f)) }
+    var textColor by remember { mutableStateOf(prefs.getInt("lyric_color", 0x99FFFFFF.toInt())) }
+    var highlightColor by remember { mutableStateOf(prefs.getInt("lyric_highlight", 0xFF1DB954.toInt())) }
+    var lines by remember { mutableStateOf(prefs.getInt("lyric_lines", 3)) }
+
+    // 逐字高亮（存 player_settings，播放页实时读取）
+    var karaokeOn by remember { mutableStateOf(playerPrefs.getBoolean("karaoke_enabled", true)) }
+    var karaokeColor by remember { mutableStateOf(playerPrefs.getString("karaoke_color", "green") ?: "green") }
+
+    fun saveKaraoke() {
+        playerPrefs.edit()
+            .putBoolean("karaoke_enabled", karaokeOn)
+            .putString("karaoke_color", karaokeColor)
+            .apply()
+        try { LxPlayerManager.loadPlayerSettings(context) } catch (_: Exception) {}
+    }
+
+    val karaokeColors = listOf(
+        "green" to (0xFF1DB954.toInt() to "绿色"),
+        "yellow" to (0xFFFFEB3B.toInt() to "黄色"),
+        "cyan" to (0xFF00E5FF.toInt() to "青色")
+    )
+
+    fun save() {
+        prefs.edit()
+            .putFloat("lyric_text_size", textSize)
+            .putInt("lyric_color", textColor)
+            .putInt("lyric_highlight", highlightColor)
+            .putInt("lyric_lines", lines)
+            .apply()
+    }
+
+    // 预设颜色
+    val colorOptions = listOf(
+        0xFFFFFFFF.toInt() to "白色",
+        0x99FFFFFF.toInt() to "浅灰",
+        0xFF1DB954.toInt() to "绿色",
+        0xFF90CAF9.toInt() to "浅蓝",
+        0xFFFF8C00.toInt() to "橙色",
+        0xFFE8A0B0.toInt() to "粉色",
+        0xFFFFFF00.toInt() to "黄色"
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(musicColors().background)
+            .padding(12.dp)
+    ) {
+        // 顶部栏
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "‹",
+                style = MaterialTheme.typography.headlineLarge,
+                color = musicColors().textPrimary,
+                modifier = Modifier
+                    .clickable { onBack() }
+                    .padding(8.dp)
+            )
+            Text(
+                text = "歌词设置",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = musicColors().textPrimary,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = musicColors().card),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+        // 字体大小
+        Text(
+            text = "字体大小: ${textSize.toInt()}sp",
+            color = musicColors().textPrimary,
+            style = MaterialTheme.typography.bodyLarge
+        )
+        Slider(
+            modifier = Modifier.height(28.dp),
+            value = textSize,
+            onValueChange = {
+                textSize = it
+                save()
+            },
+            valueRange = 12f..24f,
+            steps = 11,
+            colors = SliderDefaults.colors(
+                thumbColor = musicColors().accent,
+                activeTrackColor = musicColors().accent
+            )
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // 字体颜色
+        Text(
+            text = "字体颜色",
+            color = musicColors().textPrimary,
+            style = MaterialTheme.typography.bodyLarge
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            colorOptions.forEach { (colorInt, name) ->
+                val isSelected = textColor == colorInt
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(Color(colorInt))
+                        .border(
+                            width = if (isSelected) 3.dp else 1.dp,
+                            color = if (isSelected) musicColors().accent else Color.Gray,
+                            shape = CircleShape
+                        )
+                        .clickable {
+                            textColor = colorInt
+                            save()
+                        }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // 高亮颜色
+        Text(
+            text = "高亮颜色（当前播放行）",
+            color = musicColors().textPrimary,
+            style = MaterialTheme.typography.bodyLarge
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            colorOptions.forEach { (colorInt, name) ->
+                val isSelected = highlightColor == colorInt
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(Color(colorInt))
+                        .border(
+                            width = if (isSelected) 3.dp else 1.dp,
+                            color = if (isSelected) musicColors().accent else Color.Gray,
+                            shape = CircleShape
+                        )
+                        .clickable {
+                            highlightColor = colorInt
+                            save()
+                        }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // 显示行数
+        Text(
+            text = "播放器显示行数: $lines",
+            color = musicColors().textPrimary,
+            style = MaterialTheme.typography.bodyLarge
+        )
+        Slider(
+            modifier = Modifier.height(28.dp),
+            value = lines.toFloat(),
+            onValueChange = {
+                lines = it.toInt()
+                save()
+            },
+            valueRange = 1f..5f,
+            steps = 3,
+            colors = SliderDefaults.colors(
+                thumbColor = musicColors().accent,
+                activeTrackColor = musicColors().accent
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Divider(color = musicColors().textPrimary.copy(alpha = 0.1f))
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // 逐字高亮开关
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "逐字高亮", color = musicColors().textPrimary, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = "卡拉OK效果，当前唱到的字高亮",
+                    color = musicColors().textPrimary.copy(alpha = 0.6f),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            Switch(
+                modifier = Modifier.scale(0.85f),
+                checked = karaokeOn,
+                onCheckedChange = { karaokeOn = it; saveKaraoke() },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = musicColors().textPrimary,
+                    checkedTrackColor = musicColors().accent
+                )
+            )
+        }
+
+        if (karaokeOn) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = "高亮颜色", color = musicColors().textPrimary, style = MaterialTheme.typography.bodyLarge)
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                karaokeColors.forEach { (key, pair) ->
+                    val (colorInt, name) = pair
+                    val isSelected = karaokeColor == key
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(Color(colorInt))
+                            .border(
+                                width = if (isSelected) 3.dp else 1.dp,
+                                color = if (isSelected) musicColors().accent else Color.Gray,
+                                shape = CircleShape
+                            )
+                            .clickable { karaokeColor = key; saveKaraoke() }
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = karaokeColors.first { it.first == karaokeColor }.second.second,
+                color = musicColors().textPrimary.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // 预览
+        Text(
+            text = "预览",
+            color = musicColors().textPrimary,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = musicColors().background),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(8.dp)) {
+                Text(
+                    text = "这是普通歌词行",
+                    color = Color(textColor),
+                    fontSize = textSize.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "这是当前播放行",
+                    color = Color(highlightColor),
+                    fontSize = (textSize + 2).sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+        }
+        }
+    }
+}
+
+KOTLIN_EOF
+echo "  ✓ LxLyricSettingsActivity 已全量覆盖"
+
+# --- LxFavoritesActivity ---
+TARGET="$BASE/LxFavoritesActivity.kt"
+if [ ! -f "$TARGET" ]; then
+    echo "✗ 文件不存在: $TARGET"
+    exit 1
+fi
+cat << 'KOTLIN_EOF' > "$TARGET"
+// [32v86]
+package com.github.tvbox.osc.ui.activity
+
+import android.content.Context
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.compose.ui.unit.sp
+import org.json.JSONObject
+
+data class FavSong(
+    val key: String,
+    val songId: String,
+    val platform: String,
+    val title: String,
+    val artist: String,
+    val picUrl: String,
+    val quality: String = ""
+)
+
+class LxFavoritesActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        MusicThemeManager.init(this)
+        setContent {
+            val isDark86 by MusicThemeManager.isDarkTheme
+            val win86 = window
+            androidx.compose.runtime.SideEffect {
+                androidx.core.view.WindowCompat.getInsetsController(win86, win86.decorView).isAppearanceLightStatusBars = !isDark86
+            }
+            LxMusicTheme(isDarkTheme = isDark86) {
+                FavoritesScreen(onBack = { finish() })
+            }
+        }
+    }
+}
+
+@Composable
+fun FavoritesScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    var favSongs by remember { mutableStateOf(loadFavorites(context)) }
+
+    fun refresh() { favSongs = loadFavorites(context) }
+
+    fun removeFav(key: String) {
+        try {
+            val prefs = context.getSharedPreferences("favorites", 0)
+            val set = prefs.getStringSet("fav_set", emptySet())?.toMutableSet() ?: mutableSetOf()
+            set.remove(key)
+            prefs.edit().putStringSet("fav_set", set).apply()
+            context.getSharedPreferences("favorites_detail", 0).edit().remove(key).apply()
+            refresh()
+        } catch (e: Exception) { }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(musicColors().background)
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "‹",
+                style = MaterialTheme.typography.headlineLarge,
+                color = musicColors().textPrimary,
+                modifier = Modifier.clickable { onBack() }.padding(8.dp)
+            )
+            Text(
+                text = "我的喜欢",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = musicColors().textPrimary,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "${favSongs.size} 首",
+                color = musicColors().textPrimary.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (favSongs.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "还没有喜欢的歌曲\n在播放器点 ♥ 收藏",
+                    color = musicColors().textPrimary.copy(alpha = 0.5f),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(favSongs, key = { it.key }) { song ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = musicColors().card),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = song.title,
+                                    color = musicColors().textPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = song.artist,
+                                    color = musicColors().textPrimary.copy(alpha = 0.6f),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            IconButton(onClick = {
+                                // 播放收藏的歌曲
+                                val intent = android.content.Intent(context, LxPlayerActivity::class.java).apply {
+                                    putExtra("title", song.title)
+                                    putExtra("artist", song.artist)
+                                    putExtra("songId", song.songId)
+                                    putExtra("platform", song.platform)
+                                    putExtra("picUrl", song.picUrl)
+                                    putExtra("quality", song.quality)
+                                    putExtra("url", "")
+                                }
+                                context.startActivity(intent)
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = "播放",
+                                    tint = musicColors().accent
+                                )
+                            }
+                            IconButton(onClick = { removeFav(song.key) }) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "取消收藏",
+                                    tint = Color.Gray
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fun loadFavorites(context: Context): List<FavSong> {
+    return try {
+        val prefs = context.getSharedPreferences("favorites", 0)
+        val detailPrefs = context.getSharedPreferences("favorites_detail", 0)
+        val keys = prefs.getStringSet("fav_set", emptySet()) ?: emptySet()
+        keys.mapNotNull { key ->
+            try {
+                val json = detailPrefs.getString(key, null) ?: return@mapNotNull null
+                val obj = JSONObject(json)
+                FavSong(
+                    key = key,
+                    songId = obj.optString("songId"),
+                    platform = obj.optString("platform"),
+                    title = obj.optString("title"),
+                    artist = obj.optString("artist"),
+                    picUrl = obj.optString("picUrl"),
+                    quality = obj.optString("quality")
+                )
+            } catch (e: Exception) { null }
+        }
+    } catch (e: Exception) { emptyList() }
+}
+
+KOTLIN_EOF
+echo "  ✓ LxFavoritesActivity 已全量覆盖"
+
+# --- LxThemeSettingsActivity ---
+TARGET="$BASE/LxThemeSettingsActivity.kt"
+if [ ! -f "$TARGET" ]; then
+    echo "✗ 文件不存在: $TARGET"
+    exit 1
+fi
+cat << 'KOTLIN_EOF' > "$TARGET"
+// [32v86]
+package com.github.tvbox.osc.ui.activity
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+
+/**
+ * 主题外观设置页
+ */
+class LxThemeSettingsActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        MusicThemeManager.init(this)
+        setContent {
+            val isDark86 by MusicThemeManager.isDarkTheme
+            val win86 = window
+            androidx.compose.runtime.SideEffect {
+                androidx.core.view.WindowCompat.getInsetsController(win86, win86.decorView).isAppearanceLightStatusBars = !isDark86
+            }
+            LxMusicTheme(isDarkTheme = isDark86) {
+                ThemeSettingsScreen(onBack = { finish() })
+            }
+        }
+    }
+}
+
+@Composable
+fun ThemeSettingsScreen(onBack: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(musicColors().background)
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "‹",
+                style = MaterialTheme.typography.headlineLarge,
+                color = musicColors().textPrimary,
+                modifier = Modifier
+                    .clickable { onBack() }
+                    .padding(8.dp)
+            )
+            Text(
+                text = "主题外观",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = musicColors().textPrimary,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = musicColors().card),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                // 深色/浅色切换
+                val isDark by MusicThemeManager.isDarkTheme
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "深色主题",
+                            color = musicColors().textPrimary,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = if (isDark) "黑绿 Spotify 风" else "浅色 Sollin 风",
+                            color = musicColors().textPrimary.copy(alpha = 0.6f),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Switch(
+                        modifier = Modifier.scale(0.85f),
+                        checked = isDark,
+                        onCheckedChange = { MusicThemeManager.setDarkTheme(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = musicColors().textPrimary,
+                            checkedTrackColor = musicColors().accent
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Divider(color = musicColors().textPrimary.copy(alpha = 0.1f))
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 背景随封面变
+            }
+        }
+    }
+}
+KOTLIN_EOF
+echo "  ✓ LxThemeSettingsActivity 已全量覆盖"
+
+echo "=== 32 v86 完成 ==="
