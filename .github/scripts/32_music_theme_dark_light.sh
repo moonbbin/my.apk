@@ -4067,12 +4067,27 @@ if "Card(" in s1 and "color = musicColors().card" not in s1:
 
 # 2. LxHistoryActivity
 print("2. 播放历史")
-fix_activity(
-    "LxHistoryActivity.kt",
-    "setContent { MaterialTheme { HistoryScreen { finish() } } }",
-    "setContent { val isDark72 by MusicThemeManager.isDarkTheme; LxMusicTheme(isDarkTheme = isDark72) { HistoryScreen { finish() } } }",
-    ["Column(Modifier.fillMaxSize().background(Color(0xFF000000)).padding(12"]
-)
+# v72-fix: HistoryActivity 用正则（原精确锚点在构建机未命中）
+fp_h = BASE + "LxHistoryActivity.kt"
+with open(fp_h, encoding="utf-8") as f:
+    _s = f.read()
+if MARK not in _s:
+    import re as _re
+    _m = _re.search(r'setContent\s*\{\s*MaterialTheme\s*\{\s*HistoryScreen\s*\{[^}]*\}\s*\}\s*\}', _s)
+    if _m:
+        _s = _s.replace(_m.group(0), "setContent { val isDark72 by MusicThemeManager.isDarkTheme; LxMusicTheme(isDarkTheme = isDark72) { HistoryScreen { finish() } } }", 1)
+        print("  LxHistoryActivity.kt: ✓ LxMusicTheme (regex)")
+        _s = _s.replace("background(Color(0xFF000000))", "background(musicColors().background)", 1)
+        print("  LxHistoryActivity.kt: ✓ 根背景")
+    else:
+        print("  LxHistoryActivity.kt: ✗ regex未命中")
+        sys.exit(1)
+    # 状态栏等由 v73 处理
+    _s = MARK + "\n" + _s
+    with open(fp_h, "w", encoding="utf-8") as f:
+        f.write(_s)
+else:
+    print("  LxHistoryActivity.kt: 已处理，跳过")
 # 空状态文字 -> textSecondary
 fp2 = BASE + "LxHistoryActivity.kt"
 with open(fp2, encoding="utf-8") as f:
