@@ -3070,17 +3070,20 @@ if MARK not in s1:
         f.write(s1)
     print("  ✓ 主题预设+LxMusicTheme+根背景")
 
-# 2. 歌单卡片
+# 2. 歌单卡片 (v58 已修，此处幂等跳过)
 print("2. PlaylistScreen.kt")
-p2 = "app/src/main/java/com/github/tvbox/osc/ui/music/playlist/PlaylistScreen.kt"
-# 可能在不同子目录，搜索
 import glob
 found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
 if found:
     p2 = found[0]
-    patch_file(p2, [
-        ("MaterialTheme.colorScheme.surfaceContainerLow", "musicColors().card", "surfaceContainerLow→card"),
-    ])
+    with open(p2, encoding="utf-8") as _f:
+        _s = _f.read()
+    if "// [32v58]" in _s or "musicColors().card" in _s:
+        print("  ✓ 已由 v58 处理，跳过")
+    else:
+        patch_file(p2, [
+            ("MaterialTheme.colorScheme.surfaceContainerLow", "musicColors().card", "surfaceContainerLow→card"),
+        ])
 else:
     print("  ✗ 未找到 PlaylistScreen.kt")
     sys.exit(1)
