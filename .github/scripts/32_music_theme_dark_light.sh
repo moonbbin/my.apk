@@ -2468,3 +2468,129 @@ PYEOF
 
 echo "=== 32 v49 完成 ==="
 
+# 32 v50: 补全 LxMusicTheme 的 MaterialTheme 映射
+
+echo "=== 32 v50: 补全映射 ==="
+
+python3 << 'PYEOF'
+import sys, re
+
+MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+with open(MPATH, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v50]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# 找到 v2 的桥接函数，替换为完整映射版
+old_start = src.find("// [32v2] LxMusicTheme bridge")
+if old_start == -1:
+    print("错误: 未找到 v2 桥接")
+    sys.exit(1)
+
+# 找到函数结束（下一个顶级声明或文件尾）
+# 简单：找到 "@Composable\nfun LxMusicTheme" 到文件尾（它是最后一个）
+func_start = src.find("@Composable\nfun LxMusicTheme(", old_start)
+if func_start == -1:
+    func_start = src.find("@Composable", old_start)
+
+# 找到匹配的右括号（数括号）
+brace = 0
+in_func = False
+end_pos = len(src)
+for i in range(func_start, len(src)):
+    c = src[i]
+    if c == '{':
+        brace += 1
+        in_func = True
+    elif c == '}':
+        brace -= 1
+        if in_func and brace == 0:
+            end_pos = i + 1
+            break
+
+new_func = """// [32v50] LxMusicTheme bridge - 完整 MaterialTheme 注入
+@Composable
+fun LxMusicTheme(
+    isDarkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) {
+    val musicColors = if (isDarkTheme) DarkMusicColors else LightMusicColors
+    val materialColorScheme = if (isDarkTheme) {
+        darkColorScheme(
+            primary = BrandGreen,
+            onPrimary = TextOnAccent,
+            background = musicColors.background,
+            onBackground = musicColors.textPrimary,
+            surface = musicColors.card,
+            onSurface = musicColors.textPrimary,
+            surfaceVariant = musicColors.cardSecondary,
+            onSurfaceVariant = musicColors.textSecondary,
+            surfaceContainer = musicColors.card,
+            surfaceContainerHigh = musicColors.cardSecondary,
+            surfaceContainerHighest = musicColors.cardSecondary,
+            outline = musicColors.divider,
+            outlineVariant = musicColors.divider,
+            error = ErrorRed,
+            onError = Color.White
+        )
+    } else {
+        lightColorScheme(
+            primary = BrandGreen,
+            onPrimary = Color.White,
+            background = musicColors.background,
+            onBackground = musicColors.textPrimary,
+            surface = musicColors.card,
+            onSurface = musicColors.textPrimary,
+            surfaceVariant = musicColors.cardSecondary,
+            onSurfaceVariant = musicColors.textSecondary,
+            surfaceContainer = musicColors.card,
+            surfaceContainerHigh = musicColors.cardSecondary,
+            surfaceContainerHighest = musicColors.cardSecondary,
+            outline = musicColors.divider,
+            outlineVariant = musicColors.divider,
+            error = ErrorRed,
+            onError = Color.White
+        )
+    }
+    CompositionLocalProvider(LocalMusicColors provides musicColors) {
+        MaterialTheme(colorScheme = materialColorScheme, content = content)
+    }
+}"""
+
+src = src[:old_start] + new_func + "\n" + src[end_pos:].lstrip()
+with open(MPATH, "w", encoding="utf-8") as f:
+    f.write(src)
+print("✓ LxMusicTheme 映射已补全")
+
+# 修 SettingsScreen 第95行
+import os
+for root, dirs, files in os.walk("app/src/main/java/com/github/tvbox/osc/ui/music"):
+    for fn in files:
+        if fn == "SettingsScreen.kt":
+            fp = os.path.join(root, fn)
+            with open(fp, encoding="utf-8") as f:
+                s = f.read()
+            if "// [32v50]" in s:
+                continue
+            # Color.White.copy(alpha = 0.05f) -> musicColors().divider
+            new_s = s.replace(
+                "Color.White.copy(alpha = 0.05f)",
+                "musicColors().divider"
+            )
+            if new_s != s:
+                if "import com.github.tvbox.osc.ui.activity.musicColors" not in new_s:
+                    m = list(re.finditer(r'^import .+$', new_s, re.MULTILINE))
+                    if m:
+                        pos = m[-1].end()
+                        new_s = new_s[:pos] + '\nimport com.github.tvbox.osc.ui.activity.musicColors' + new_s[pos:]
+                new_s = "// [32v50]\n" + new_s
+                with open(fp, "w", encoding="utf-8") as f:
+                    f.write(new_s)
+                print(f"✓ SettingsScreen 已修")
+PYEOF
+
+echo "=== 32 v50 完成 ==="
+
