@@ -3,14 +3,14 @@
 # 本脚本为 SearchScreen.kt 的唯一最终控制权，后续所有搜索页修改均在此进行。
 # 注意：25_music_pages_wire.sh 也会写 SearchScreen.kt，但本脚本编号更大（33 > 25），
 # 构建时后运行，覆盖生效。25 的写入仅作为兜底。
+# [33v2] 补 Color import
 set -e
 cd avbox
 
-echo "=== 33 v1: 搜索页视觉微调 ==="
+echo "=== 33 v2: 搜索页视觉微调 ==="
 
 TARGET="app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchScreen.kt"
 
-# 文件存在校验（25 应该已经生成）
 if [ ! -f "$TARGET" ]; then
     echo "✗ 文件不存在: $TARGET（25 未生成？）"
     exit 1
@@ -50,6 +50,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.graphics.Color
 import com.github.tvbox.osc.ui.activity.musicColors
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -240,5 +241,5 @@ fun SearchScreenPreview() {
 }
 KOTLIN_EOF
 
-echo "✓ SearchScreen.kt 已全量覆盖（33v1）"
-echo "=== 33 v1 完成 ==="
+echo "✓ SearchScreen.kt 已全量覆盖（33v2）"
+echo "=== 33 v2 完成 ==="
