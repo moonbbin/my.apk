@@ -3662,3 +3662,82 @@ with open(fp, "w", encoding="utf-8") as f:
 print("=== 32 v67 完成 ===")
 PYEOF
 
+# 32 v68: 播放量描边胶囊 + TopAppBar透明
+
+echo "=== 32 v68 ==="
+
+python3 << 'PYEOF'
+import os, re, sys, glob
+
+MARK = "// [32v68]"
+
+# 1. 播放量标签：描边胶囊
+print("1. PlaylistScreen 播放量胶囊")
+found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
+if not found:
+    print("  ✗ 未找到")
+    sys.exit(1)
+fp = found[0]
+with open(fp, encoding="utf-8") as f:
+    s = f.read()
+if MARK not in s:
+    # 背景 0.6f 黑
+    s = s.replace("color = Color.Black.copy(alpha = 0.65f),", "color = Color.Black.copy(alpha = 0.6f),")
+    # Surface 加 border 参数：在 shape 行后加
+    # 找到播放量标签的 Surface（有 OverlayScrimBlack 或 0.6f 的）
+    # 在 shape = MaterialTheme.shapes.extraLarge, 后加 border
+    old_shape = "shape = MaterialTheme.shapes.extraLarge,\n                        modifier = Modifier\n                            .align(Alignment.BottomEnd)"
+    new_shape = "shape = MaterialTheme.shapes.extraLarge,\n                        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.3f)),\n                        modifier = Modifier\n                            .align(Alignment.BottomEnd)\n                            .shadow(2.dp, RoundedCornerShape(50))"
+    if old_shape in s:
+        s = s.replace(old_shape, new_shape, 1)
+        print("  ✓ 已加 border+shadow")
+    else:
+        print("  ✗ 未找到 Surface 锚点")
+        sys.exit(1)
+    # 加 import
+    imports_needed = []
+    if "import androidx.compose.ui.draw.shadow" not in s:
+        imports_needed.append("import androidx.compose.ui.draw.shadow")
+    if "import androidx.compose.foundation.BorderStroke" not in s:
+        # BorderStroke 在 foundation 包
+        imports_needed.append("import androidx.compose.foundation.BorderStroke")
+    if "import androidx.compose.foundation.shape.RoundedCornerShape" not in s and "RoundedCornerShape" not in s.split("import")[0]:
+        # RoundedCornerShape 可能已 import
+        pass
+    if imports_needed:
+        m = list(re.finditer(r'^import .+$', s, re.MULTILINE))
+        if m:
+            pos = m[-1].end()
+            s = s[:pos] + '\n' + '\n'.join(imports_needed) + s[pos:]
+            print(f"  ✓ 已加 import: {imports_needed}")
+    # 确保文字图标白色（v66 已做，再确认）
+    s = MARK + "\n" + s
+    with open(fp, "w", encoding="utf-8") as f:
+        f.write(s)
+else:
+    print("  ✓ 已处理，跳过")
+
+# 2. TopAppBar 透明
+print("2. LxSourceSettings TopAppBar")
+sp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+with open(sp, encoding="utf-8") as f:
+    s = f.read()
+if MARK not in s:
+    # TopAppBar 加 colors
+    old_tb = "TopAppBar(\n                title = { Text(\"音乐源管理\") },"
+    new_tb = "TopAppBar(\n                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),\n                title = { Text(\"音乐源管理\", color = musicColors().textPrimary) },"
+    if old_tb in s:
+        s = s.replace(old_tb, new_tb, 1)
+        print("  ✓ TopAppBar 透明+标题色")
+    else:
+        print("  ✗ 未找到 TopAppBar")
+        sys.exit(1)
+    s = MARK + "\n" + s
+    with open(sp, "w", encoding="utf-8") as f:
+        f.write(s)
+else:
+    print("  ✓ 已处理，跳过")
+
+print("=== 32 v68 完成 ===")
+PYEOF
+
