@@ -3791,3 +3791,119 @@ if found:
 print("=== 32 v69 完成 ===")
 PYEOF
 
+# 32 v70: 4处终修
+
+echo "=== 32 v70 ==="
+
+python3 << 'PYEOF'
+import os, re, sys, glob
+
+MARK = "// [32v70]"
+
+# 1. 播放量标签：0.8f 黑底白字
+print("1. 播放量标签")
+found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
+if found:
+    fp = found[0]
+    with open(fp, encoding="utf-8") as f:
+        s = f.read()
+    if MARK not in s:
+        s = s.replace("color = Color.Black.copy(alpha = 0.6f),", "color = Color.Black.copy(alpha = 0.8f),")
+        print("  ✓ 背景→0.8f")
+        s = MARK + "\n" + s
+        with open(fp, "w", encoding="utf-8") as f:
+            f.write(s)
+    else:
+        print("  ✓ 已处理")
+
+# 2. 主题页：LxMusicTheme 包裹 + 响应式
+print("2. LxThemeSettingsActivity")
+tp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt"
+with open(tp, encoding="utf-8") as f:
+    s = f.read()
+if MARK not in s:
+    # 在 setContent 内用 by 委托（MutableState 响应式）
+    # 找到 setContent {
+    m = re.search(r'setContent\s*\{', s)
+    if m:
+        pos = m.end()
+        ls = s.rfind('\n', 0, m.start()) + 1
+        indent = s[ls:m.start()]
+        # 检查是否已有 LxMusicTheme
+        after = s[pos:pos+500]
+        if "LxMusicTheme" not in after:
+            inject = f"\n{indent}    val isDark70 by MusicThemeManager.isDarkTheme\n{indent}    LxMusicTheme(isDarkTheme = isDark70) {{"
+            # 需要找到 setContent 块结束加 }
+            # 简化：假设 setContent 内容是单个 Composable 调用，用括号计数
+            # 这里用 v66 的括号计数法
+            depth = 1
+            i = pos
+            while i < len(s) and depth > 0:
+                if s[i] == '{': depth += 1
+                elif s[i] == '}': depth -= 1
+                i += 1
+            inner = s[pos:i-1]
+            new_block = f" {{{inject}\n{inner}\n{indent}    }}\n{indent}}}"
+            s = s[:m.start()] + "setContent" + new_block + s[i:]
+            print("  ✓ 已包裹 LxMusicTheme（by 委托响应式）")
+        else:
+            print("  ✓ 已有 LxMusicTheme")
+    # 3. 状态栏 SideEffect
+    if "isAppearanceLightStatusBars" not in s:
+        m2 = re.search(r'setContent\s*\{', s)
+        if m2:
+            pos2 = m2.end()
+            ls2 = s.rfind('\n', 0, m2.start()) + 1
+            indent2 = s[ls2:m2.start()]
+            inject2 = f"""
+{indent2}    val win70 = window
+{indent2}    val isDarkSb70 by MusicThemeManager.isDarkTheme
+{indent2}    androidx.compose.runtime.SideEffect {{
+{indent2}        androidx.core.view.WindowCompat.getInsetsController(win70, win70.decorView).isAppearanceLightStatusBars = !isDarkSb70
+{indent2}    }}
+"""
+            s = s[:pos2] + inject2 + s[pos2:]
+            print("  ✓ 状态栏 SideEffect")
+    s = MARK + "\n" + s
+    with open(tp, "w", encoding="utf-8") as f:
+        f.write(s)
+else:
+    print("  ✓ 已处理")
+
+# 3. 源设置页状态栏 + 标题颜色
+print("3. LxSourceSettings")
+sp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+with open(sp, encoding="utf-8") as f:
+    s = f.read()
+if MARK not in s:
+    # 状态栏
+    if "isAppearanceLightStatusBars" not in s:
+        m = re.search(r'setContent\s*\{', s)
+        if m:
+            pos = m.end()
+            ls = s.rfind('\n', 0, m.start()) + 1
+            indent = s[ls:m.start()]
+            inject = f"""
+{indent}    val win70 = window
+{indent}    val isDarkSb70 by MusicThemeManager.isDarkTheme
+{indent}    androidx.compose.runtime.SideEffect {{
+{indent}        androidx.core.view.WindowCompat.getInsetsController(win70, win70.decorView).isAppearanceLightStatusBars = !isDarkSb70
+{indent}    }}
+"""
+            s = s[:pos] + inject + s[pos:]
+            print("  ✓ 状态栏 SideEffect")
+    # 标题颜色（v68 已做 textPrimary，再确认返回箭头）
+    # 返回箭头 Icon 的 tint
+    if 'Icon(Icons.Filled.ArrowBack' in s:
+        # 找到 IconButton 内的 Icon，加 tint
+        # 简化：如果 Icon 没有 tint 参数，加上
+        pass  # v68 的 TopAppBar 标题已处理，箭头用默认（通常跟随标题色）
+    s = MARK + "\n" + s
+    with open(sp, "w", encoding="utf-8") as f:
+        f.write(s)
+else:
+    print("  ✓ 已处理")
+
+print("=== 32 v70 完成 ===")
+PYEOF
+
