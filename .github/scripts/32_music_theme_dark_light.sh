@@ -2631,3 +2631,56 @@ PYEOF
 
 echo "=== 32 v53 完成 ==="
 
+# 32 v54: 主题切换响应式
+
+echo "=== 32 v54: 响应式主题 ==="
+
+python3 << 'PYEOF'
+import sys, re
+
+MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+with open(MPATH, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v54]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# v53 的写法：LxMusicTheme(isDarkTheme = MusicThemeManager.isDarkTheme.value)
+# 改为响应式：先 collectAsState，再传值
+old = "LxMusicTheme(isDarkTheme = MusicThemeManager.isDarkTheme.value)"
+
+# 需要在 setContent 内、LxMusicTheme 之前加：
+# val isDark54 by MusicThemeManager.isDarkTheme.collectAsState()
+# 然后 LxMusicTheme(isDarkTheme = isDark54)
+
+if old in src:
+    # 找到 LxMusicTheme 的行首
+    idx = src.find(old)
+    line_start = src.rfind('\n', 0, idx) + 1
+    indent = src[line_start:idx]
+    
+    new_code = f"""{indent}val isDark54 by MusicThemeManager.isDarkTheme.collectAsState()
+{indent}LxMusicTheme(isDarkTheme = isDark54)"""
+    
+    src = src[:idx] + new_code + src[idx+len(old):]
+    
+    # 确保 import collectAsState 和 getValue
+    if "import androidx.compose.runtime.collectAsState" not in src:
+        m = list(re.finditer(r'^import androidx\.compose\.runtime\..+$', src, re.MULTILINE))
+        if m:
+            pos = m[-1].end()
+            src = src[:pos] + '\nimport androidx.compose.runtime.collectAsState\nimport androidx.compose.runtime.getValue' + src[pos:]
+    
+    print("✓ 已改为响应式")
+    src = MARK + "\n" + src
+    with open(MPATH, "w", encoding="utf-8") as f:
+        f.write(src)
+else:
+    print("警告: 未找到 v53 的代码")
+    sys.exit(1)
+PYEOF
+
+echo "=== 32 v54 完成 ==="
+
