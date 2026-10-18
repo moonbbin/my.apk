@@ -3741,3 +3741,53 @@ else:
 print("=== 32 v68 完成 ===")
 PYEOF
 
+# 32 v69: 补 import
+
+echo "=== 32 v69: 补 import ==="
+
+python3 << 'PYEOF'
+import re, sys, glob
+
+MARK = "// [32v69]"
+
+# 1. LxSourceSettings: TopAppBarDefaults
+print("1. LxSourceSettings")
+sp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+with open(sp, encoding="utf-8") as f:
+    s = f.read()
+if MARK not in s:
+    if "import androidx.compose.material3.TopAppBarDefaults" not in s:
+        m = list(re.finditer(r'^import .+$', s, re.MULTILINE))
+        if m:
+            pos = m[-1].end()
+            s = s[:pos] + '\nimport androidx.compose.material3.TopAppBarDefaults' + s[pos:]
+            print("  ✓ 已加 TopAppBarDefaults")
+    s = MARK + "\n" + s
+    with open(sp, "w", encoding="utf-8") as f:
+        f.write(s)
+else:
+    print("  ✓ 已处理")
+
+# 2. PlaylistScreen: RoundedCornerShape
+print("2. PlaylistScreen")
+found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
+if found:
+    fp = found[0]
+    with open(fp, encoding="utf-8") as f:
+        s = f.read()
+    if MARK not in s:
+        if "import androidx.compose.foundation.shape.RoundedCornerShape" not in s:
+            m = list(re.finditer(r'^import .+$', s, re.MULTILINE))
+            if m:
+                pos = m[-1].end()
+                s = s[:pos] + '\nimport androidx.compose.foundation.shape.RoundedCornerShape' + s[pos:]
+                print("  ✓ 已加 RoundedCornerShape")
+        s = MARK + "\n" + s
+        with open(fp, "w", encoding="utf-8") as f:
+            f.write(s)
+    else:
+        print("  ✓ 已处理")
+
+print("=== 32 v69 完成 ===")
+PYEOF
+
