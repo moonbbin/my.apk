@@ -62,6 +62,26 @@
 - v4-v4.2：⚠ 自诊断（内联判断，不静态调用）
 - v5-v6：Hi-Res 可疑检测 + 中文标签
 
+**21 v19：** 切歌清空 `_currentQuality`/`_measuredBitrate`/`_bitrate`（防旧徽标残留）
+
+### 32 版本速查（主题切换）
+
+**32（主题）：**
+- v1-v12：基础建设（Build #244 OK）
+- v13/v14：红构建（Hilt/错文件）；v20 越界改 MainActivity（回滚）
+- v26：MainActivity 从上游恢复（主体修复关闭）
+- v30：三档切换 UI（theme_prefs + MusicThemeManager）
+- v35-v55：背景/导航/TopAppBar 换 musicColors()；LxMusicTheme 桥接；onCreate 预设
+- v56：暴力替换 colorScheme→musicColors()（Build #290 OK，误伤 scrim）
+- v57-v71：精准修复（PlaylistScreen/ RankScreen/ Source/ Theme/ Artist/ Search）；Overlay 常量；badge 白字
+- v72：5 二级页面统一（LxMusicTheme+状态栏+背景）
+- v73-v75：HistoryActivity 正则失败（根因：构建机用 QingfengMusicTheme）
+- v76：History 方案A全量覆盖（132 行 cat）
+- v77/v78：删 v72/v73 的 History 正则死代码
+- v79-v83：修 Conflicting declarations + Card(color=) 误用（5 版试错）
+- v84/v85：Playback 方案A全量覆盖（删 bgFollowCover，因 v33 已删该方法）
+- v86：清死代码（删 673 行 v72/v75/v79-v84）；Quality/Lyric/Favorites/ThemeSettings 方案A全量覆盖
+
 ## 页面 UI（24-31）
 
 | # | 脚本 | 干嘛的 |
@@ -74,6 +94,7 @@
 | 29 | `29_music_rank_capsule_fix.sh` | 胶囊修复（历史，已跑过） |
 | 30 | `30_music_rank_capsule_green.sh` | 胶囊绿色版（未被 build.yml 引用，内容已并入 28） |
 | 31 | `31_music_search_result.sh` | **搜索二级结果页**<br>SearchResultScreen.kt + 接线到 LxMusicSearchActivity |
+| 32 | `32_music_theme_dark_light.sh` | **深色/浅色主题切换**<br>三档（跟随系统/深色/浅色）存 theme_prefs；LxMusicTheme 桥接；独立 Activity 全量覆盖 |
 
 ## 约束速查
 
