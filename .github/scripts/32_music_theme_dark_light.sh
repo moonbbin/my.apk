@@ -2951,3 +2951,51 @@ PYEOF
 
 echo "=== 32 v58 完成 ==="
 
+# 32 v59: LxThemeSettingsActivity 预设主题
+
+echo "=== 32 v59: 主题页预设 ==="
+
+python3 << 'PYEOF'
+import sys, re
+
+FP = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt"
+with open(FP, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v59]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# 在 onCreate 的 setContent 之前注入主题预设（仿 v47）
+m = re.search(r'setContent\s*\{', src)
+if not m:
+    print("错误: 未找到 setContent")
+    sys.exit(1)
+
+pos = m.start()
+line_start = src.rfind('\n', 0, pos) + 1
+indent = src[line_start:pos]
+
+inject = f"""{indent}// [32v59] 预设主题
+{indent}run {{
+{indent}    val p59 = getSharedPreferences("theme_prefs", MODE_PRIVATE)
+{indent}    val mode59 = p59.getInt("theme_mode", 0)
+{indent}    val dark59 = when (mode59) {{
+{indent}        1 -> true
+{indent}        2 -> false
+{indent}        else -> (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+{indent}    }}
+{indent}    MusicThemeManager.setDarkTheme(dark59)
+{indent}}}
+"""
+
+src = src[:line_start] + inject + src[line_start:]
+src = MARK + "\n" + src
+with open(FP, "w", encoding="utf-8") as f:
+    f.write(src)
+print("✓ LxThemeSettingsActivity 已预设主题")
+PYEOF
+
+echo "=== 32 v59 完成 ==="
+
