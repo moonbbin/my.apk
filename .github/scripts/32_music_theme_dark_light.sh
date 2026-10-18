@@ -2856,3 +2856,98 @@ PYEOF
 
 echo "=== 32 v57 完成 ==="
 
+# 32 v58: 精准修三处 + 补 ui/activity 目录
+
+echo "=== 32 v58: 精准修复 ==="
+
+python3 << 'PYEOF'
+import os, re, sys
+
+MARK = "// [32v58]"
+IMPORT_ACT = "import com.github.tvbox.osc.ui.activity.musicColors"
+
+def add_import_activity(src):
+    # ui/activity 包下的文件，musicColors 在同一包，不需要 import
+    return src
+
+def add_import_music(src):
+    if IMPORT_ACT in src:
+        return src
+    m = list(re.finditer(r'^import .+$', src, re.MULTILINE))
+    if m:
+        pos = m[-1].end()
+        return src[:pos] + '\n' + IMPORT_ACT + src[pos:]
+    return src
+
+replacements = [
+    (r'MaterialTheme\.colorScheme\.onSurface\b', 'musicColors().textPrimary'),
+    (r'MaterialTheme\.colorScheme\.onBackground\b', 'musicColors().textPrimary'),
+    (r'MaterialTheme\.colorScheme\.onSurfaceVariant\b', 'musicColors().textSecondary'),
+    (r'MaterialTheme\.colorScheme\.background\b', 'musicColors().background'),
+    (r'MaterialTheme\.colorScheme\.surface\b', 'musicColors().card'),
+    (r'MaterialTheme\.colorScheme\.surfaceVariant\b', 'musicColors().cardSecondary'),
+    (r'MaterialTheme\.colorScheme\.surfaceContainer\b', 'musicColors().card'),
+    (r'MaterialTheme\.colorScheme\.surfaceContainerLow\b', 'musicColors().card'),
+    (r'MaterialTheme\.colorScheme\.surfaceContainerHigh\b', 'musicColors().cardSecondary'),
+    (r'MaterialTheme\.colorScheme\.surfaceContainerHighest\b', 'musicColors().cardSecondary'),
+    (r'MaterialTheme\.colorScheme\.outline\b', 'musicColors().divider'),
+    (r'MaterialTheme\.colorScheme\.outlineVariant\b', 'musicColors().divider'),
+]
+
+# 1. 处理 ui/activity 下的 Activity 文件（LxFavoritesActivity 等）
+ACT_BASE = "app/src/main/java/com/github/tvbox/osc/ui/activity"
+act_targets = [
+    "LxFavoritesActivity.kt",
+    "LxQualitySettingsActivity.kt",
+    "LxThemeSettingsActivity.kt",
+    "LxPlaybackSettingsActivity.kt",
+    "LxLyricSettingsActivity.kt",
+]
+for fn in act_targets:
+    fp = os.path.join(ACT_BASE, fn)
+    if not os.path.exists(fp):
+        continue
+    with open(fp, encoding="utf-8") as f:
+        src = f.read()
+    if MARK in src:
+        print(f"跳过: {fn}")
+        continue
+    orig = src
+    count = 0
+    for pat, repl in replacements:
+        src, n = re.subn(pat, repl, src)
+        count += n
+    # 硬编码黑背景 -> musicColors().background
+    src, n = re.subn(r'\.background\(Color\(0xFF000000\)\)', '.background(musicColors().background)', src)
+    count += n
+    src, n = re.subn(r'\.background\(Color\.Black\)', '.background(musicColors().background)', src)
+    count += n
+    if count > 0:
+        src = MARK + "\n" + src
+        with open(fp, "w", encoding="utf-8") as f:
+            f.write(src)
+        print(f"✓ {fn}: {count} 处")
+
+# 2. 补 PlaylistScreen 的 surfaceContainerLow（v56 漏了）
+MUSIC_BASE = "app/src/main/java/com/github/tvbox/osc/ui/music"
+for root, dirs, files in os.walk(MUSIC_BASE):
+    for fn in files:
+        if fn == "PlaylistScreen.kt":
+            fp = os.path.join(root, fn)
+            with open(fp, encoding="utf-8") as f:
+                src = f.read()
+            if MARK in src:
+                continue
+            src, n = re.subn(r'MaterialTheme\.colorScheme\.surfaceContainerLow\b', 'musicColors().card', src)
+            if n > 0:
+                src = add_import_music(src)
+                src = MARK + "\n" + src
+                with open(fp, "w", encoding="utf-8") as f:
+                    f.write(src)
+                print(f"✓ PlaylistScreen.kt: 补 {n} 处 surfaceContainerLow")
+
+print("完成")
+PYEOF
+
+echo "=== 32 v58 完成 ==="
+
