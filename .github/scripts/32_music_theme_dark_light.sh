@@ -2812,3 +2812,47 @@ PYEOF
 
 echo "=== 32 v56 完成 ==="
 
+# 32 v57: 修复 v56 误伤 BgDeepBlue 定义
+
+echo "=== 32 v57: 修复误伤 ==="
+
+python3 << 'PYEOF'
+import sys, re
+
+MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+with open(MPATH, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v57]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+fixed = False
+# 修复各种可能的误伤定义
+patterns = [
+    ("val musicColors().background", "val BgDeepBlue"),
+    ("var musicColors().background", "var BgDeepBlue"),
+    ("private val musicColors().background", "private val BgDeepBlue"),
+    ("internal val musicColors().background", "internal val BgDeepBlue"),
+]
+for bad, good in patterns:
+    if bad in src:
+        src = src.replace(bad, good)
+        print(f"✓ 修复: {bad[:30]}...")
+        fixed = True
+
+if fixed:
+    src = MARK + "\n" + src
+    with open(MPATH, "w", encoding="utf-8") as f:
+        f.write(src)
+else:
+    print("未发现定义误伤")
+    # 仍然加 MARK 防止重复检查
+    src = MARK + "\n" + src
+    with open(MPATH, "w", encoding="utf-8") as f:
+        f.write(src)
+PYEOF
+
+echo "=== 32 v57 完成 ==="
+
