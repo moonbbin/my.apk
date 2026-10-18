@@ -4330,3 +4330,60 @@ sed -i '1i // [32v76]' "$TARGET"
 
 echo "=== 32 v76 完成 ==="
 
+# 32 v79: 修 Conflicting declarations + Card color
+
+echo "=== 32 v79 ==="
+
+python3 << 'PYEOF'
+import re, sys, glob
+
+MARK = "// [32v79]"
+BASE = "app/src/main/java/com/github/tvbox/osc/ui/activity/"
+
+# 1. 去重：删除重复注入的 win72/isDark72
+for fname in ["LxPlaybackSettingsActivity.kt", "LxQualitySettingsActivity.kt",
+              "LxLyricSettingsActivity.kt", "LxFavoritesActivity.kt",
+              "LxThemeSettingsActivity.kt", "LxSourceSettings.kt"]:
+    fp = BASE + fname
+    try:
+        with open(fp, encoding="utf-8") as f:
+            s = f.read()
+    except:
+        continue
+    # 统计 win72 出现次数
+    c_win = s.count("val win72 = window")
+    c_dark = s.count("val isDark72 by MusicThemeManager.isDarkTheme")
+    if c_win > 1 or c_dark > 1:
+        print(f"  {fname}: 发现重复注入 (win72 x{c_win}, isDark72 x{c_dark})，去重")
+        # 只保留第一个，删除后续的
+        # 找到所有的注入块并删除多余的
+        # 注入块格式：
+        #     val win72 = window
+        #     val isDark72 by MusicThemeManager.isDarkTheme
+        #     androidx.compose.runtime.SideEffect {
+        #         ...
+        #     }
+        pattern = r'\n    val win72 = window\n    val isDark72 by MusicThemeManager\.isDarkTheme\n    androidx\.compose\.runtime\.SideEffect \{\n        androidx\.core\.view\.WindowCompat\.getInsetsController\(win72, win72\.decorView\)\.isAppearanceLightStatusBars = !isDark72\n    \}'
+        matches = list(re.finditer(pattern, s))
+        if len(matches) > 1:
+            # 从后往前删除，保留第一个
+            for m in reversed(matches[1:]):
+                s = s[:m.start()] + s[m.end():]
+            print(f"  {fname}: ✓ 已去重")
+            with open(fp, "w", encoding="utf-8") as f:
+                f.write(s)
+    # 2. 修 Card(color=...) -> colors=CardDefaults...
+    # 错误写法：Card(\n                color = musicColors().card,
+    if "Card(\n                color = musicColors().card," in s:
+        s = s.replace(
+            "Card(\n                color = musicColors().card,",
+            "Card(\n                colors = CardDefaults.cardColors(containerColor = musicColors().card),",
+            1
+        )
+        print(f"  {fname}: ✓ Card color 已修正")
+        with open(fp, "w", encoding="utf-8") as f:
+            f.write(s)
+
+print("=== 32 v79 完成 ===")
+PYEOF
+
