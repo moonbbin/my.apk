@@ -4255,3 +4255,155 @@ with open(fp, "w", encoding="utf-8") as f:
 print("=== 32 v75 完成 ===")
 PYEOF
 
+# 32 v76: LxHistoryActivity 全量覆盖（方案A）
+
+echo "=== 32 v76: HistoryActivity 全量覆盖 ==="
+
+TARGET="app/src/main/java/com/github/tvbox/osc/ui/activity/LxHistoryActivity.kt"
+
+if [ ! -f "$TARGET" ]; then
+    echo "  ✗ 未找到 $TARGET"
+    exit 1
+fi
+
+cat << 'KOTLIN_EOF' > "$TARGET"
+package com.github.tvbox.osc.ui.activity
+
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import coil.compose.AsyncImage
+import org.json.JSONArray
+
+data class HistSong(val title: String, val artist: String, val picUrl: String, val platform: String, val songId: String, val quality: String, val url: String)
+
+fun loadHistory(context: Context): List<HistSong> = try {
+    val arr = JSONArray(context.getSharedPreferences("music_history", 0).getString("history_list", "[]"))
+    List(arr.length()) { i ->
+        val o = arr.optJSONObject(i) ?: org.json.JSONObject()
+        HistSong(o.optString("title"), o.optString("artist"), o.optString("picUrl"), o.optString("platform"), o.optString("songId"), o.optString("quality"), o.optString("url"))
+    }
+} catch (e: Exception) { emptyList() }
+
+class LxHistoryActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        MusicThemeManager.init(this)
+        setContent {
+            val isDark by MusicThemeManager.isDarkTheme
+            val win = window
+            SideEffect {
+                WindowCompat.getInsetsController(win, win.decorView).isAppearanceLightStatusBars = !isDark
+            }
+            LxMusicTheme(isDarkTheme = isDark) {
+                HistoryScreen { finish() }
+            }
+        }
+    }
+}
+
+@Composable
+fun HistoryScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    var songs by remember { mutableStateOf(loadHistory(context)) }
+    var confirm by remember { mutableStateOf(false) }
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text("清空播放历史？", color = musicColors().textPrimary) },
+            text = { Text("删除全部 ${songs.size} 条记录", color = musicColors().textPrimary.copy(alpha = 0.7f)) },
+            confirmButton = { TextButton(onClick = {
+                context.getSharedPreferences("music_history", 0).edit().remove("history_list").apply()
+                songs = emptyList(); confirm = false
+            }) { Text("清空", color = Color(0xFFFF6B6B)) } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("取消", color = musicColors().textPrimary) } },
+            containerColor = musicColors().card
+        )
+    }
+    Column(Modifier.fillMaxSize().background(musicColors().background).padding(12.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("‹", style = MaterialTheme.typography.headlineLarge, color = musicColors().textPrimary,
+                modifier = Modifier.clickable { onBack() }.padding(8.dp))
+            Text("播放历史", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                color = musicColors().textPrimary, modifier = Modifier.padding(start = 8.dp))
+            Spacer(Modifier.weight(1f))
+            Text("${songs.size} 首", color = musicColors().textPrimary.copy(alpha = 0.6f), style = MaterialTheme.typography.bodySmall)
+            if (songs.isNotEmpty()) IconButton(onClick = { confirm = true }) {
+                Icon(Icons.Filled.Delete, contentDescription = "清空", tint = musicColors().textPrimary.copy(alpha = 0.7f))
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        if (songs.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("还没有播放记录\n播过的歌会自动记在这里",
+                    color = musicColors().textSecondary, style = MaterialTheme.typography.bodyMedium)
+            }
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                items(songs, key = { it.title + "|" + it.artist }) { s ->
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = musicColors().card),
+                        shape = RoundedCornerShape(12.dp)) {
+                        Row(Modifier.fillMaxWidth().clickable {
+                            context.startActivity(Intent(context, LxPlayerActivity::class.java).apply {
+                                putExtra("title", s.title); putExtra("artist", s.artist)
+                                putExtra("songId", s.songId); putExtra("platform", s.platform)
+                                putExtra("picUrl", s.picUrl); putExtra("quality", s.quality)
+                                putExtra("url", s.url)
+                            })
+                        }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (s.picUrl.isNotEmpty()) AsyncImage(model = s.picUrl, contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)))
+                            else Box(Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)).background(musicColors().cardSecondary),
+                                contentAlignment = Alignment.Center) {
+                                Text(s.title.take(1), color = musicColors().textPrimary.copy(alpha = 0.7f),
+                                    fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(s.title, color = musicColors().textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Spacer(Modifier.height(2.dp))
+                                Text(s.artist, color = musicColors().textSecondary,
+                                    style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            Text("›", color = musicColors().textPrimary.copy(alpha = 0.4f),
+                                style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(start = 4.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+KOTLIN_EOF
+
+echo "  ✓ LxHistoryActivity.kt 已全量覆盖 (// [32v76])"
+# 加版本标记
+sed -i '1i // [32v76]' "$TARGET"
+
+echo "=== 32 v76 完成 ==="
+
