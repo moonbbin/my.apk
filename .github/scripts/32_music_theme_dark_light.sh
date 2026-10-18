@@ -3622,3 +3622,43 @@ else:
 print("=== 32 v66 完成 ===")
 PYEOF
 
+# 32 v67: 去掉 shadow
+
+echo "=== 32 v67: 去 shadow ==="
+
+python3 << 'PYEOF'
+import sys, glob
+
+MARK = "// [32v67]"
+found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
+if not found:
+    print("未找到 PlaylistScreen")
+    sys.exit(1)
+
+fp = found[0]
+with open(fp, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# 去掉 v66 加的 shadow
+if ".shadow(2.dp," in s:
+    s = s.replace(".shadow(2.dp, MaterialTheme.shapes.extraLarge)\n                            ", "")
+    print("  ✓ 已去掉 shadow")
+else:
+    print("  - 未找到 shadow")
+
+# 去掉 import（如果 v66 加了）
+if "import androidx.compose.foundation.shadow" in s:
+    s = s.replace("\nimport androidx.compose.foundation.shadow", "")
+    print("  ✓ 已去掉 import")
+
+s = MARK + "\n" + s
+with open(fp, "w", encoding="utf-8") as f:
+    f.write(s)
+
+print("=== 32 v67 完成 ===")
+PYEOF
+
