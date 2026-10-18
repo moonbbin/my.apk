@@ -69,4 +69,5 @@ fi
 2. 颜色走 musicColors()，禁写死黑白（Scrim 标签除外）。
 3. 弹窗传 containerColor，图片标签用 LxScrimTag。
 4. 修改庞大 Kotlin 文件严禁用 sed 盲改，必须基于真实源码全量覆盖。
-5. Card 背景色必须用 colors = CardDefaults.cardColors(...)。"
+5. Card 背景色必须用 colors = CardDefaults.cardColors(...)。
+6. 用 sed/python 做字符串替换后，必须立即用 grep 或 assert 断言目标字符串存在；不存在则打印 ❌ 替换失败：未找到锚点 xxx 并 exit 1，绝对禁止静默通过！"
