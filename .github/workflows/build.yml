@@ -77,7 +77,9 @@ jobs:
       - name: 深色/浅色主题切换
         run: bash .github/scripts/32_music_theme_dark_light.sh
       - name: 33_search_page_polish
-        run: bash .github/scripts/33_search_page_polish.sh
+        run: bash .github/scripts/33_search_page_polish.sh    
+      - name: 34_player_immersive
+        run: bash .github/scripts/34_player_immersive.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
