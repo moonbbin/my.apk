@@ -2389,3 +2389,82 @@ PYEOF
 
 echo "=== 32 v48 完成 ==="
 
+# 32 v49: 精准修三页面文字颜色
+
+echo "=== 32 v49: 精准修文字 ==="
+
+python3 << 'PYEOF'
+import os, re, sys
+
+MARK = "// [32v49]"
+IMPORT = "import com.github.tvbox.osc.ui.activity.musicColors"
+
+def add_import(src):
+    if IMPORT in src:
+        return src
+    m = list(re.finditer(r'^import .+$', src, re.MULTILINE))
+    if m:
+        pos = m[-1].end()
+        return src[:pos] + '\n' + IMPORT + src[pos:]
+    return src
+
+done = 0
+
+# 1. SearchScreen.kt: 热搜文字 White -> textPrimary
+# 找文件
+for root, dirs, files in os.walk("app/src/main/java/com/github/tvbox/osc/ui/music"):
+    for fn in files:
+        if fn == "SearchScreen.kt":
+            fp = os.path.join(root, fn)
+            with open(fp, encoding="utf-8") as f:
+                src = f.read()
+            if MARK in src:
+                continue
+            # 热搜榜的 Text: color = Color.White -> musicColors().textPrimary
+            # 只处理搜索列表相关的（保守：处理所有 Text 的 White）
+            new_src = re.sub(
+                r'(Text\([^)]*?color\s*=\s*)Color\.White',
+                r'\1musicColors().textPrimary',
+                src
+            )
+            if new_src != src:
+                new_src = add_import(new_src)
+                new_src = MARK + "\n" + new_src
+                with open(fp, "w", encoding="utf-8") as f:
+                    f.write(new_src)
+                print(f"✓ SearchScreen")
+                done += 1
+
+# 2. SettingsScreen.kt: 卡片背景深色 -> card
+for root, dirs, files in os.walk("app/src/main/java/com/github/tvbox/osc/ui/music"):
+    for fn in files:
+        if fn == "SettingsScreen.kt":
+            fp = os.path.join(root, fn)
+            with open(fp, encoding="utf-8") as f:
+                src = f.read()
+            if MARK in src:
+                continue
+            # Surface 的 color = 深色 -> musicColors().card
+            # 找 Surface(color = xxx)
+            new_src = src
+            # 卡片背景：Color(0xFF...) 深色 -> card
+            # 保守：只换明确的深色背景
+            new_src = re.sub(
+                r'color\s*=\s*Color\(0xFF1[0-9A-Fa-f]{6}\)',
+                'color = musicColors().card',
+                new_src
+            )
+            if new_src != src:
+                new_src = add_import(new_src)
+                new_src = MARK + "\n" + new_src
+                with open(fp, "w", encoding="utf-8") as f:
+                    f.write(new_src)
+                print(f"✓ SettingsScreen")
+                done += 1
+
+print(f"共处理 {done} 个文件")
+print("注意: PlaylistDetailScreen 在 MusicHomeActivity.kt，需单独处理")
+PYEOF
+
+echo "=== 32 v49 完成 ==="
+
