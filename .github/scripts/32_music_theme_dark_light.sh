@@ -2291,3 +2291,50 @@ PYEOF
 
 echo "=== 32 v46 完成 ==="
 
+# 32 v47: onCreate 里预设主题，setContent 前同步
+
+echo "=== 32 v47: onCreate 预设主题 ==="
+
+python3 << 'PYEOF'
+import re, sys
+
+MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+with open(MPATH, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v47]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# 在 setContent 之前插入主题预设
+# 找 setContent {
+m = re.search(r'(\n\s*)setContent\s*\{', src)
+if not m:
+    print("错误: 未找到 setContent")
+    sys.exit(1)
+
+indent = m.group(1)
+inject = indent + """// [32v47] onCreate 预设主题，保证 musicColors() 读到正确值
+        run {
+            val p47 = getSharedPreferences("theme_prefs", MODE_PRIVATE)
+            val mode47 = p47.getInt("theme_mode", 0)
+            val dark47 = when (mode47) {
+                1 -> true
+                2 -> false
+                else -> (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+            }
+            MusicThemeManager.setDarkTheme(dark47)
+        }
+"""
+
+src = src[:m.start()] + inject + src[m.start():]
+src = MARK + "\n" + src
+
+with open(MPATH, "w", encoding="utf-8") as f:
+    f.write(src)
+print("✓ 已在 setContent 前注入主题预设")
+PYEOF
+
+echo "=== 32 v47 完成 ==="
+
