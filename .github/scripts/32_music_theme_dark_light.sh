@@ -2684,3 +2684,39 @@ PYEOF
 
 echo "=== 32 v54 完成 ==="
 
+# 32 v55: 修正 MutableState 的用法
+
+echo "=== 32 v55: 修正委托 ==="
+
+python3 << 'PYEOF'
+import sys, re
+
+MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+with open(MPATH, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [32v55]"
+if MARK in src:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# v54 错误：val isDark54 by MusicThemeManager.isDarkTheme.collectAsState()
+# isDarkTheme 是 MutableState，直接 by 即可，不需要 collectAsState()
+old = "val isDark54 by MusicThemeManager.isDarkTheme.collectAsState()"
+new = "val isDark54 by MusicThemeManager.isDarkTheme"
+
+if old in src:
+    src = src.replace(old, new, 1)
+    print("✓ 已修正为直接委托")
+    # 移除 collectAsState 的 import（如果 v54 加了）
+    src = src.replace("import androidx.compose.runtime.collectAsState\n", "")
+    src = MARK + "\n" + src
+    with open(MPATH, "w", encoding="utf-8") as f:
+        f.write(src)
+else:
+    print("警告: 未找到 v54 代码")
+    sys.exit(1)
+PYEOF
+
+echo "=== 32 v55 完成 ==="
+
