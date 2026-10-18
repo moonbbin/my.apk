@@ -3907,3 +3907,91 @@ else:
 print("=== 32 v70 完成 ===")
 PYEOF
 
+# 32 v71: badge白字 + 主题页LxMusicTheme
+
+echo "=== 32 v71 ==="
+
+python3 << 'PYEOF'
+import re, sys, glob
+
+MARK = "// [32v71]"
+
+# 1. 播放量标签：强制白字（修 v56 的误伤）
+print("1. PlaylistScreen badge")
+found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
+if not found:
+    print("  ✗ 未找到")
+    sys.exit(1)
+fp = found[0]
+with open(fp, encoding="utf-8") as f:
+    s = f.read()
+if MARK not in s:
+    # Icon tint: PlayArrow 图标的 tint -> Color.White
+    # 锚点：imageVector = Icons.Filled.PlayArrow 后的 tint
+    # 用正则精准定位
+    # 找到 PlayArrow 块
+    m = re.search(r'imageVector = Icons\.Filled\.PlayArrow,\s*\n\s*contentDescription[^\n]*\n\s*tint = ([^\n,]+),', s)
+    if m:
+        old_tint = m.group(1).strip()
+        print(f"  Icon tint 当前: {old_tint}")
+        if old_tint != "Color.White":
+            s = s.replace(m.group(0), m.group(0).replace(f"tint = {old_tint},", "tint = Color.White,"), 1)
+            print("  ✓ Icon tint→White")
+    else:
+        print("  ✗ 未找到 PlayArrow tint")
+        sys.exit(1)
+    # Text color: formatPlayCount 的 Text -> Color.White
+    m2 = re.search(r'text = formatPlayCount\(playlist\.playCount\),\s*\n\s*style[^\n]*\n\s*color = ([^\n,]+),', s)
+    if m2:
+        old_color = m2.group(1).strip()
+        print(f"  Text color 当前: {old_color}")
+        if old_color != "Color.White":
+            s = s.replace(m2.group(0), m2.group(0).replace(f"color = {old_color},", "color = Color.White,"), 1)
+            print("  ✓ Text color→White")
+    else:
+        print("  ✗ 未找到 playCount Text")
+        sys.exit(1)
+    # 背景 0.65f（按规范例外条款）
+    if "color = Color.Black.copy(alpha = 0.8f)," in s:
+        s = s.replace("color = Color.Black.copy(alpha = 0.8f),", "color = Color.Black.copy(alpha = 0.65f),", 1)
+        print("  ✓ 背景→0.65f")
+    s = MARK + "\n" + s
+    with open(fp, "w", encoding="utf-8") as f:
+        f.write(s)
+else:
+    print("  ✓ 已处理")
+
+# 2. 主题页：MaterialTheme -> LxMusicTheme
+print("2. LxThemeSettingsActivity")
+tp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt"
+with open(tp, encoding="utf-8") as f:
+    s = f.read()
+if MARK not in s:
+    # setContent 内的 MaterialTheme -> LxMusicTheme(isDarkTheme = ...)
+    # 原始：setContent {\n            MaterialTheme {\n                ThemeSettingsScreen(...)
+    # 目标：setContent {\n            val isDark71 by MusicThemeManager.isDarkTheme\n            LxMusicTheme(isDarkTheme = isDark71) {\n                ThemeSettingsScreen(...)
+    old = "setContent {\n            MaterialTheme {\n                ThemeSettingsScreen(onBack = { finish() })\n            }\n        }"
+    new = "setContent {\n            val isDark71 by MusicThemeManager.isDarkTheme\n            LxMusicTheme(isDarkTheme = isDark71) {\n                ThemeSettingsScreen(onBack = { finish() })\n            }\n        }"
+    if old in s:
+        s = s.replace(old, new, 1)
+        print("  ✓ MaterialTheme→LxMusicTheme")
+    else:
+        # 可能 v70 已经改过，检查
+        if "LxMusicTheme" in s:
+            print("  ✓ 已有 LxMusicTheme")
+        else:
+            print("  ✗ 未找到 setContent 锚点")
+            sys.exit(1)
+    # 背景：Color(0xFF000000) -> musicColors().background
+    if ".background(Color(0xFF000000))" in s:
+        s = s.replace(".background(Color(0xFF000000))", ".background(musicColors().background)", 1)
+        print("  ✓ 背景→musicColors")
+    s = MARK + "\n" + s
+    with open(tp, "w", encoding="utf-8") as f:
+        f.write(s)
+else:
+    print("  ✓ 已处理")
+
+print("=== 32 v71 完成 ===")
+PYEOF
+
