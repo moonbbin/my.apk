@@ -4450,3 +4450,41 @@ for fname in ["LxPlaybackSettingsActivity.kt", "LxQualitySettingsActivity.kt",
 print("=== 32 v80 完成 ===")
 PYEOF
 
+# 32 v81: 删重复的 Card color
+
+echo "=== 32 v81 ==="
+
+python3 << 'PYEOF'
+import sys
+
+fp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlaybackSettingsActivity.kt"
+MARK = "// [32v81]"
+
+with open(fp, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("已处理")
+    sys.exit(0)
+
+# 删除 v72 加错的 "color = musicColors().card,"（保留正确的 colors=CardDefaults）
+# 错误行：Card(\n                color = musicColors().card,
+# 正确行：colors = CardDefaults.cardColors(containerColor = musicColors().card),
+if "color = musicColors().card," in s:
+    # 只删除单独的 color= 行，不碰 colors=
+    # 用正则确保前面不是 "colors"
+    import re
+    # 匹配 "color = musicColors().card," 但前面不是 "s" (避免匹配 "colors")
+    # 简单：替换 "Card(\n                color = musicColors().card," 为 "Card("
+    s = s.replace("Card(\n                color = musicColors().card,", "Card(", 1)
+    print("  ✓ 已删除多余的 color=")
+else:
+    print("  - 未找到多余的 color=")
+
+s = MARK + "\n" + s
+with open(fp, "w", encoding="utf-8") as f:
+    f.write(s)
+
+print("=== 32 v81 完成 ===")
+PYEOF
+
