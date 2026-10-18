@@ -4073,10 +4073,6 @@ with open(fp_h, encoding="utf-8") as f:
     _s = f.read()
 if MARK not in _s:
     import re as _re
-    # DEBUG: 打印 setContent 周边
-    for _i, _l in enumerate(_s.splitlines(), 1):
-        if 'setContent' in _l:
-            print(f"  DEBUG 行{_i}: {_l[:120]}")
     _m = _re.search(r'setContent\s*\{\s*MaterialTheme\s*\{\s*HistoryScreen\s*\{[^}]*\}\s*\}\s*\}', _s)
     if _m:
         _s = _s.replace(_m.group(0), "setContent { val isDark72 by MusicThemeManager.isDarkTheme; LxMusicTheme(isDarkTheme = isDark72) { HistoryScreen { finish() } } }", 1)
@@ -4199,5 +4195,63 @@ with open(fp, "w", encoding="utf-8") as f:
     f.write(s)
 
 print("=== 32 v73 完成 ===")
+PYEOF
+
+# 32 v75: HistoryActivity QingfengMusicTheme -> LxMusicTheme
+
+echo "=== 32 v75 ==="
+
+python3 << 'PYEOF'
+import re, sys
+
+MARK = "// [32v75]"
+fp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxHistoryActivity.kt"
+
+with open(fp, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("已处理，跳过")
+    sys.exit(0)
+
+# QingfengMusicTheme -> LxMusicTheme
+m = re.search(r'setContent\s*\{\s*QingfengMusicTheme\s*\{\s*HistoryScreen\s*\{[^}]*\}\s*\}\s*\}', s)
+if m:
+    old = m.group(0)
+    new = "setContent { val isDark75 by MusicThemeManager.isDarkTheme; LxMusicTheme(isDarkTheme = isDark75) { HistoryScreen { finish() } } }"
+    s = s.replace(old, new, 1)
+    print("  ✓ QingfengMusicTheme→LxMusicTheme")
+else:
+    print("  ✗ 未找到 QingfengMusicTheme")
+    sys.exit(1)
+
+# 根背景
+if "background(Color(0xFF000000))" in s:
+    s = s.replace("background(Color(0xFF000000))", "background(musicColors().background)", 1)
+    print("  ✓ 根背景")
+
+# 状态栏
+if "isAppearanceLightStatusBars" not in s:
+    m2 = re.search(r'setContent\s*\{', s)
+    if m2:
+        pos = m2.end()
+        inject = "\n    val win75 = window\n    val isDark75b by MusicThemeManager.isDarkTheme\n    androidx.compose.runtime.SideEffect {\n        androidx.core.view.WindowCompat.getInsetsController(win75, win75.decorView).isAppearanceLightStatusBars = !isDark75b\n    }"
+        s = s[:pos] + inject + s[pos:]
+        print("  ✓ 状态栏")
+
+# 空状态文字
+if 'color = musicColors().textPrimary.copy(alpha = 0.5f)' in s:
+    s = s.replace('color = musicColors().textPrimary.copy(alpha = 0.5f)', 'color = musicColors().textSecondary', 1)
+    print("  ✓ 空状态文字")
+
+# 去掉 debug 版的 MARK（如果有）
+s = s.replace("// [32v72]\n", "")
+s = s.replace("// [32v73]\n", "")
+
+s = MARK + "\n" + s
+with open(fp, "w", encoding="utf-8") as f:
+    f.write(s)
+
+print("=== 32 v75 完成 ===")
 PYEOF
 
