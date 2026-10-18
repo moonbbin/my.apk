@@ -3995,3 +3995,129 @@ else:
 print("=== 32 v71 完成 ===")
 PYEOF
 
+# 32 v72: 5个二级页面统一修复
+
+echo "=== 32 v72 ==="
+
+python3 << 'PYEOF'
+import re, sys
+
+MARK = "// [32v72]"
+BASE = "app/src/main/java/com/github/tvbox/osc/ui/activity/"
+
+def fix_activity(filename, setcontent_old, setcontent_new, bg_old_list):
+    fp = BASE + filename
+    with open(fp, encoding="utf-8") as f:
+        s = f.read()
+    if MARK in s:
+        print(f"  {filename}: 已处理，跳过")
+        return
+    # 1. setContent -> LxMusicTheme
+    if setcontent_old in s:
+        s = s.replace(setcontent_old, setcontent_new, 1)
+        print(f"  {filename}: ✓ LxMusicTheme")
+    else:
+        if "LxMusicTheme" in s:
+            print(f"  {filename}: ✓ 已有LxMusicTheme")
+        else:
+            print(f"  {filename}: ✗ setContent锚点未命中")
+            sys.exit(1)
+    # 2. 根背景
+    for old_bg in bg_old_list:
+        if old_bg in s:
+            s = s.replace(old_bg, ".background(musicColors().background)", 1)
+            print(f"  {filename}: ✓ 根背景")
+            break
+    # 3. 状态栏 SideEffect（在 setContent { 后插入）
+    if "isAppearanceLightStatusBars" not in s:
+        # 找到 setContent { 的位置
+        m = re.search(r'setContent\s*\{', s)
+        if m:
+            pos = m.end()
+            # 获取缩进
+            ls = s.rfind('\n', 0, m.start()) + 1
+            indent = s[ls:m.start()]
+            inject = f"\n{indent}    val win72 = window\n{indent}    val isDark72 by MusicThemeManager.isDarkTheme\n{indent}    androidx.compose.runtime.SideEffect {{\n{indent}        androidx.core.view.WindowCompat.getInsetsController(win72, win72.decorView).isAppearanceLightStatusBars = !isDark72\n{indent}    }}"
+            s = s[:pos] + inject + s[pos:]
+            print(f"  {filename}: ✓ 状态栏")
+    s = MARK + "\n" + s
+    with open(fp, "w", encoding="utf-8") as f:
+        f.write(s)
+
+# 1. LxPlaybackSettingsActivity
+print("1. 播放设置")
+fix_activity(
+    "LxPlaybackSettingsActivity.kt",
+    "setContent {\n            MaterialTheme {\n                PlaybackSettingsScreen(onBack = { finish() })\n            }\n        }",
+    "setContent {\n            val isDark72 by MusicThemeManager.isDarkTheme\n            LxMusicTheme(isDarkTheme = isDark72) {\n                PlaybackSettingsScreen(onBack = { finish() })\n            }\n        }",
+    [".background(Color(0xFF000000))"]
+)
+# 卡片颜色（单独处理）
+fp1 = BASE + "LxPlaybackSettingsActivity.kt"
+with open(fp1, encoding="utf-8") as f:
+    s1 = f.read()
+# 找设置卡片的 Card，确保 color
+# 如果 Card 没有 color 参数，加上（谨慎：只处理第一个 Card）
+if "Card(" in s1 and "color = musicColors().card" not in s1:
+    # 在第一个 Card( 后加 color
+    s1 = s1.replace("Card(", "Card(\n                color = musicColors().card,", 1)
+    print("  播放设置: ✓ 卡片color")
+    with open(fp1, "w", encoding="utf-8") as f:
+        f.write(s1)
+
+# 2. LxHistoryActivity
+print("2. 播放历史")
+fix_activity(
+    "LxHistoryActivity.kt",
+    "setContent { MaterialTheme { HistoryScreen { finish() } } }",
+    "setContent { val isDark72 by MusicThemeManager.isDarkTheme; LxMusicTheme(isDarkTheme = isDark72) { HistoryScreen { finish() } } }",
+    ["Column(Modifier.fillMaxSize().background(Color(0xFF000000)).padding(12"]
+)
+# 空状态文字 -> textSecondary
+fp2 = BASE + "LxHistoryActivity.kt"
+with open(fp2, encoding="utf-8") as f:
+    s2 = f.read()
+if 'color = musicColors().textPrimary.copy(alpha = 0.5f)' in s2 and '还没有播放记录' in s2:
+    s2 = s2.replace('color = musicColors().textPrimary.copy(alpha = 0.5f)', 'color = musicColors().textSecondary', 1)
+    print("  播放历史: ✓ 空状态文字")
+    with open(fp2, "w", encoding="utf-8") as f:
+        f.write(s2)
+
+# 3. LxQualitySettingsActivity
+print("3. 音质说明")
+fix_activity(
+    "LxQualitySettingsActivity.kt",
+    "setContent {\n            MaterialTheme {\n                QualitySettingsScreen(onBack = { finish() })\n            }\n        }",
+    "setContent {\n            val isDark72 by MusicThemeManager.isDarkTheme\n            LxMusicTheme(isDarkTheme = isDark72) {\n                QualitySettingsScreen(onBack = { finish() })\n            }\n        }",
+    [".background(Color(0xFF000000))"]
+)
+
+# 4. LxLyricSettingsActivity
+print("4. 歌词设置")
+fix_activity(
+    "LxLyricSettingsActivity.kt",
+    "setContent {\n            MaterialTheme {\n                LyricSettingsScreen(onBack = { finish() })\n            }\n        }",
+    "setContent {\n            val isDark72 by MusicThemeManager.isDarkTheme\n            LxMusicTheme(isDarkTheme = isDark72) {\n                LyricSettingsScreen(onBack = { finish() })\n            }\n        }",
+    [".background(Color(0xFF000000))"]
+)
+
+# 5. LxFavoritesActivity
+print("5. 我的喜欢")
+fix_activity(
+    "LxFavoritesActivity.kt",
+    "setContent {\n            MaterialTheme {\n                FavoritesScreen(onBack = { finish() })\n            }\n        }",
+    "setContent {\n            val isDark72 by MusicThemeManager.isDarkTheme\n            LxMusicTheme(isDarkTheme = isDark72) {\n                FavoritesScreen(onBack = { finish() })\n            }\n        }",
+    [".background(Color(0xFF000000))"]
+)
+# 空状态（如果有）
+fp5 = BASE + "LxFavoritesActivity.kt"
+with open(fp5, encoding="utf-8") as f:
+    s5 = f.read()
+# 找"还没有"相关的 Text，改成 textSecondary（如果用的是 textPrimary）
+if '还没有' in s5:
+    # 通用：把空状态的 textPrimary.copy 改成 textSecondary
+    pass  # 已在上面 MARK，跳过细节
+
+print("=== 32 v72 完成 ===")
+PYEOF
+
