@@ -4073,6 +4073,10 @@ with open(fp_h, encoding="utf-8") as f:
     _s = f.read()
 if MARK not in _s:
     import re as _re
+    # DEBUG: 打印 setContent 周边
+    for _i, _l in enumerate(_s.splitlines(), 1):
+        if 'setContent' in _l:
+            print(f"  DEBUG 行{_i}: {_l[:120]}")
     _m = _re.search(r'setContent\s*\{\s*MaterialTheme\s*\{\s*HistoryScreen\s*\{[^}]*\}\s*\}\s*\}', _s)
     if _m:
         _s = _s.replace(_m.group(0), "setContent { val isDark72 by MusicThemeManager.isDarkTheme; LxMusicTheme(isDarkTheme = isDark72) { HistoryScreen { finish() } } }", 1)
