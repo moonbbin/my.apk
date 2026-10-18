@@ -53,6 +53,10 @@ fi
 if grep -rn "Card(.*color\s*=" app/src/main/java/com/github/tvbox/osc/ui/music/; then
 echo "❌ 发现违规使用 Card(color=...)，请用 colors = CardDefaults.cardColors(...)"; exit 1
 fi
+# 检查是否有人写死了黑背景（深色模式也走 token，写死黑必死）
+if grep -rn "background(Color.Black)" app/src/main/java/com/github/tvbox/osc/ui/music/ | grep -v "Scrim" | grep -v "Overlay"; then
+echo "❌ 发现写死黑背景，违反规范！"; exit 1
+fi
 ```
 
 ---
