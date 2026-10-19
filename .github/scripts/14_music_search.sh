@@ -37,3 +37,103 @@ if old in c and "LxMusicSearchActivity" not in c:
 PYEOF2
 fi
 echo "=== 搜索页 Spotify 风格完成 ==="
+
+# === 14 v2: 专辑详情页主题接入 ===
+echo "=== 14 v2 ==="
+
+python3 << 'PYEOF2'
+import re, sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxArtistDetailActivity.kt"
+MARK = "// [14v2]"
+
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+if MARK in src:
+    print("14 v2: 已应用，跳过")
+    sys.exit(0)
+
+# --- 1. setContent 接 LxMusicTheme（正则兼容空格） ---
+# 锚点：setContent { MaterialTheme {
+pat_setcontent = r'setContent\s*\{\s*MaterialTheme\s*\{'
+m = re.search(pat_setcontent, src)
+if not m:
+    print("❌ 替换失败：未找到锚点 setContent+MaterialTheme")
+    sys.exit(1)
+
+old_sc = m.group(0)
+new_sc = """setContent {
+            val isDark by MusicThemeManager.isDarkTheme  // [14v2] by 代理，非 collectAsState
+            LxMusicTheme(isDarkTheme = isDark) {"""
+src = src.replace(old_sc, new_sc, 1)
+print("✓ setContent 已接 LxMusicTheme")
+
+# --- 2. 加 SideEffect 状态栏（在 LxMusicTheme 内首行） ---
+# 找到 LxMusicTheme(isDarkTheme = isDark) { 的位置，在其后插入 SideEffect
+pat_theme = r'(LxMusicTheme\(isDarkTheme = isDark\) \{)'
+m2 = re.search(pat_theme, src)
+if not m2:
+    print("❌ 替换失败：未找到锚点 LxMusicTheme")
+    sys.exit(1)
+
+sideeffect_code = m2.group(1) + """
+                SideEffect {  // [14v2] 状态栏反转
+                    try {
+                        val win = (this@LxArtistDetailActivity).window
+                        androidx.core.view.WindowCompat.getInsetsController(win, win.decorView)
+                            .isAppearanceLightStatusBars = !isDark
+                    } catch (_: Exception) {}
+                }"""
+src = src.replace(m2.group(1), sideeffect_code, 1)
+print("✓ SideEffect 状态栏已加")
+assert "isAppearanceLightStatusBars" in src, "❌ 断言失败：SideEffect 未加入"
+
+# --- 3. 专辑页背景：Color(0xFF121212) -> musicColors().background ---
+# 只替换专辑页的 Box 背景（第 592 行附近，selectedAlbum != null 内）
+# 锚点：.background(Color(0xFF121212)) 且在 selectedAlbum 上下文
+# 为精准，限定替换第一个（专辑页的）
+old_bg = ".background(Color(0xFF121212))"
+new_bg = ".background(musicColors().background) // [14v2]"
+if old_bg not in src:
+    print("❌ 替换失败：未找到锚点 专辑页黑底")
+    sys.exit(1)
+# 只替换专辑页的（第一个），避免误伤其他页面的 0xFF121212
+src = src.replace(old_bg, new_bg, 1)
+print("✓ 专辑页背景已改")
+assert new_bg in src, "❌ 断言失败：背景替换未生效"
+
+# --- 4. 歌手名/副标题：DetailGray -> textSecondary（仅 Text 的 color 属性） ---
+# 警告：DetailGray 是顶层 val，不能全局替换！只替换 color = DetailGray
+# 4a. 专辑歌手名：Text(album.artist, color = DetailGray,
+old_artist = "Text(album.artist, color = DetailGray,"
+new_artist = "Text(album.artist, color = musicColors().textSecondary, // [14v2]"
+if old_artist in src:
+    src = src.replace(old_artist, new_artist, 1)
+    print("✓ 专辑歌手名已改")
+else:
+    print("⚠ 未找到专辑歌手名锚点，跳过")
+
+# 4b. 歌曲列表副标题：color = DetailGray,（在 songArtist 上下文）
+# 为避免误伤顶层定义，只替换 "color = DetailGray," 且前后有 Text( 的
+# 保守策略：替换所有 "color = DetailGray," 为 "color = musicColors().textSecondary, // [14v2]"
+# 但必须确保不在顶层 val 定义处（顶层是 "private val DetailGray ="，不含 "color ="）
+count = src.count("color = DetailGray,")
+if count > 0:
+    src = src.replace("color = DetailGray,", "color = musicColors().textSecondary, // [14v2]")
+    print(f"✓ {count} 处 DetailGray 已改 textSecondary")
+else:
+    print("⚠ 未找到 color = DetailGray")
+
+# 确保顶层定义未被动（安全检查）
+assert "private val DetailGray" in src, "❌ 断言失败：DetailGray 定义被误删"
+
+# --- 5. 最终 assert ---
+assert MARK in src, "❌ 断言失败：14v2 标记未找到"
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("✓ 14 v2 完成")
+PYEOF2
+
+echo "=== 14 v2 完成 ==="
