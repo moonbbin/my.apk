@@ -262,3 +262,167 @@ PYEOF
 
 echo "✓ LxPlayerActivity.kt 34v12 补丁已应用"
 echo "=== 34 v12 完成 ==="
+
+# === 34 v15: Emoji 根除 + 时长文字 + 红心重置 + 亮度直判 ===
+echo "=== 34 v15 ==="
+
+python3 << 'PYEOF15'
+import re, sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v15]"
+
+with open(path, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("34 v15: 已应用，跳过")
+    sys.exit(0)
+
+def need(old, name):
+    if old not in s:
+        print(f"❌ 替换失败：未找到锚点 {name}")
+        sys.exit(1)
+
+# --- 0. 加 Icons import（全量，最稳） ---
+if "import androidx.compose.material.icons.filled" not in s:
+    need("import androidx.compose.material3.*", "material3 import")
+    s = s.replace(
+        "import androidx.compose.material3.*",
+        "import androidx.compose.material3.*\nimport androidx.compose.material.icons.Icons\nimport androidx.compose.material.icons.filled.* // [34v15]",
+        1
+    )
+    print("✓ Icons 全量 import 已加")
+else:
+    print("✓ Icons import 已存在")
+
+# --- 1. 播放/暂停 Emoji → Icon ---
+old_play = '''                        Text(
+                            text = if (isPlaying) "⏸" else "▶",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = musicColors().card
+                        )'''
+new_play = '''                        Icon(
+                            imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.Play,
+                            contentDescription = null,
+                            tint = Color.White, // [34v15] Emoji 根除
+                            modifier = Modifier.size(28.dp)
+                        )'''
+need(old_play, "播放键 Text")
+s = s.replace(old_play, new_play, 1)
+print("✓ 播放键 Emoji→Icon")
+
+# --- 2. 上一首/下一首 Emoji → Icon ---
+old_prev = 'Text("⏮", style = MaterialTheme.typography.titleLarge, color = musicColors().textPrimary.copy(alpha = 0.9f))'
+new_prev = 'Icon(Icons.Filled.SkipPrevious, contentDescription = null, tint = secondaryTextColor, modifier = Modifier.size(28.dp)) // [34v15]'
+if old_prev in s:
+    s = s.replace(old_prev, new_prev, 1)
+    print("✓ 上一首 Emoji→Icon")
+else:
+    print("⚠ 未找到上一首锚点")
+
+old_next = 'Text("⏭", style = MaterialTheme.typography.titleLarge, color = musicColors().textPrimary.copy(alpha = 0.9f))'
+new_next = 'Icon(Icons.Filled.SkipNext, contentDescription = null, tint = secondaryTextColor, modifier = Modifier.size(28.dp)) // [34v15]'
+if old_next in s:
+    s = s.replace(old_next, new_next, 1)
+    print("✓ 下一首 Emoji→Icon")
+else:
+    print("⚠ 未找到下一首锚点")
+
+# --- 3. 循环键 Emoji → Icon ---
+old_loop = '''                    val modeIcon = when (playMode) {
+                        LxPlayerManager.MODE_SHUFFLE -> "🔀"
+                        LxPlayerManager.MODE_LOOP_ONE -> "🔂"
+                        else -> "🔁"
+                    }
+                    val modeColor = if (playMode == LxPlayerManager.MODE_SEQUENCE) PlayerGray.copy(alpha = 0.6f) else musicColors().accent
+                    Text(modeIcon, style = MaterialTheme.typography.titleMedium, color = modeColor)'''
+new_loop = '''                    val modeIconVector = when (playMode) {
+                        LxPlayerManager.MODE_SHUFFLE -> Icons.Filled.Shuffle
+                        LxPlayerManager.MODE_LOOP_ONE -> Icons.Filled.RepeatOne
+                        else -> Icons.Filled.Repeat
+                    } // [34v15] Emoji 根除
+                    val modeColor = if (playMode == LxPlayerManager.MODE_SEQUENCE) secondaryTextColor.copy(alpha = 0.6f) else musicColors().accent
+                    Icon(modeIconVector, contentDescription = null, tint = modeColor, modifier = Modifier.size(24.dp))'''
+need(old_loop, "循环键")
+s = s.replace(old_loop, new_loop, 1)
+print("✓ 循环键 Emoji→Icon")
+
+# --- 4. 时长文字 PlayerGray → textSecondary ---
+old_time1 = '''                        text = formatTime(if (isSeeking) seekPos.toLong() else position),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = PlayerGray'''
+new_time1 = '''                        text = formatTime(if (isSeeking) seekPos.toLong() else position),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = musicColors().textSecondary // [34v15]'''
+if old_time1 in s:
+    s = s.replace(old_time1, new_time1, 1)
+    print("✓ 当前时长文字已改")
+else:
+    print("⚠ 未找到当前时长锚点")
+
+old_time2 = '''                        text = formatTime(duration),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = PlayerGray'''
+new_time2 = '''                        text = formatTime(duration),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = musicColors().textSecondary // [34v15]'''
+if old_time2 in s:
+    s = s.replace(old_time2, new_time2, 1)
+    print("✓ 总时长文字已改")
+else:
+    print("⚠ 未找到总时长锚点")
+
+# --- 5. 红心 LaunchedEffect 强制重置 ---
+old_fav = 'var isLiked by remember(favSongKey) { mutableStateOf(isFavorite(favSongKey)) }'
+new_fav = '''var isLiked by remember(favSongKey) { mutableStateOf(isFavorite(favSongKey)) }
+    // [34v15] 切歌强制重读收藏状态
+    LaunchedEffect(favSongKey) { isLiked = isFavorite(favSongKey) }'''
+need(old_fav, "红心 isLiked")
+s = s.replace(old_fav, new_fav, 1)
+print("✓ 红心重置已加")
+
+# --- 6. 亮度直判（删 v12 复杂计算，改用 animatedTint） ---
+# v12 的块：vibrantBg/finalBg/bgLuminance/isDarkBg
+# 用正则删掉整个块，替换为简单版
+m = re.search(
+    r'    // \[34v12\] 背景提鲜：HSV 拉高饱和度/亮度\n'
+    r'    val vibrantBg = remember\(animatedTint\) \{.*?\n    \}\n'
+    r'    // \[34v12\] 遮罩后近似色.*?\n'
+    r'    val finalBg = remember\(vibrantBg\) \{.*?\n    \}\n'
+    r'    // \[34v12\] 用最终渲染色算亮度.*?\n'
+    r'    val bgLuminance = remember\(finalBg\) \{.*?\n    \}\n'
+    r'    val isDarkBg = bgLuminance < 0\.5\n'
+    r'    val secondaryTextColor = if \(isDarkBg\) \{.*?\n    \} else \{.*?\n    \}',
+    s, re.DOTALL
+)
+if m:
+    new_lumi = '''    // [34v15] 用封面原色直接判亮度（不绑定 App 主题）
+    val isLightBg = remember(animatedTint) {
+        androidx.core.graphics.ColorUtils.calculateLuminance(animatedTint.toArgb()) > 0.5f
+    }
+    val primaryTextColor = if (isLightBg) Color(0xFF1C1C1E) else Color.White // [34v15]
+    val secondaryTextColor = if (isLightBg) musicColors().textSecondary else Color.White.copy(alpha = 0.7f) // [34v15]'''
+    s = s.replace(m.group(0), new_lumi, 1)
+    print("✓ 亮度改用 animatedTint 直判")
+else:
+    print("⚠ 未找到 v12 luminance 块（可能已被删），跳过")
+
+# --- 7. 根背景改用 animatedTint（删 vibrantBg 引用） ---
+# v12 的根背景用了 vibrantBg，现在改回 animatedTint
+if ".background(vibrantBg)" in s:
+    s = s.replace(".background(vibrantBg)", ".background(animatedTint) // [34v15]", 1)
+    print("✓ 根背景改用 animatedTint")
+
+assert MARK in s, "❌ 断言失败"
+# 确保无 Emoji 残留（播放/循环/上下首）
+for e in ["⏸", "▶", "🔀", "🔂", "🔁", "⏮", "⏭"]:
+    if f'"{e}"' in s:
+        print(f"⚠ 还有 Emoji 残留: {e}")
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(s)
+print("✓ 34 v15 完成")
+PYEOF15
+
+echo "=== 34 v15 完成 ==="
