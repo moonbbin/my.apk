@@ -1612,3 +1612,60 @@ print("✓ 34 v34 完成")
 PYEOF34
 
 echo "=== 34 v34 完成 ==="
+
+# === 34 v35: 修复 v33 腐蚀残留 ===
+echo "=== 34 v35 ==="
+
+python3 << 'PYEOF35'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v35]"
+
+with open(path, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("34 v35: 已应用，跳过")
+    sys.exit(0)
+
+# v33 把 Icons.Filled.RepeatOne 腐蚀成 playerRepeatVector()One，v34 没修
+# v35 直接修复腐蚀版本
+fixes = [
+    ("playerRepeatVector()One", "playerRepeatOneVector()"),  # [34v35] v33 腐蚀残留
+]
+for old, new in fixes:
+    n = s.count(old)
+    if n > 0:
+        s = s.replace(old, new)
+        print(f"✓ {old} → {new} ({n})")
+    else:
+        print(f"- 未找到: {old}")
+
+# 兜底：如果还有漏网的 Icons.Filled.*（按长度降序）
+replacements = [
+    ("Icons.AutoMirrored.Filled.SkipPrevious", "playerSkipPrevVector()"),
+    ("Icons.AutoMirrored.Filled.SkipNext", "playerSkipNextVector()"),
+    ("Icons.AutoMirrored.Filled.Shuffle", "playerShuffleVector()"),
+    ("Icons.Filled.SkipPrevious", "playerSkipPrevVector()"),
+    ("Icons.Filled.SkipNext", "playerSkipNextVector()"),
+    ("Icons.Filled.Shuffle", "playerShuffleVector()"),
+    ("Icons.Filled.RepeatOne", "playerRepeatOneVector()"),
+    ("Icons.Filled.Repeat", "playerRepeatVector()"),
+    ("Icons.Filled.Pause", "playerPauseVector()"),
+    ("Icons.Filled.Play", "playerPlayVector()"),
+]
+replacements.sort(key=lambda x: len(x[0]), reverse=True)
+for old, new in replacements:
+    n = s.count(old)
+    if n > 0:
+        s = s.replace(old, new)
+        print(f"✓ 兜底: {old} → {new} ({n})")
+
+s += "\n" + MARK + "\n"
+with open(path, "w", encoding="utf-8") as f:
+    f.write(s)
+print("✓ 34 v35 完成")
+PYEOF35
+
+echo "=== 34 v35 完成 ==="
