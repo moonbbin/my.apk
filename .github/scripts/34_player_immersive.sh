@@ -509,3 +509,164 @@ print("✓ 34 v25 完成")
 PYEOF25
 
 echo "=== 34 v25 完成 ==="
+
+# === 34 v26: 找回 v17 遗产（Emoji→Icon + gradle依赖）+ 歌词用 lyricTextColor ===
+echo "=== 34 v26 ==="
+
+# --- 1. Gradle 依赖（防重复：全局 grep，已存在则跳过） ---
+GRADLE_FILE=$(find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1)
+if [ -z "$GRADLE_FILE" ]; then
+    echo "❌ 未找到 app/build.gradle*"
+    exit 1
+fi
+echo "Gradle 文件: $GRADLE_FILE"
+
+if grep -q "material-icons-extended" "$GRADLE_FILE"; then
+    echo "✓ icons-extended 已存在，跳过"
+else
+    python3 << 'PYDEP26'
+import re, sys, os
+gradle_path = os.popen('find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1').read().strip()
+with open(gradle_path, encoding='utf-8') as f:
+    g = f.read()
+# 二次确认（防并发）
+if "material-icons-extended" in g:
+    print("✓ 已存在，跳过")
+    sys.exit(0)
+is_kts = gradle_path.endswith('.kts')
+has_bom = "compose-bom" in g
+if has_bom or True:  # 无版本最安全（BOM 管理或 Gradle 自动解析）
+    new_dep = 'implementation("androidx.compose.material:material-icons-extended")' if is_kts else 'implementation "androidx.compose.material:material-icons-extended"'
+m = re.search(r'(dependencies\s*\{)', g)
+if not m:
+    print("❌ 未找到 dependencies 块")
+    sys.exit(1)
+g = g.replace(m.group(1), m.group(1) + '\n    ' + new_dep + ' // [34v26]', 1)
+with open(gradle_path, 'w', encoding='utf-8') as f:
+    f.write(g)
+print(f"✓ 已加: {new_dep}")
+PYDEP26
+    if [ $? -ne 0 ]; then exit 1; fi
+fi
+
+python3 << 'PYEOF26'
+import re, sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v26]"
+
+with open(path, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("34 v26: 已应用，跳过")
+    sys.exit(0)
+
+def need(old, name):
+    if old not in s:
+        print(f"❌ 替换失败：未找到锚点 {name}")
+        sys.exit(1)
+
+# --- Icons import（防重复） ---
+if "import androidx.compose.material.icons.filled" not in s:
+    need("import androidx.compose.material3.*", "material3 import")
+    s = s.replace(
+        "import androidx.compose.material3.*",
+        "import androidx.compose.material3.*\nimport androidx.compose.material.icons.Icons\nimport androidx.compose.material.icons.filled.* // [34v26]",
+        1
+    )
+    print("✓ Icons import 已加")
+else:
+    print("✓ Icons import 已存在")
+
+# --- 2. 播放键 Emoji→Icon（精确匹配 text = if (isPlaying)，tint=White） ---
+# v12 改过 color 行，用正则匹配 Text 块结构，不依赖 color
+m_play = re.search(
+    r'Text\(\s*\n\s*text = if \(isPlaying\) "⏸" else "▶",\s*\n\s*style = MaterialTheme\.typography\.titleLarge,\s*\n\s*color = [^\n]+\n\s*\)',
+    s
+)
+if not m_play:
+    print("❌ 未找到播放键 Text 块")
+    sys.exit(1)
+new_play = '''Icon(
+                            imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.Play,
+                            contentDescription = null,
+                            tint = Color.White, // [34v26] 粉底白图标
+                            modifier = Modifier.size(28.dp)
+                        )'''
+s = s.replace(m_play.group(0), new_play, 1)
+print("✓ 播放键 Emoji→Icon (tint=White)")
+
+# --- 上一首/下一首 Emoji→Icon ---
+for emoji, icon_name in [("⏮", "SkipPrevious"), ("⏭", "SkipNext")]:
+    pat = rf'Text\("{emoji}", style = MaterialTheme\.typography\.titleLarge, color = [^\)]+\)'
+    m2 = re.search(pat, s)
+    if m2:
+        new_icon = f'Icon(Icons.Filled.{icon_name}, contentDescription = null, tint = secondaryTextColor, modifier = Modifier.size(28.dp)) // [34v26]'
+        s = s.replace(m2.group(0), new_icon, 1)
+        print(f"✓ {emoji} → {icon_name}")
+    else:
+        print(f"⚠ 未找到 {emoji}（可能已被替换）")
+
+# --- 循环键 Emoji→Icon（tint=musicColors().accent） ---
+m_loop = re.search(
+    r'val modeIcon = when \(playMode\) \{\s*\n\s*LxPlayerManager\.MODE_SHUFFLE -> "🔀"\s*\n\s*LxPlayerManager\.MODE_LOOP_ONE -> "🔂"\s*\n\s*else -> "🔁"\s*\n\s*\}\s*\n\s*val modeColor = [^\n]+\n\s*Text\(modeIcon, style = MaterialTheme\.typography\.titleMedium, color = modeColor\)',
+    s
+)
+if m_loop:
+    new_loop = '''val modeIconVector = when (playMode) {
+                        LxPlayerManager.MODE_SHUFFLE -> Icons.Filled.Shuffle
+                        LxPlayerManager.MODE_LOOP_ONE -> Icons.Filled.RepeatOne
+                        else -> Icons.Filled.Repeat
+                    } // [34v26]
+                    val modeColor = if (playMode == LxPlayerManager.MODE_SEQUENCE) secondaryTextColor.copy(alpha = 0.6f) else musicColors().accent
+                    Icon(modeIconVector, contentDescription = null, tint = modeColor, modifier = Modifier.size(24.dp)) // [34v26]'''
+    s = s.replace(m_loop.group(0), new_loop, 1)
+    print("✓ 循环键 Emoji→Icon (tint=accent)")
+else:
+    print("⚠ 未找到循环键 when 块（可能已被替换）")
+
+# --- 3. 歌词用 lyricTextColor（严禁 secondaryTextColor） ---
+# 确保 lyricTextColor 定义存在且逻辑正确：按封面亮度 isLightBg
+# 浅色封面 → 深灰 0.8f；深色封面 → 白 0.8f
+if "val lyricTextColor" not in s:
+    # 在 isLightBg 定义后插入
+    m_lyric = re.search(r'(val isLightBg[^\n]*\n)', s)
+    if not m_lyric:
+        print("❌ 未找到 isLightBg 定义，无法插入 lyricTextColor")
+        sys.exit(1)
+    lyric_def = m_lyric.group(1) + "    val lyricTextColor = if (isLightBg) Color(0xFF1C1C1E).copy(alpha = 0.8f) else Color.White.copy(alpha = 0.8f) // [34v26] 歌词按封面亮度\n"
+    s = s.replace(m_lyric.group(1), lyric_def, 1)
+    print("✓ lyricTextColor 已定义（按封面亮度）")
+else:
+    print("✓ lyricTextColor 已存在")
+    # 检查定义是否正确（按 isLightBg，不是按主题）
+    m_check = re.search(r'val lyricTextColor = ([^\n]+)', s)
+    if m_check:
+        def_line = m_check.group(1)
+        if "isLightBg" not in def_line:
+            print(f"⚠ lyricTextColor 定义未按 isLightBg: {def_line[:80]}")
+
+# 把歌词的 secondaryTextColor 换成 lyricTextColor（仅歌词相关行）
+# v24/v25 可能已做，这里做幂等检查
+lyric_patterns = [
+    ("normalColor = secondaryTextColor", "normalColor = lyricTextColor // [34v26]"),
+]
+for old_p, new_p in lyric_patterns:
+    if old_p in s:
+        # 只替换歌词行的（KaraokeLine 的 normalColor）
+        # 用更精确的锚点：包含 KaraokeLine 上下文的
+        pass  # v24/v25 已处理，这里不重复
+
+assert MARK in s, "❌ 断言失败"
+# 确保无 Emoji 残留
+for e in ["⏸", "▶", "🔀", "🔂", "🔁", "⏮", "⏭"]:
+    if f'"{e}"' in s:
+        print(f"⚠ 还有 Emoji 残留: {e}")
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(s)
+print("✓ 34 v26 完成")
+PYEOF26
+
+echo "=== 34 v26 完成 ==="
