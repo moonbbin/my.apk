@@ -1272,3 +1272,186 @@ print("✓ 21 v23 完成")
 PYEOF3
 
 echo "=== 21 v23 完成 ==="
+
+# === 21 v24: 探针三重优化 ===
+echo "=== 21 v24 ==="
+
+python3 << 'PYEOF24'
+import re, sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+MARK = "// [21v24]"
+
+with open(path, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("21 v24: 已应用，跳过")
+    sys.exit(0)
+
+# --- 细节3：请求头伪装（UA + 动态 Referer） ---
+# 替换所有旧 UA
+old_ua = 'conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14)")'
+new_ua = '''conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36") // [21v24]
+            try { val h = java.net.URL(url).host; if (h.isNotEmpty()) conn.setRequestProperty("Referer", "https://$h/") } catch (_: Exception) { } // [21v24] 动态 host 防403'''
+count_ua = s.count(old_ua)
+if count_ua > 0:
+    s = s.replace(old_ua, new_ua)
+    print(f"✓ 请求头已更新 {count_ua} 处（UA+动态Referer）")
+else:
+    print("⚠ 未找到旧 UA（可能已更新）")
+
+# --- 细节1：添加 probeBytesRange 重载（支持 start 偏移） ---
+if "fun probeBytesRange" in s:
+    print("✓ probeBytesRange 已存在")
+else:
+    # 在第一个 probeBytes 定义结束后插入新函数
+    # 找 "private fun probeBytes(url: String, size: Int)" 的完整函数体结束
+    # 简化：在第一个出现处后面插入
+    anchor = 'private fun probeBytes(url: String, size: Int): Pair<ByteArray, Long>? {'
+    idx = s.find(anchor)
+    if idx == -1:
+        print("❌ 未找到 probeBytes 定义")
+        sys.exit(1)
+    # 找到该函数的结束（数大括号）
+    depth = 0
+    i = idx + len(anchor)
+    started = False
+    end_idx = -1
+    for j in range(i, min(i + 3000, len(s))):
+        if s[j] == '{':
+            depth += 1
+            started = True
+        elif s[j] == '}':
+            depth -= 1
+            if started and depth == 0:
+                end_idx = j + 1
+                break
+    if end_idx == -1:
+        print("❌ probeBytes 函数结束未找到")
+        sys.exit(1)
+    new_func = '''
+    // [21v24] 细节1：支持指定起始偏移的 Range 探测（用于 64KB-256KB 二次探测）
+    private fun probeBytesRange(url: String, start: Long, size: Int): Pair<ByteArray, Long>? {
+        return try {
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
+            conn.instanceFollowRedirects = true
+            conn.setRequestProperty("Range", "bytes=${start}-${start + size - 1}")
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36") // [21v24]
+            try { val h = java.net.URL(url).host; if (h.isNotEmpty()) conn.setRequestProperty("Referer", "https://$h/") } catch (_: Exception) { } // [21v24]
+            conn.connect()
+            val code = conn.responseCode
+            // [21v24] 细节2：416 越界直接返回 null（文件太小），不抛异常
+            if (code == 416) { conn.disconnect(); return null }
+            if (code != 200 && code != 206) { conn.disconnect(); return null }
+            var total: Long = -1
+            try {
+                val cr = conn.getHeaderField("Content-Range") ?: ""
+                val slash = cr.lastIndexOf('/')
+                if (slash >= 0) total = cr.substring(slash + 1).trim().toLongOrNull() ?: -1
+                if (total <= 0) total = conn.getHeaderFieldLong("Content-Length", -1)
+            } catch (_: Exception) { }
+            val buf = ByteArray(size)
+            var off = 0
+            conn.inputStream.use { ins ->
+                while (off < size) {
+                    val n = ins.read(buf, off, size - off)
+                    if (n <= 0) break
+                    off += n
+                }
+            }
+            conn.disconnect()
+            if (off < 64) null else Pair(buf.copyOf(off), total)
+        } catch (e: Exception) {
+            Log.w(TAG, "[21v24] 二次探测失败: ${e.message}")
+            null
+        }
+    }
+'''
+    s = s[:end_idx] + new_func + s[end_idx:]
+    print("✓ probeBytesRange 已插入")
+
+# --- 优化1+3：修改 probeAudio，加二次探测和大小盲猜 ---
+# 找到最新的 probeAudio（最后一个定义）
+matches = list(re.finditer(r'    private fun probeAudio\(url: String\): Pair<Int, Int> \{', s))
+if not matches:
+    print("❌ 未找到 probeAudio")
+    sys.exit(1)
+# 取最后一个（最新的）
+m = matches[-1]
+start_idx = m.start()
+# 找到函数结束（数大括号）
+depth = 0
+started = False
+end_idx = -1
+for j in range(m.end() - 1, min(m.end() + 5000, len(s))):
+    if s[j] == '{':
+        depth += 1
+        started = True
+    elif s[j] == '}':
+        depth -= 1
+        if started and depth == 0:
+            end_idx = j + 1
+            break
+if end_idx == -1:
+    print("❌ probeAudio 结束未找到")
+    sys.exit(1)
+
+old_func = s[start_idx:end_idx]
+# 在 MP3 探测后、AAC 探测前插入二次探测；在最后 return Pair(-1, 0) 前插入大小盲猜
+# 锚点1：MP3 探测行
+mp3_anchor = 'val mp3br = mp3BitrateKbps(bytes)'
+if mp3_anchor not in old_func:
+    print("❌ probeAudio 内未找到 MP3 锚点")
+    sys.exit(1)
+
+new_mp3 = '''val mp3br = mp3BitrateKbps(bytes)
+        // [21v24] 优化1：前64KB没找到帧头，尝试 64KB-256KB（防大封面MP3）
+        var mp3br2 = mp3br
+        if (mp3br2 <= 0) {
+            try {
+                val probed2 = probeBytesRange(url, 65536, 192 * 1024)
+                if (probed2 != null) {
+                    mp3br2 = mp3BitrateKbps(probed2.first)
+                    if (mp3br2 > 0) Log.i(TAG, "[21v24] MP3帧头在64KB-256KB找到: ${mp3br2}kbps")
+                }
+            } catch (_: Exception) { } // [21v24] 细节2：416/异常直接吞，继续盲猜
+        }
+        val mp3brFinal = mp3br2'''
+old_func = old_func.replace(mp3_anchor, new_mp3, 1)
+# 更新后续引用 mp3br → mp3brFinal
+old_func = old_func.replace('if (mp3br > 0) return Pair(if (mp3br >= 224) 1 else 0, mp3br)',
+                            'if (mp3brFinal > 0) return Pair(if (mp3brFinal >= 224) 1 else 0, mp3brFinal) // [21v24]', 1)
+
+# 锚点2：最后的 return Pair(-1, 0) 前插入大小盲猜
+size_fallback = '''        // [21v24] 优化3：解析不出帧头时，按 Content-Length 总大小盲猜
+        if (totalBytes > 0) {
+            val guessed = when {
+                totalBytes > 15 * 1024 * 1024 -> Pair(2, 0)   // >15MB → FLAC/无损
+                totalBytes >= 8 * 1024 * 1024 -> Pair(1, 320) // 8-12MB → 320k
+                totalBytes < 4 * 1024 * 1024 -> Pair(0, 128)  // <4MB → 128k
+                else -> Pair(1, 0) // 4-8MB 灰色地带，按高档放行
+            }
+            Log.i(TAG, "[21v24] 大小盲猜: ${totalBytes}字节 → tier=${guessed.first}")
+            return guessed
+        }
+        return Pair(-1, 0)'''
+if 'return Pair(-1, 0)' in old_func:
+    old_func = old_func.replace('return Pair(-1, 0)', size_fallback, 1)
+    print("✓ 大小盲猜兜底已插入")
+else:
+    print("⚠ 未找到 return Pair(-1, 0)")
+
+s = s[:start_idx] + old_func + s[end_idx:]
+print("✓ probeAudio 已升级（二次探测+盲猜）")
+
+assert MARK in s or "[21v24]" in s
+with open(path, "w", encoding="utf-8") as f:
+    f.write(s)
+print("✓ 21 v24 完成")
+PYEOF24
+
+echo "=== 21 v24 完成 ==="
