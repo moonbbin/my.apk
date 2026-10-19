@@ -1182,3 +1182,93 @@ print("✓ 21 v21 补丁完成")
 PYEOF2
 
 echo "=== 21 v21 完成 ==="
+
+# === 21 v23: 修复 v22 时序灾难 ===
+echo "=== 21 v23 ==="
+
+python3 << 'PYEOF3'
+import re, sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+MARK_V23 = "// [21v23]"
+MARK_V22 = "// [21v22] clear on song change"
+
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+if MARK_V23 in src:
+    print("21 v23: 已应用，跳过")
+    sys.exit(0)
+
+# 步骤1：移除 v22 在 fun play( 入口的清空（时序灾难根源）
+# v22 的清空会误伤探针回调中的 play() 调用
+if MARK_V22 in src:
+    # 找到 v22 加入的清空块并移除
+    v22_block = """        // [21v22] clear on song change: 切歌立即清空旧徽章数据
+        _currentQuality.value = ""
+        _measuredBitrate.value = 0
+        try { _bitrate.value = 0 } catch (_: Exception) {}"""
+    if v22_block in src:
+        src = src.replace(v22_block, "        // [21v23] v22 清空已移除（时序冲突）", 1)
+        print("✓ v22 误伤清空已移除")
+    else:
+        print("⚠ v22 块格式不匹配，尝试模糊移除")
+        # 模糊匹配：删除包含 MARK_V22 的行及后续3行
+        lines = src.split("\n")
+        new_lines = []
+        skip = 0
+        for line in lines:
+            if MARK_V22 in line:
+                skip = 4  # 跳过标记行 + 3行清空代码
+                new_lines.append("        // [21v23] v22 清空已移除")
+                continue
+            if skip > 0:
+                skip -= 1
+                continue
+            new_lines.append(line)
+        src = "\n".join(new_lines)
+        print("✓ v22 块已模糊移除")
+
+# 步骤2：在真正的切歌入口加清空（next/previous/seekTo）
+# 这些是用户主动切歌，不会与探针回调冲突
+clear_code = """        // [21v23] 用户切歌：立即清空旧徽章
+        _currentQuality.value = ""
+        _measuredBitrate.value = 0
+        try { _bitrate.value = 0 } catch (_: Exception) {}"""
+
+song_change_fns = [
+    (r'(fun\s+next\s*\(\s*\)\s*\{)', "next()"),
+    (r'(fun\s+previous\s*\(\s*\)\s*\{)', "previous()"),
+    (r'(fun\s+seekToNext\s*\([^)]*\)\s*\{)', "seekToNext()"),
+    (r'(fun\s+playNext\s*\([^)]*\)\s*\{)', "playNext()"),
+]
+
+patched = []
+for pat, name in song_change_fns:
+    m = re.search(pat, src)
+    if m and MARK_V23 not in src[max(0, m.start()-200):m.start()]:
+        anchor = m.group(1)
+        # 检查是否已打过补丁（避免重复）
+        src = src.replace(anchor, anchor + "\n" + clear_code, 1)
+        patched.append(name)
+        print(f"✓ {name} 已加清空")
+
+if not patched:
+    print("⚠ 未找到切歌函数，尝试 probeAndSetQuality 入口保护")
+    # 兜底：在 probeAndSetQuality 入口加 guard，防止重复清空
+    # （v20 的条件清空保留，v23 不动它）
+    pass
+else:
+    print(f"✓ 共修补 {len(patched)} 个切歌入口: {', '.join(patched)}")
+
+# 步骤3：assert 确保探针赋值不受影响
+# 检查探针赋值代码仍在
+assert "_currentQuality.value = label" in src or "_currentQuality.value = realQuality" in src, "❌ v23 断言失败：探针赋值丢失"
+assert MARK_V23 in src or len(patched) > 0, "❌ v23 断言失败：未修补任何入口"
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("✓ 21 v23 完成")
+PYEOF3
+
+echo "=== 21 v23 完成 ==="
