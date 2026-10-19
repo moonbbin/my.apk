@@ -107,7 +107,7 @@ assert new_bg in src, "❌ 断言失败：背景替换未生效"
 # 警告：DetailGray 是顶层 val，不能全局替换！只替换 color = DetailGray
 # 4a. 专辑歌手名：Text(album.artist, color = DetailGray,
 old_artist = "Text(album.artist, color = DetailGray,"
-new_artist = "Text(album.artist, color = musicColors().textSecondary, // [14v2]"
+new_artist = "Text(album.artist, color = musicColors().textSecondary,"
 if old_artist in src:
     src = src.replace(old_artist, new_artist, 1)
     print("✓ 专辑歌手名已改")
@@ -116,11 +116,11 @@ else:
 
 # 4b. 歌曲列表副标题：color = DetailGray,（在 songArtist 上下文）
 # 为避免误伤顶层定义，只替换 "color = DetailGray," 且前后有 Text( 的
-# 保守策略：替换所有 "color = DetailGray," 为 "color = musicColors().textSecondary, // [14v2]"
+# 保守策略：替换所有 "color = DetailGray," 为 "color = musicColors().textSecondary,"
 # 但必须确保不在顶层 val 定义处（顶层是 "private val DetailGray ="，不含 "color ="）
 count = src.count("color = DetailGray,")
 if count > 0:
-    src = src.replace("color = DetailGray,", "color = musicColors().textSecondary, // [14v2]")
+    src = src.replace("color = DetailGray,", "color = musicColors().textSecondary,")
     print(f"✓ {count} 处 DetailGray 已改 textSecondary")
 else:
     print("⚠ 未找到 color = DetailGray")
@@ -133,109 +133,15 @@ assert MARK in src, "❌ 断言失败：14v2 标记未找到"
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(src)
+# v4: 简单断言核心注入成功（不检查注释）
+assert "LxMusicTheme(isDarkTheme = isDark)" in src, "❌ 断言失败：LxMusicTheme 未注入"
+assert "musicColors().background)" in src, "❌ 断言失败：背景未注入"
 print("✓ 14 v2 完成")
 PYEOF2
 
 echo "=== 14 v2 完成 ==="\n
-# === 14 v3: 修复 v2 的行内注释吃代码问题 ===
-echo "=== 14 v3 ==="
 
-python3 << 'PYEOF3'
-import sys
-
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxArtistDetailActivity.kt"
-
-with open(path, encoding="utf-8") as f:
-    src = f.read()
-
-if "// [14v3]" in src:
-    print("14 v3: 已应用，跳过")
-    sys.exit(0)
-
-# v2 把 "color = DetailGray," 全局换成了 "color = musicColors().textSecondary, // [14v2]"
-# 行内 // 吃掉了单行 Text() 后面的参数，导致 14 处语法错误
-# 修复：删掉 ", // [14v2]" 中的注释部分，保留正确的 musicColors() 调用
-bad_count = src.count(", // [14v2]")
-print(f"发现 {bad_count} 处 v2 坏注释，正在清理...")
-src = src.replace(", // [14v2]", ",")
-
-# 安全检查：不应再有行内 [14v2] 吃代码
-# （setContent 和背景处的 [14v2] 是独立行或行尾安全位置，保留）
-for line in src.split("\n"):
-    if "// [14v2]" in line:
-        idx = line.index("// [14v2]")
-        after = line[idx + 9:].strip()
-        # 如果注释后还有实质代码，且不是背景行（背景行是安全的行尾），则为坏注释
-        if after and "musicColors().background)" not in line:
-            print(f"❌ 残留坏注释: {line.strip()[:100]}")
-            sys.exit(1)
-
-print("✓ v2 坏注释已清理")
-
-# 加 v3 标记（package 后独立行，安全）
-lines = src.split("\n")
-out = []
-marked = False
-for line in lines:
-    out.append(line)
-    if not marked and line.startswith("package "):
-        out.append("// [14v3] 专辑详情页主题接入（v2 行内注释已修复）")
-        marked = True
-src = "\n".join(out)
-
-assert "// [14v3]" in src, "❌ 断言失败：v3 标记未加入"
-assert ", // [14v2]" not in src, "❌ 断言失败：坏注释残留"
-
-with open(path, "w", encoding="utf-8") as f:
-    f.write(src)
-print("✓ 14 v3 完成")
-PYEOF3
-
-echo "=== 14 v3 完成 ==="
-
-# === 14 v4: 修复 v3 误杀行尾安全注释 ===
+# === 14 v4: 去注释化（v2 行内注释导致 Kotlin 语法错误，v3 误杀） ===
+# v4 不做任何清理，只确保 v2 的核心注入逻辑无行内注释
 echo "=== 14 v4 ==="
-
-python3 << 'PYEOF4'
-import sys
-
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxArtistDetailActivity.kt"
-
-with open(path, encoding="utf-8") as f:
-    src = f.read()
-
-if "// [14v4]" in src:
-    print("14 v4: 已应用，跳过")
-    sys.exit(0)
-
-# v3 已清理了 ", // [14v2]"（13 处），但误杀了行尾安全的 "// [14v2]"
-# 行尾安全的特征：// 后只有注释文字，行已结束（无未闭合的括号/逗号）
-# 坏注释的特征：", // [14v2]" 后面还有代码（v3 已清理，不应再有）
-
-# 检查是否还有 ", // [14v2]"（真坏注释）
-if ", // [14v2]" in src:
-    print(f"❌ 还有 {src.count(', // [14v2]')} 处真坏注释")
-    sys.exit(1)
-
-print("✓ 无真坏注释（v3 已清理）")
-print("✓ 行尾 // [14v2] 是安全的，保留")
-
-# 加 v4 标记
-lines = src.split("\n")
-out = []
-marked = False
-for ln in lines:
-    out.append(ln)
-    if not marked and ln.startswith("package "):
-        out.append("// [14v4] v3 误杀已修复")
-        marked = True
-src = "\n".join(out)
-
-assert "// [14v4]" in src, "❌ 断言失败"
-
-with open(path, "w", encoding="utf-8") as f:
-    f.write(src)
-print("✓ 14 v4 完成")
-PYEOF4
-
-echo "=== 14 v4 完成 ==="
+echo "✓ 14 v4 完成（v2 已去注释化）"
