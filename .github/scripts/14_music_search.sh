@@ -136,4 +136,59 @@ with open(path, "w", encoding="utf-8") as f:
 print("✓ 14 v2 完成")
 PYEOF2
 
-echo "=== 14 v2 完成 ==="
+echo "=== 14 v2 完成 ==="\n
+# === 14 v3: 修复 v2 的行内注释吃代码问题 ===
+echo "=== 14 v3 ==="
+
+python3 << 'PYEOF3'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxArtistDetailActivity.kt"
+
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+if "// [14v3]" in src:
+    print("14 v3: 已应用，跳过")
+    sys.exit(0)
+
+# v2 把 "color = DetailGray," 全局换成了 "color = musicColors().textSecondary, // [14v2]"
+# 行内 // 吃掉了单行 Text() 后面的参数，导致 14 处语法错误
+# 修复：删掉 ", // [14v2]" 中的注释部分，保留正确的 musicColors() 调用
+bad_count = src.count(", // [14v2]")
+print(f"发现 {bad_count} 处 v2 坏注释，正在清理...")
+src = src.replace(", // [14v2]", ",")
+
+# 安全检查：不应再有行内 [14v2] 吃代码
+# （setContent 和背景处的 [14v2] 是独立行或行尾安全位置，保留）
+for line in src.split("\n"):
+    if "// [14v2]" in line:
+        idx = line.index("// [14v2]")
+        after = line[idx + 9:].strip()
+        # 如果注释后还有实质代码，且不是背景行（背景行是安全的行尾），则为坏注释
+        if after and "musicColors().background)" not in line:
+            print(f"❌ 残留坏注释: {line.strip()[:100]}")
+            sys.exit(1)
+
+print("✓ v2 坏注释已清理")
+
+# 加 v3 标记（package 后独立行，安全）
+lines = src.split("\n")
+out = []
+marked = False
+for line in lines:
+    out.append(line)
+    if not marked and line.startswith("package "):
+        out.append("// [14v3] 专辑详情页主题接入（v2 行内注释已修复）")
+        marked = True
+src = "\n".join(out)
+
+assert "// [14v3]" in src, "❌ 断言失败：v3 标记未加入"
+assert ", // [14v2]" not in src, "❌ 断言失败：坏注释残留"
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("✓ 14 v3 完成")
+PYEOF3
+
+echo "=== 14 v3 完成 ==="
