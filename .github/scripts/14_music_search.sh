@@ -192,3 +192,50 @@ print("✓ 14 v3 完成")
 PYEOF3
 
 echo "=== 14 v3 完成 ==="
+
+# === 14 v4: 修复 v3 误杀行尾安全注释 ===
+echo "=== 14 v4 ==="
+
+python3 << 'PYEOF4'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxArtistDetailActivity.kt"
+
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+if "// [14v4]" in src:
+    print("14 v4: 已应用，跳过")
+    sys.exit(0)
+
+# v3 已清理了 ", // [14v2]"（13 处），但误杀了行尾安全的 "// [14v2]"
+# 行尾安全的特征：// 后只有注释文字，行已结束（无未闭合的括号/逗号）
+# 坏注释的特征：", // [14v2]" 后面还有代码（v3 已清理，不应再有）
+
+# 检查是否还有 ", // [14v2]"（真坏注释）
+if ", // [14v2]" in src:
+    print(f"❌ 还有 {src.count(', // [14v2]')} 处真坏注释")
+    sys.exit(1)
+
+print("✓ 无真坏注释（v3 已清理）")
+print("✓ 行尾 // [14v2] 是安全的，保留")
+
+# 加 v4 标记
+lines = src.split("\n")
+out = []
+marked = False
+for ln in lines:
+    out.append(ln)
+    if not marked and ln.startswith("package "):
+        out.append("// [14v4] v3 误杀已修复")
+        marked = True
+src = "\n".join(out)
+
+assert "// [14v4]" in src, "❌ 断言失败"
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("✓ 14 v4 完成")
+PYEOF4
+
+echo "=== 14 v4 完成 ==="
