@@ -1451,3 +1451,164 @@ print("✓ 34 v33 完成")
 PYEOF33
 
 echo "=== 34 v33 完成 ==="
+
+# === 34 v34: 彻底重写（修复 v33 三坑） ===
+echo "=== 34 v34 ==="
+
+python3 << 'PYEOF34'
+import re, sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v34]"
+
+with open(path, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("34 v34: 已应用，跳过")
+    sys.exit(0)
+
+# --- 步骤1：暴力清除 v32/v33 所有残留 ---
+# 删图标定义块（v32 的 @Composable 版 + v33 的 ImageVector 版）
+# v32 块：从 "// [34v32] 手搓播放器图标" 到 "class LxPlayerActivity"
+# v33 块：从 "// [34v33] 手搓图标 ImageVector" 到 "class LxPlayerActivity"
+for marker in ["// [34v32] 手搓播放器图标", "// [34v33] 手搓图标 ImageVector"]:
+    m1 = s.find(marker)
+    m2 = s.find("class LxPlayerActivity")
+    if m1 != -1 and m2 != -1 and m1 < m2:
+        s = s[:m1] + s[m2:]
+        print(f"✓ 已清图标定义块: {marker[:20]}...")
+# 删所有 v32/v33 import
+s, n1 = re.subn(r'^import [^\n]*// \[34v32\]\n', '', s, flags=re.M)
+s, n2 = re.subn(r'^import [^\n]*// \[34v33\]\n', '', s, flags=re.M)
+if n1+n2: print(f"✓ 已清 {n1+n2} 个 v32/v33 import")
+# 删 v32 的坏调用（PlayerXXXIcon(tint=...) // [34v32]）
+# 这些坏调用已经破坏了语法，必须还原
+# v32 坏代码模式：PlayerPauseIcon(tint = X, modifier = Y) // [34v32]
+# 我们无法还原原样，但 v34 会重新正确替换，所以先删除这些坏行所在的 Icon 调用残留
+# 实际上最安全：找到所有 "// [34v32]" 的行，如果是坏调用则删除整行
+lines = s.split('\n')
+new_lines = []
+for line in lines:
+    if '// [34v32]' in line and 'Player' in line and 'Icon(tint' in line:
+        print(f"✓ 删除 v32 坏调用行: {line.strip()[:60]}...")
+        continue
+    new_lines.append(line)
+s = '\n'.join(new_lines)
+
+# --- 步骤2：插入修正版 ImageVector 图标（不用 addRoundRect，用 addRect） ---
+icons = '''
+// [34v34] 手搓图标 ImageVector（零依赖）
+private fun playerPlayVector(): ImageVector = ImageVector.Builder(
+    name = "PlayerPlay", defaultWidth = 24.dp, defaultHeight = 24.dp,
+    viewportWidth = 24f, viewportHeight = 24f).apply {
+    path(fill = SolidColor(Color.Black)) {
+        moveTo(9.2f, 4.8f); lineTo(20.0f, 12f); lineTo(9.2f, 19.2f); close()
+    }
+}.build()
+private fun playerPauseVector(): ImageVector = ImageVector.Builder(
+    name = "PlayerPause", defaultWidth = 24.dp, defaultHeight = 24.dp,
+    viewportWidth = 24f, viewportHeight = 24f).apply {
+    path(fill = SolidColor(Color.Black)) {
+        moveTo(5.5f, 4.8f); lineTo(10.3f, 4.8f); lineTo(10.3f, 19.2f); lineTo(5.5f, 19.2f); close()
+        moveTo(13.7f, 4.8f); lineTo(18.5f, 4.8f); lineTo(18.5f, 19.2f); lineTo(13.7f, 19.2f); close()
+    }
+}.build()
+private fun playerSkipNextVector(): ImageVector = ImageVector.Builder(
+    name = "PlayerSkipNext", defaultWidth = 24.dp, defaultHeight = 24.dp,
+    viewportWidth = 24f, viewportHeight = 24f).apply {
+    path(fill = SolidColor(Color.Black)) {
+        moveTo(2.8f, 4.8f); lineTo(13.6f, 12f); lineTo(2.8f, 19.2f); close()
+        moveTo(16.0f, 4.8f); lineTo(19.2f, 4.8f); lineTo(19.2f, 19.2f); lineTo(16.0f, 19.2f); close()
+    }
+}.build()
+private fun playerSkipPrevVector(): ImageVector = ImageVector.Builder(
+    name = "PlayerSkipPrev", defaultWidth = 24.dp, defaultHeight = 24.dp,
+    viewportWidth = 24f, viewportHeight = 24f).apply {
+    path(fill = SolidColor(Color.Black)) {
+        moveTo(4.8f, 4.8f); lineTo(8.0f, 4.8f); lineTo(8.0f, 19.2f); lineTo(4.8f, 19.2f); close()
+        moveTo(21.2f, 4.8f); lineTo(10.4f, 12f); lineTo(21.2f, 19.2f); close()
+    }
+}.build()
+private fun playerShuffleVector(): ImageVector = ImageVector.Builder(
+    name = "PlayerShuffle", defaultWidth = 24.dp, defaultHeight = 24.dp,
+    viewportWidth = 24f, viewportHeight = 24f).apply {
+    path(fill = SolidColor(Color.Black), stroke = SolidColor(Color.Black), strokeLineWidth = 2f,
+         strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+        moveTo(3f, 7f); lineTo(19f, 17f); moveTo(3f, 17f); lineTo(19f, 7f)
+        moveTo(19f, 17f); lineTo(15f, 16f); moveTo(19f, 17f); lineTo(17f, 13f)
+        moveTo(19f, 7f); lineTo(15f, 8f); moveTo(19f, 7f); lineTo(17f, 11f)
+    }
+}.build()
+private fun playerRepeatVector(): ImageVector = ImageVector.Builder(
+    name = "PlayerRepeat", defaultWidth = 24.dp, defaultHeight = 24.dp,
+    viewportWidth = 24f, viewportHeight = 24f).apply {
+    path(fill = SolidColor(Color.Black), stroke = SolidColor(Color.Black), strokeLineWidth = 2f,
+         strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+        moveTo(18f, 6f); lineTo(18f, 4f); lineTo(20f, 6f)
+        moveTo(6f, 9f); lineTo(6f, 15f); lineTo(18f, 15f); lineTo(18f, 9f)
+    }
+}.build()
+private fun playerRepeatOneVector(): ImageVector = ImageVector.Builder(
+    name = "PlayerRepeatOne", defaultWidth = 24.dp, defaultHeight = 24.dp,
+    viewportWidth = 24f, viewportHeight = 24f).apply {
+    path(fill = SolidColor(Color.Black), stroke = SolidColor(Color.Black), strokeLineWidth = 2f,
+         strokeLineCap = StrokeCap.Round) {
+        moveTo(18f, 6f); lineTo(18f, 4f); lineTo(20f, 6f)
+        moveTo(6f, 9f); lineTo(6f, 15f); lineTo(18f, 15f); lineTo(18f, 9f)
+        moveTo(12f, 10f); lineTo(12f, 14f)
+    }
+}.build()
+'''
+m_class = re.search(r'^class LxPlayerActivity', s, re.M)
+if not m_class:
+    print("❌ 未找到 class LxPlayerActivity")
+    sys.exit(1)
+s = s[:m_class.start()] + icons + "\n" + s[m_class.start():]
+print("✓ 7 个修正版 ImageVector 已插入")
+
+# --- 步骤3：加 import ---
+for imp in [
+    "import androidx.compose.ui.graphics.vector.ImageVector",
+    "import androidx.compose.ui.graphics.vector.path",
+    "import androidx.compose.ui.graphics.SolidColor",
+    "import androidx.compose.ui.graphics.StrokeCap",
+    "import androidx.compose.ui.graphics.StrokeJoin",
+]:
+    if imp not in s:
+        m = re.search(r'^import androidx\.compose[^\n]*\n', s, re.M)
+        if m: s = s[:m.end()] + imp + " // [34v34]\n" + s[m.end():]
+print("✓ import 已补")
+
+# --- 步骤4：替换 imageVector（最长优先，防子串 bug） ---
+# 按长度降序排列，确保 RepeatOne 先于 Repeat
+replacements = [
+    ("Icons.AutoMirrored.Filled.SkipPrevious", "playerSkipPrevVector()"),
+    ("Icons.AutoMirrored.Filled.SkipNext", "playerSkipNextVector()"),
+    ("Icons.AutoMirrored.Filled.Shuffle", "playerShuffleVector()"),
+    ("Icons.Filled.SkipPrevious", "playerSkipPrevVector()"),
+    ("Icons.Filled.SkipNext", "playerSkipNextVector()"),
+    ("Icons.Filled.Shuffle", "playerShuffleVector()"),
+    ("Icons.Filled.RepeatOne", "playerRepeatOneVector()"),  # [34v34] 必须在 Repeat 之前
+    ("Icons.Filled.Repeat", "playerRepeatVector()"),
+    ("Icons.Filled.Pause", "playerPauseVector()"),
+    ("Icons.Filled.Play", "playerPlayVector()"),
+]
+# 按 old 长度降序排序
+replacements.sort(key=lambda x: len(x[0]), reverse=True)
+total = 0
+for old, new in replacements:
+    n = s.count(old)
+    if n > 0:
+        s = s.replace(old, new)
+        total += n
+        print(f"✓ {old} → {new} ({n})")
+print(f"✓ 共替换 {total} 处")
+
+assert MARK in s, "❌ v34 标记未写入"
+with open(path, "w", encoding="utf-8") as f:
+    f.write(s)
+print("✓ 34 v34 完成")
+PYEOF34
+
+echo "=== 34 v34 完成 ==="
