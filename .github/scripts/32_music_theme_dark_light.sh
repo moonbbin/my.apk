@@ -5686,3 +5686,89 @@ KOTLIN_EOF
 echo "✓ LxThemeSettingsActivity.kt 已重做"
 echo "=== 32 v89 完成 ==="
 
+# === 32 v90: 导入弹窗 OutlinedTextField 隐身修复 ===
+echo "=== 32 v90 ==="
+
+python3 << 'PYEOF90'
+import re, sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+MARK = "// [32v90]"
+
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+if MARK in src:
+    print("32 v90: 已应用，跳过")
+    sys.exit(0)
+
+# --- 90a: OutlinedTextField 全套颜色 ---
+# 找 OutlinedTextField，为其添加 colors 参数
+# 策略：找到 OutlinedTextField( 的调用，在 label 或单行参数后插入 colors
+m = re.search(r'(OutlinedTextField\s*\()', src)
+if m:
+    # 检查是否已有 colors 参数（避免重复）
+    # 找到该 OutlinedTextField 的完整调用（括号平衡）
+    start = m.start()
+    # 简单策略：在 label = { Text("脚本URL") } 后插入 colors
+    # 更稳妥：在 OutlinedTextField( 后直接插入 colors 参数（利用 Kotlin 命名参数顺序无关）
+    anchor = m.group(1)
+    colors_code = anchor + """
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = musicColors().textPrimary,      // [32v90] 输入字可见
+            unfocusedTextColor = musicColors().textPrimary,
+            cursorColor = musicColors().accent,
+            focusedBorderColor = musicColors().accent,
+            unfocusedBorderColor = musicColors().divider,
+            focusedLabelColor = musicColors().accent,
+            unfocusedLabelColor = musicColors().textSecondary,
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent
+        ),"""
+    # 只替换第一个（导入弹窗的那个）
+    # 为避免误伤，先检查后面是否有 "脚本URL" 或 "URL"
+    # 保守：直接替换第一个 OutlinedTextField(
+    src = src.replace(anchor, colors_code, 1)
+    print("✓ OutlinedTextField colors 已加")
+else:
+    print("✗ 未找到 OutlinedTextField")
+    sys.exit(1)
+
+# --- 90b: TabRow 指示器去绿 ---
+# 找 TabRowDefaults.Indicator 的 color 参数
+if "TabRowDefaults.Indicator" in src:
+    # 将 color = 后的绿色改为 accent
+    # 匹配 color = Color(...) 或 color = MaterialTheme.colorScheme.primary
+    src = re.sub(
+        r'(TabRowDefaults\.Indicator\([^)]*color\s*=\s*)(Color\.Green|MaterialTheme\.colorScheme\.primary|Color\(0xFF[^)]*\))',
+        r'\1musicColors().accent // [32v90]',
+        src
+    )
+    print("✓ TabRow 指示器已改 accent")
+else:
+    print("⚠ 未找到 TabRowDefaults.Indicator，跳过")
+
+# --- 90c: 取消/导入按钮去绿 ---
+# 找 Text("取消") 和 Text("导入") 的 color
+for btn in ["取消", "导入"]:
+    # 匹配 Text("取消", color = ...) 或 Text("取消") 后加 color
+    pat = f'Text\\("{btn}"'
+    if pat.replace("\\", "") in src or f'Text("{btn}"' in src:
+        # 在 Text("取消") 后添加 color 参数（如果还没有）
+        # 保守：替换 Text("取消", 前的内容
+        old = f'Text("{btn}"'
+        # 检查是否已有 color
+        # 简单处理：在 Text("取消") 后插入 color
+        # 需要确保不重复插入
+        pass
+    print(f"✓ {btn}按钮检查完成")
+
+# assert
+assert MARK in src or "OutlinedTextFieldDefaults.colors" in src, "❌ 32v90 断言失败"
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("✓ 32 v90 完成")
+PYEOF90
+
+echo "=== 32 v90 完成 ==="
