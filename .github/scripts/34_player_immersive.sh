@@ -263,168 +263,124 @@ PYEOF
 echo "✓ LxPlayerActivity.kt 34v12 补丁已应用"
 echo "=== 34 v12 完成 ==="
 
-# === 34 v17: 结构性锚点 + 合并 v15/v16 ===
-echo "=== 34 v17 ==="
+# === 34 v18: 加 icons-extended 依赖 + 修复 isDarkBg/isLightBg ===
+echo "=== 34 v18 ==="
 
-python3 << 'PYEOF17'
+# --- 1. 加 material-icons-extended 依赖 ---
+# Pause/Play/SkipPrevious 等在 core 里没有，必须加 extended
+GRADLE_FILE=$(find avbox/app -maxdepth 1 -name "build.gradle*" | head -1)
+if [ -z "$GRADLE_FILE" ]; then
+    echo "❌ 未找到 app/build.gradle"
+    exit 1
+fi
+echo "Gradle 文件: $GRADLE_FILE"
+
+if grep -q "material-icons-extended" "$GRADLE_FILE"; then
+    echo "✓ icons-extended 已存在"
+else
+    # 在 dependencies 块里加
+    python3 << 'PYDEP'
+import re, sys
+gradle_path = """GRADLE_FILE""".strip()
+# 实际路径从环境变量取
+import os
+gradle_path = os.popen('find avbox/app -maxdepth 1 -name "build.gradle*" | head -1').read().strip()
+with open(gradle_path, encoding='utf-8') as f:
+    g = f.read()
+
+# 找 implementation 行，加一行
+# 找 compose bom 或 material3 的版本
+m = re.search(r'(implementation\s+["\']androidx\.compose\.material3:material3[:0-9a-zA-Z\.\-]*["\'])', g)
+if m:
+    dep_line = m.group(1)
+    # 提取版本号（如果有）
+    vm = re.search(r'androidx\.compose:compose-bom:([0-9.\-]+)', g)
+    if vm:
+        ver = vm.group(1)
+        new_dep = f'implementation "androidx.compose.material:material-icons-extended:{ver}"'
+    else:
+        # 用 compose bom 管理版本
+        new_dep = 'implementation "androidx.compose.material:material-icons-extended"'
+    g = g.replace(dep_line, dep_line + '\n    ' + new_dep + ' // [34v18]', 1)
+    print(f"✓ 已加: {new_dep}")
+else:
+    print("❌ 未找到 material3 依赖行")
+    sys.exit(1)
+
+with open(gradle_path, 'w', encoding='utf-8') as f:
+    f.write(g)
+PYDEP
+    if [ $? -ne 0 ]; then exit 1; fi
+fi
+
+python3 << 'PYEOF18'
 import re, sys
 
 path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
-MARK = "// [34v17]"
+MARK = "// [34v18]"
 
 with open(path, encoding="utf-8") as f:
     s = f.read()
 
 if MARK in s:
-    print("34 v17: 已应用，跳过")
+    print("34 v18: 已应用，跳过")
     sys.exit(0)
 
-# --- 0. Icons import ---
+# --- 2. 确保 isLightBg / isDarkBg 定义存在 ---
+# v17 的 luminance 正则可能没匹配，导致两者都未定义
+# 策略：如果 isLightBg 不存在，在 animatedTint 定义后插入
+
+if "val isLightBg" not in s:
+    # 找 animatedTint 的定义
+    m = re.search(r'(val animatedTint[^\n]*\n(?:.*\n)*?\s*\})', s)
+    if not m:
+        # 简单版：找 animatedTint = 
+        m2 = re.search(r'(val animatedTint\s*=\s*animateColorAsState[^\n]*\n)', s)
+        if m2:
+            insert_pos = m2.end(1)
+            new_defs = '''
+    // [34v18] 亮度判断（补定义）
+    val isLightBg = androidx.core.graphics.ColorUtils.calculateLuminance(animatedTint.value.toArgb()) > 0.5f
+    val isDarkBg = !isLightBg
+    val primaryTextColor = if (isLightBg) Color(0xFF1C1C1E) else Color.White
+    val secondaryTextColor = if (isLightBg) musicColors().textSecondary else Color.White.copy(alpha = 0.7f)
+'''
+            s = s[:insert_pos] + new_defs + s[insert_pos:]
+            print("✓ isLightBg/isDarkBg 已补定义")
+        else:
+            print("❌ 未找到 animatedTint 定义")
+            sys.exit(1)
+    else:
+        print("⚠ animatedTint 结构复杂，跳过自动插入")
+else:
+    print("✓ isLightBg 已存在")
+    # 如果 isLightBg 存在但 isDarkBg 不存在，补一个
+    if "val isDarkBg" not in s and "isDarkBg" in s:
+        # 在 isLightBg 定义后加 isDarkBg
+        m3 = re.search(r'(val isLightBg[^\n]*\n(?:.*?\n)*?\s*\})', s)
+        if m3:
+            s = s.replace(m3.group(1), m3.group(1) + '\n    val isDarkBg = !isLightBg // [34v18]', 1)
+            print("✓ isDarkBg 已补")
+
+# --- 3. 确保 Icons import 存在 ---
 if "import androidx.compose.material.icons.filled" not in s:
     if "import androidx.compose.material3.*" not in s:
-        print("❌ 未找到 material3 import 锚点")
+        print("❌ 未找到 material3 import")
         sys.exit(1)
     s = s.replace(
         "import androidx.compose.material3.*",
-        "import androidx.compose.material3.*\nimport androidx.compose.material.icons.Icons\nimport androidx.compose.material.icons.filled.* // [34v17]",
+        "import androidx.compose.material3.*\nimport androidx.compose.material.icons.Icons\nimport androidx.compose.material.icons.filled.* // [34v18]",
         1
     )
     print("✓ Icons import 已加")
-
-# --- 1. 播放键：结构性锚点（用 isPlaying 定位，不依赖 color 行） ---
-# 匹配：Text( text = if (isPlaying) ... ) 整个块
-# v12 改了 color 行，但 text = if (isPlaying) 不变
-m = re.search(
-    r'Text\(\s*\n\s*text = if \(isPlaying\) ".*?" else ".*?",\s*\n\s*style = MaterialTheme\.typography\.titleLarge,\s*\n\s*color = [^\n]+\n\s*\)',
-    s
-)
-if not m:
-    print("❌ 未找到播放键（isPlaying 结构）")
-    sys.exit(1)
-old_play = m.group(0)
-new_play = '''Icon(
-                            imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.Play,
-                            contentDescription = null,
-                            tint = Color.White, // [34v17] Emoji 根除
-                            modifier = Modifier.size(28.dp)
-                        )'''
-s = s.replace(old_play, new_play, 1)
-print("✓ 播放键 Emoji→Icon")
-
-# --- 2. 上一首/下一首：结构性锚点 ---
-for emoji, icon_name in [("⏮", "SkipPrevious"), ("⏭", "SkipNext")]:
-    # 匹配 Text("⏮", ...) 整个
-    pat = rf'Text\("{emoji}", style = MaterialTheme\.typography\.titleLarge, color = [^\)]+\)'
-    m2 = re.search(pat, s)
-    if m2:
-        new_icon = f'Icon(Icons.Filled.{icon_name}, contentDescription = null, tint = secondaryTextColor, modifier = Modifier.size(28.dp)) // [34v17]'
-        s = s.replace(m2.group(0), new_icon, 1)
-        print(f"✓ {emoji} → {icon_name}")
-    else:
-        print(f"⚠ 未找到 {emoji}")
-
-# --- 3. 循环键：匹配整个 when 块 ---
-m3 = re.search(
-    r'val modeIcon = when \(playMode\) \{\s*\n\s*LxPlayerManager\.MODE_SHUFFLE -> ".*?"\s*\n\s*LxPlayerManager\.MODE_LOOP_ONE -> ".*?"\s*\n\s*else -> ".*?"\s*\n\s*\}\s*\n\s*val modeColor = [^\n]+\n\s*Text\(modeIcon, style = MaterialTheme\.typography\.titleMedium, color = modeColor\)',
-    s
-)
-if not m3:
-    print("❌ 未找到循环键 when 块")
-    sys.exit(1)
-old_loop = m3.group(0)
-new_loop = '''val modeIconVector = when (playMode) {
-                        LxPlayerManager.MODE_SHUFFLE -> Icons.Filled.Shuffle
-                        LxPlayerManager.MODE_LOOP_ONE -> Icons.Filled.RepeatOne
-                        else -> Icons.Filled.Repeat
-                    } // [34v17]
-                    val modeColor = if (playMode == LxPlayerManager.MODE_SEQUENCE) secondaryTextColor.copy(alpha = 0.6f) else musicColors().accent
-                    Icon(modeIconVector, contentDescription = null, tint = modeColor, modifier = Modifier.size(24.dp))'''
-s = s.replace(old_loop, new_loop, 1)
-print("✓ 循环键 Emoji→Icon")
-
-# --- 4. 时长文字 ---
-for label, old_pat in [
-    ("当前时长", r'text = formatTime\(if \(isSeeking\) seekPos\.toLong\(\) else position\),\s*\n\s*style = MaterialTheme\.typography\.bodySmall,\s*\n\s*color = PlayerGray'),
-    ("总时长", r'text = formatTime\(duration\),\s*\n\s*style = MaterialTheme\.typography\.bodySmall,\s*\n\s*color = PlayerGray'),
-]:
-    m4 = re.search(old_pat, s)
-    if m4:
-        new_t = m4.group(0).replace("color = PlayerGray", "color = musicColors().textSecondary // [34v17]")
-        s = s.replace(m4.group(0), new_t, 1)
-        print(f"✓ {label}已改")
-    else:
-        print(f"⚠ 未找到{label}")
-
-# --- 5. 红心重置 ---
-old_fav = 'var isLiked by remember(favSongKey) { mutableStateOf(isFavorite(favSongKey)) }'
-if old_fav in s:
-    new_fav = old_fav + '\n    // [34v17] 切歌强制重读\n    LaunchedEffect(favSongKey) { isLiked = isFavorite(favSongKey) }'
-    s = s.replace(old_fav, new_fav, 1)
-    print("✓ 红心重置已加")
 else:
-    print("⚠ 未找到红心锚点")
+    print("✓ Icons import 已存在")
 
-# --- 6. 亮度直判（v15 内容） ---
-m5 = re.search(
-    r'    // \[34v12\] 背景提鲜：HSV 拉高饱和度/亮度\n'
-    r'    val vibrantBg = remember\(animatedTint\) \{.*?\n    \}\n'
-    r'    // \[34v12\] 遮罩后近似色.*?\n'
-    r'    val finalBg = remember\(vibrantBg\) \{.*?\n    \}\n'
-    r'    // \[34v12\] 用最终渲染色算亮度.*?\n'
-    r'    val bgLuminance = remember\(finalBg\) \{.*?\n    \}\n'
-    r'    val isDarkBg = bgLuminance < 0\.5\n'
-    r'    val secondaryTextColor = if \(isDarkBg\) \{.*?\n    \} else \{.*?\n    \}',
-    s, re.DOTALL
-)
-if m5:
-    new_lumi = '''    // [34v17] 用封面原色直接判亮度
-    val isLightBg = remember(animatedTint) {
-        androidx.core.graphics.ColorUtils.calculateLuminance(animatedTint.toArgb()) > 0.5f
-    }
-    val primaryTextColor = if (isLightBg) Color(0xFF1C1C1E) else Color.White // [34v17]
-    val secondaryTextColor = if (isLightBg) musicColors().textSecondary else Color.White.copy(alpha = 0.7f) // [34v17]'''
-    s = s.replace(m5.group(0), new_lumi, 1)
-    print("✓ 亮度直判已加")
-    # 根背景改用 animatedTint
-    if ".background(vibrantBg)" in s:
-        s = s.replace(".background(vibrantBg)", ".background(animatedTint) // [34v17]", 1)
-        print("✓ 根背景已改")
-else:
-    print("⚠ 未找到 v12 luminance 块")
-
-# --- 7. 歌词颜色（v16 内容，合并） ---
-old_lyric_main = 'normalColor = Color(lyricColor),'
-if old_lyric_main in s:
-    s = s.replace(
-        old_lyric_main,
-        'normalColor = if (isLightBg) Color(0xFF1C1C1E).copy(alpha = 0.6f) else Color.White.copy(alpha = 0.6f), // [34v17]',
-        1
-    )
-    print("✓ 歌词未高亮已改")
-
-old_lyric_hl = 'highlightColor = if (karaokeOn) karaokeHl else Color(lyricHighlight),'
-if old_lyric_hl in s:
-    s = s.replace(
-        old_lyric_hl,
-        'highlightColor = if (karaokeOn) karaokeHl else musicColors().accent, // [34v17]',
-        1
-    )
-    print("✓ 歌词高亮已改")
-
-old_trans = 'color = (if (isCurrent) Color(lyricHighlight) else Color(lyricColor)).copy(alpha = 0.65f),'
-if old_trans in s:
-    s = s.replace(
-        old_trans,
-        'color = (if (isCurrent) musicColors().accent else if (isLightBg) Color(0xFF1C1C1E).copy(alpha = 0.6f) else Color.White.copy(alpha = 0.6f)).copy(alpha = 0.8f), // [34v17]',
-        1
-    )
-    print("✓ 翻译行已改")
-
-assert MARK in s, "❌ 断言失败"
+assert MARK in s or "34v18" in s, "❌ 断言失败"
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(s)
-print("✓ 34 v17 完成（v15+v16 合并）")
-PYEOF17
+print("✓ 34 v18 完成")
+PYEOF18
 
-echo "=== 34 v17 完成 ==="
+echo "=== 34 v18 完成 ==="
