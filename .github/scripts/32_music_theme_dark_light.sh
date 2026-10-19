@@ -5686,20 +5686,20 @@ KOTLIN_EOF
 echo "✓ LxThemeSettingsActivity.kt 已重做"
 echo "=== 32 v89 完成 ==="
 
-# === 32 v90: 导入弹窗 OutlinedTextField 隐身修复 ===
-echo "=== 32 v90 ==="
+# === 32 v91: 导入弹窗 OutlinedTextField 隐身修复 ===
+echo "=== 32 v91 ==="
 
 python3 << 'PYEOF90'
 import re, sys
 
 path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
-MARK = "// [32v90]"
+MARK = "// [32v91]"
 
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
 if MARK in src:
-    print("32 v90: 已应用，跳过")
+    print("32 v91: 已应用，跳过")
     sys.exit(0)
 
 # --- 90a: OutlinedTextField 全套颜色 ---
@@ -5715,7 +5715,7 @@ if m:
     anchor = m.group(1)
     colors_code = anchor + """
         colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = musicColors().textPrimary,      // [32v90] 输入字可见
+            focusedTextColor = musicColors().textPrimary,      // [32v91] 输入字可见
             unfocusedTextColor = musicColors().textPrimary,
             cursorColor = musicColors().accent,
             focusedBorderColor = musicColors().accent,
@@ -5741,7 +5741,7 @@ if "TabRowDefaults.Indicator" in src:
     # 匹配 color = Color(...) 或 color = MaterialTheme.colorScheme.primary
     src = re.sub(
         r'(TabRowDefaults\.Indicator\([^)]*color\s*=\s*)(Color\.Green|MaterialTheme\.colorScheme\.primary|Color\(0xFF[^)]*\))',
-        r'\1musicColors().accent // [32v90]',
+        r'\1musicColors().accent // [32v91]',
         src
     )
     print("✓ TabRow 指示器已改 accent")
@@ -5768,7 +5768,51 @@ assert MARK in src or "OutlinedTextFieldDefaults.colors" in src, "❌ 32v90 断�
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(src)
-print("✓ 32 v90 完成")
+print("✓ 32 v91 完成")
 PYEOF90
 
-echo "=== 32 v90 完成 ==="
+echo "=== 32 v91 完成 ==="
+
+# === 32 v91: 补 OutlinedTextFieldDefaults import ===
+echo "=== 32 v91 ==="
+
+python3 << 'PYEOF91'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+MARK = "// [32v91]"
+
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+if MARK in src:
+    print("32 v91: 已应用，跳过")
+    sys.exit(0)
+
+# 加 import
+old_import = "import androidx.compose.material3.OutlinedTextField"
+new_import = """import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults // [32v91]"""
+
+if old_import in src:
+    src = src.replace(old_import, new_import, 1)
+    print("✓ OutlinedTextFieldDefaults import 已加")
+else:
+    # 尝试找其他 material3 import
+    import re
+    m = re.search(r'(import androidx\.compose\.material3\.[^\n]+\n)', src)
+    if m:
+        src = src.replace(m.group(1), m.group(1) + "import androidx.compose.material3.OutlinedTextFieldDefaults // [32v91]\n", 1)
+        print("✓ import 已加（兜底位置）")
+    else:
+        print("✗ 未找到 import 锚点")
+        sys.exit(1)
+
+assert "OutlinedTextFieldDefaults" in src, "❌ 32v91 断言失败"
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("✓ 32 v91 完成")
+PYEOF91
+
+echo "=== 32 v91 完成 ==="
