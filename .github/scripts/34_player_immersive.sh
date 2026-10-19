@@ -442,3 +442,70 @@ print("✓ 34 v24 歌词颜色修复完成")
 PYEOF24
 
 echo "=== 34 v24 完成 ==="
+
+# === 34 v25: 歌词按封面亮度硬判，不跟主题色 ===
+echo "=== 34 v25 ==="
+
+python3 << 'PYEOF25'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v25]"
+
+with open(path, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("34 v25: 已应用，跳过")
+    sys.exit(0)
+
+# 1. 在 v23 secondaryTextColor 定义后插入 lyricTextColor（按封面亮度硬判）
+anchor_def = "    val secondaryTextColor = if (isLightBg) musicColors().textSecondary else Color.White.copy(alpha = 0.7f) // [34v23]"
+assert s.count(anchor_def) == 1, f"❌ 插入锚点命中 {s.count(anchor_def)} 次"
+new_def = anchor_def + "\n    val lyricTextColor = if (isLightBg) Color(0xFF1C1C1E).copy(alpha = 0.6f) else Color.White.copy(alpha = 0.6f) // [34v25] 歌词按封面亮度硬判，不跟主题"
+s = s.replace(anchor_def, new_def, 1)
+print("✓ lyricTextColor 定义已插入")
+
+def assert_replace(old, new, name, count=1):
+    global s
+    c = s.count(old)
+    if c != count:
+        print(f"❌ 锚点异常 {name}：命中 {c} 次（要求 {count} 次）")
+        raise SystemExit(1)
+    s = s.replace(old, new)
+    print(f"✓ {name}")
+
+# 2. 迷你歌词 KaraokeLine 主色 → lyricTextColor
+assert_replace(
+    "normalColor = secondaryTextColor, // [34v24]",
+    "normalColor = lyricTextColor, // [34v25]",
+    "迷你歌词主色"
+)
+
+# 3+4. 两处翻译行（迷你+全屏，字符串相同，一起换）
+assert_replace(
+    "else secondaryTextColor).copy(alpha = 0.65f), // [34v24]",
+    "else lyricTextColor).copy(alpha = 0.65f), // [34v25]",
+    "两处翻译行",
+    count=2
+)
+
+# 5. 全屏歌词主行
+assert_replace(
+    "else secondaryTextColor, // [34v24]",
+    "else lyricTextColor, // [34v25]",
+    "全屏歌词主行"
+)
+
+# 实质修改校验（防空壳补丁）
+assert s.count("// [34v25]") == 5, f"❌ v25 标记数={s.count('// [34v25]')}，要求5"
+# 非歌词的 secondaryTextColor 必须保留（上一首/下一首/图标）
+assert "color = secondaryTextColor.copy(alpha = 0.9f)" in s, "❌ 误伤了上一首/下一首"
+print("✓ 5处歌词已切到 lyricTextColor，非歌词 secondaryTextColor 保留")
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(s)
+print("✓ 34 v25 完成")
+PYEOF25
+
+echo "=== 34 v25 完成 ==="
