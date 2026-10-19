@@ -1055,3 +1055,244 @@ print("注：如构建报 Duplicate class / 版本冲突，v32 将降级到 1.6.
 PYEOF31
 
 echo "=== 34 v31 完成 ==="
+
+# === 34 v32: 手搓 Canvas 图标（零依赖） ===
+echo "=== 34 v32 ==="
+
+# --- 删 v31 pinned 依赖 ---
+GRADLE_FILE=$(find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1)
+if [ -n "$GRADLE_FILE" ]; then
+python3 << 'PYG32'
+import os
+gp = os.popen('find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1').read().strip()
+with open(gp, encoding="utf-8") as f:
+    lines = f.readlines()
+orig = len(lines)
+lines = [l for l in lines if '[34v31]' not in l]
+if len(lines) < orig:
+    with open(gp, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+    print(f"✓ 已删 v31 pinned 依赖 ({orig - len(lines)} 行)")
+else:
+    print("✓ v31 依赖已不存在")
+PYG32
+fi
+
+python3 << 'PYEOF32'
+import re, sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v32]"
+
+with open(path, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("34 v32: 已应用，跳过")
+    sys.exit(0)
+
+# --- 删 v30 AutoMirrored import ---
+for imp in [
+    "import androidx.compose.material.icons.automirrored.filled.SkipPrevious",
+    "import androidx.compose.material.icons.automirrored.filled.SkipNext",
+    "import androidx.compose.material.icons.automirrored.filled.Shuffle",
+]:
+    s, n = re.subn(r'^' + re.escape(imp) + r'[^\n]*\n', '', s, flags=re.M)
+    if n > 0: print(f"✓ 已删: {imp}")
+
+# --- 加 Canvas 相关 import ---
+canvas_imports = [
+    "import androidx.compose.foundation.Canvas",
+    "import androidx.compose.ui.graphics.Path",
+    "import androidx.compose.ui.graphics.drawscope.Stroke",
+    "import androidx.compose.ui.graphics.StrokeCap",
+    "import androidx.compose.ui.geometry.Offset",
+    "import androidx.compose.ui.geometry.Size",
+    "import androidx.compose.foundation.layout.Box",
+    "import androidx.compose.ui.Alignment",
+    "import androidx.compose.ui.text.font.FontWeight",
+]
+m_first = re.search(r'^import androidx\.compose[^\n]*\n', s, re.M)
+if m_first:
+    to_add = ""
+    for imp in canvas_imports:
+        if imp not in s:
+            to_add += imp + " // [34v32]\n"
+    if to_add:
+        s = s[:m_first.end()] + to_add + s[m_first.end():]
+        print(f"✓ 已补 {to_add.count(chr(10))} 个 Canvas import")
+
+# --- 7 个手搓图标定义 ---
+icons_code = '''
+// [34v32] 手搓播放器图标（零依赖 Canvas，100% tint 着色）
+@Composable
+private fun PlayerPlayIcon(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height
+        drawPath(Path().apply {
+            moveTo(w * 0.38f, h * 0.2f); lineTo(w * 0.84f, h * 0.5f); lineTo(w * 0.38f, h * 0.8f) // [34v32] 视觉居中右移; close()
+        }, color = tint)
+    }
+}
+@Composable
+private fun PlayerPauseIcon(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height; val bw = w * 0.22f
+        drawRoundRect(tint, Offset(w * 0.22f, h * 0.2f), Size(bw, h * 0.6f), CornerRadius(8f, 8f))
+        drawRoundRect(tint, Offset(w * 0.56f, h * 0.2f), Size(bw, h * 0.6f), CornerRadius(8f, 8f))
+    }
+}
+@Composable
+private fun PlayerSkipNextIcon(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height
+        drawPath(Path().apply {
+            moveTo(w * 0.12f, h * 0.2f); lineTo(w * 0.58f, h * 0.5f); lineTo(w * 0.12f, h * 0.8f); close()
+        }, color = tint)
+        drawRoundRect(tint, Offset(w * 0.68f, h * 0.2f), Size(2.dp.toPx(), h * 0.6f), CornerRadius(8f, 8f)) // [34v32] 统一2.dp
+    }
+}
+@Composable
+private fun PlayerSkipPreviousIcon(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height
+        drawRoundRect(tint, Offset(w * 0.18f, h * 0.2f), Size(2.dp.toPx(), h * 0.6f), CornerRadius(8f, 8f)) // [34v32] 统一2.dp
+        drawPath(Path().apply {
+            moveTo(w * 0.88f, h * 0.2f); lineTo(w * 0.42f, h * 0.5f); lineTo(w * 0.88f, h * 0.8f); close()
+        }, color = tint)
+    }
+}
+@Composable
+private fun PlayerShuffleIcon(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height; val sw = 2.dp.toPx() // [34v32] 统一2.dp
+        drawLine(tint, Offset(w * 0.12f, h * 0.28f), Offset(w * 0.82f, h * 0.72f), sw, StrokeCap.Round)
+        drawLine(tint, Offset(w * 0.12f, h * 0.72f), Offset(w * 0.82f, h * 0.28f), sw, StrokeCap.Round)
+        drawPath(Path().apply {
+            moveTo(w * 0.88f, h * 0.72f); lineTo(w * 0.72f, h * 0.66f); lineTo(w * 0.76f, h * 0.82f); close()
+        }, color = tint)
+        drawPath(Path().apply {
+            moveTo(w * 0.88f, h * 0.28f); lineTo(w * 0.72f, h * 0.34f); lineTo(w * 0.76f, h * 0.18f); close()
+        }, color = tint)
+    }
+}
+@Composable
+private fun PlayerRepeatIcon(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height; val sw = 2.dp.toPx() // [34v32] 统一2.dp
+        drawArc(tint, 35f, 290f, false, Offset(w * 0.14f, h * 0.22f), Size(w * 0.72f, h * 0.56f), Stroke(sw, StrokeCap.Round))
+        drawPath(Path().apply {
+            moveTo(w * 0.86f, h * 0.18f); lineTo(w * 0.70f, h * 0.14f); lineTo(w * 0.76f, h * 0.30f); close()
+        }, color = tint)
+    }
+}
+@Composable
+private fun PlayerRepeatOneIcon(tint: Color, modifier: Modifier = Modifier) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        PlayerRepeatIcon(tint = tint, modifier = Modifier.fillMaxSize(0.82f))
+        Text("1", color = tint, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+    }
+}
+'''
+m_class = re.search(r'^class LxPlayerActivity', s, re.M)
+if not m_class:
+    print("❌ 未找到 class LxPlayerActivity")
+    sys.exit(1)
+s = s[:m_class.start()] + icons_code + "\n" + s[m_class.start():]
+print("✓ 7 个手搓图标已插入")
+
+# --- 替换 7 处 Icon 调用 ---
+# 策略：用正则提取 Icon(imageVector=..., tint=..., modifier=...) 的参数，替换为对应手搓图标
+count = 0
+
+def replace_icon(pattern, replacement_fn, label):
+    global s, count
+    # 匹配 Icon( ... imageVector = <pattern> ... )
+    # 简化：直接替换 imageVector 的值部分，保留 Icon 结构，再整体替换 Icon 为手搓
+    pass
+
+# 1. SkipPrevious: Icon(imageVector = Icons.AutoMirrored.Filled.SkipPrevious, tint = X, modifier = Y)
+#    → PlayerSkipPreviousIcon(tint = X, modifier = Y)
+for old_iv, new_fn in [
+    ("Icons.AutoMirrored.Filled.SkipPrevious", "PlayerSkipPreviousIcon"),
+    ("Icons.AutoMirrored.Filled.SkipNext", "PlayerSkipNextIcon"),
+    ("Icons.AutoMirrored.Filled.Shuffle", "PlayerShuffleIcon"),
+    ("Icons.Filled.Repeat", "PlayerRepeatIcon"),
+    ("Icons.Filled.RepeatOne", "PlayerRepeatOneIcon"),
+]:
+    # 匹配 Icon(imageVector = <old_iv>, tint = <t>, modifier = <m>, ...) 或不同参数顺序
+    # 用函数解析：找到 Icon( 起始，括号配对找结束，提取 tint/modifier
+    idx = 0
+    while True:
+        i = s.find("Icon(", idx)
+        if i == -1: break
+        # 检查 imageVector 是否为目标
+        # 找这个 Icon 调用的结束（括号配对）
+        depth = 0
+        j = i + 5
+        start_j = j
+        while j < len(s):
+            if s[j] == '(': depth += 1
+            elif s[j] == ')':
+                if depth == 0: break
+                depth -= 1
+            j += 1
+        call = s[i:j+1]
+        if old_iv in call:
+            # [34v32] 细节3：防误伤计数
+            occ = s.count(old_iv)
+            if occ > 1:
+                print(f"⚠ {old_iv} 出现 {occ} 次，跳过（防误伤返回键等）")
+                idx = i + 5
+                continue
+            # 提取 tint 和 modifier
+            tm = re.search(r'tint\s*=\s*([^,\)]+)', call)
+            mm = re.search(r'modifier\s*=\s*([^,\)]+)', call)
+            tint = tm.group(1).strip() if tm else "Color.White"
+            mod = mm.group(1).strip() if mm else "Modifier"
+            new_call = f"{new_fn}(tint = {tint}, modifier = {mod}) // [34v32]"
+            s = s[:i] + new_call + s[j+1:]
+            count += 1
+            print(f"✓ {old_iv} → {new_fn} (tint={tint[:30]})")
+            idx = i + len(new_call)
+        else:
+            idx = i + 5
+
+# 2. Play/Pause: Icon(imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.Play, tint = X, ...)
+#    → if (isPlaying) PlayerPauseIcon(tint = X, ...) else PlayerPlayIcon(tint = X, ...)
+idx = 0
+while True:
+    i = s.find("Icon(", idx)
+    if i == -1: break
+    depth = 0; j = i + 5
+    while j < len(s):
+        if s[j] == '(': depth += 1
+        elif s[j] == ')':
+            if depth == 0: break
+            depth -= 1
+        j += 1
+    call = s[i:j+1]
+    if "isPlaying" in call and ("Icons.Filled.Pause" in call or "Icons.Filled.Play" in call):
+        tm = re.search(r'tint\s*=\s*([^,\)]+)', call)
+        mm = re.search(r'modifier\s*=\s*([^,\)]+)', call)
+        tint = tm.group(1).strip() if tm else "Color.White"
+        mod = mm.group(1).strip() if mm else "Modifier"
+        new_call = f"if (isPlaying) PlayerPauseIcon(tint = {tint}, modifier = {mod}) else PlayerPlayIcon(tint = {tint}, modifier = {mod}) // [34v32]"
+        s = s[:i] + new_call + s[j+1:]
+        count += 1
+        print(f"✓ Play/Pause → 手搓版 (tint={tint[:30]})")
+        idx = i + len(new_call)
+    else:
+        idx = i + 5
+
+print(f"✓ 共替换 {count} 处 Icon 调用")
+if count < 7:
+    print(f"⚠ 警告：期望 7 处，实际 {count} 处")
+
+assert MARK in s, "❌ v32 标记未写入"
+with open(path, "w", encoding="utf-8") as f:
+    f.write(s)
+print("✓ 34 v32 完成")
+PYEOF32
+
+echo "=== 34 v32 完成 ==="
