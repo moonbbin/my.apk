@@ -1127,41 +1127,50 @@ with open(path, "w", encoding="utf-8") as f:
 print("=== 21 v20 完成 ===")
 PYEOF
 
-# === 21 v21: 切歌回调无条件清空质量状态 ===
-echo "=== 21 v21 ==="
+# === 21 v22: 切歌无条件清空（多锚点兜底） ===
+echo "=== 21 v22 ==="
 
 python3 << 'PYEOF2'
 import re, sys
 
 path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
-MARK = "// [21v21] clear on song change"
+MARK = "// [21v22] clear on song change"
 
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
 if MARK in src:
-    print("21 v21: 已应用，跳过")
+    print("21 v22: 已应用，跳过")
     sys.exit(0)
 
-# 策略：在 onMediaItemTransition 回调入口无条件清空
-# 先找回调位置
-m = re.search(r'(onMediaItemTransition\s*\([^)]*\)\s*\{)', src)
-if not m:
-    # 尝试找 Player.Listener 的 onMediaItemTransition
-    m = re.search(r'(override\s+fun\s+onMediaItemTransition\s*\([^)]*\)\s*\{)', src)
+# 多锚点按顺序尝试
+anchors = [
+    (r'(onMediaItemTransition\s*\([^)]*\)\s*\{)', "onMediaItemTransition"),
+    (r'(override\s+fun\s+onMediaItemTransition[^{]*\{)', "override onMediaItemTransition"),
+    (r'(fun\s+play\s*\([^)]*\)\s*\{)', "fun play("),
+]
 
-if m:
-    anchor = m.group(1)
+found = None
+for pat, name in anchors:
+    m = re.search(pat, src)
+    if m:
+        found = (m.group(1), name)
+        break
+
+if found:
+    anchor, name = found
     clear_code = anchor + """
-        // [21v21] clear on song change: 切歌立即清空旧徽章数据
+        // [21v22] clear on song change: 切歌立即清空旧徽章数据
         _currentQuality.value = ""
         _measuredBitrate.value = 0
         try { _bitrate.value = 0 } catch (_: Exception) {}"""
     src = src.replace(anchor, clear_code, 1)
-    print("✓ onMediaItemTransition 已加清空逻辑")
+    print(f"✓ {name} 已加清空逻辑")
 else:
-    print("✗ 未找到 onMediaItemTransition 锚点")
+    print("✗ 未找到任何切歌锚点")
     sys.exit(1)
+
+assert MARK in src, "❌ v22 断言失败"
 
 # assert: 确保清空代码已加入
 assert MARK in src, "❌ v21 断言失败：清空标记未找到"
