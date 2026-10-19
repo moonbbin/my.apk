@@ -263,14 +263,16 @@ PYEOF
 echo "✓ LxPlayerActivity.kt 34v12 补丁已应用"
 echo "=== 34 v12 完成 ==="
 
-# === 34 v18: 加 icons-extended 依赖 + 修复 isDarkBg/isLightBg ===
-echo "=== 34 v18 ==="
+# === 34 v19: 修正 gradle 路径（工作目录已在 avbox 内） ===
+echo "=== 34 v19 ==="
 
-# --- 1. 加 material-icons-extended 依赖 ---
-# Pause/Play/SkipPrevious 等在 core 里没有，必须加 extended
-GRADLE_FILE=$(find avbox/app -maxdepth 1 -name "build.gradle*" | head -1)
+# v12 用相对路径 app/src/main/java/... 能成功，说明 cwd 已在 avbox/
+# 所以 gradle 文件是 app/build.gradle，不是 avbox/app/build.gradle
+GRADLE_FILE=$(find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1)
 if [ -z "$GRADLE_FILE" ]; then
     echo "❌ 未找到 app/build.gradle"
+    echo "当前目录: $(pwd)"
+    ls -la
     exit 1
 fi
 echo "Gradle 文件: $GRADLE_FILE"
@@ -278,30 +280,22 @@ echo "Gradle 文件: $GRADLE_FILE"
 if grep -q "material-icons-extended" "$GRADLE_FILE"; then
     echo "✓ icons-extended 已存在"
 else
-    # 在 dependencies 块里加
     python3 << 'PYDEP'
-import re, sys
-gradle_path = """GRADLE_FILE""".strip()
-# 实际路径从环境变量取
-import os
-gradle_path = os.popen('find avbox/app -maxdepth 1 -name "build.gradle*" | head -1').read().strip()
+import re, sys, os
+gradle_path = os.popen('find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1').read().strip()
 with open(gradle_path, encoding='utf-8') as f:
     g = f.read()
 
-# 找 implementation 行，加一行
-# 找 compose bom 或 material3 的版本
 m = re.search(r'(implementation\s+["\']androidx\.compose\.material3:material3[:0-9a-zA-Z\.\-]*["\'])', g)
 if m:
     dep_line = m.group(1)
-    # 提取版本号（如果有）
     vm = re.search(r'androidx\.compose:compose-bom:([0-9.\-]+)', g)
     if vm:
         ver = vm.group(1)
         new_dep = f'implementation "androidx.compose.material:material-icons-extended:{ver}"'
     else:
-        # 用 compose bom 管理版本
         new_dep = 'implementation "androidx.compose.material:material-icons-extended"'
-    g = g.replace(dep_line, dep_line + '\n    ' + new_dep + ' // [34v18]', 1)
+    g = g.replace(dep_line, dep_line + '\n    ' + new_dep + ' // [34v19]', 1)
     print(f"✓ 已加: {new_dep}")
 else:
     print("❌ 未找到 material3 依赖行")
@@ -313,74 +307,60 @@ PYDEP
     if [ $? -ne 0 ]; then exit 1; fi
 fi
 
-python3 << 'PYEOF18'
+# --- 确保 isLightBg / isDarkBg 定义存在 ---
+python3 << 'PYEOF19'
 import re, sys
 
 path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
-MARK = "// [34v18]"
+MARK = "// [34v19]"
 
 with open(path, encoding="utf-8") as f:
     s = f.read()
 
 if MARK in s:
-    print("34 v18: 已应用，跳过")
+    print("34 v19: 已应用，跳过")
     sys.exit(0)
 
-# --- 2. 确保 isLightBg / isDarkBg 定义存在 ---
-# v17 的 luminance 正则可能没匹配，导致两者都未定义
-# 策略：如果 isLightBg 不存在，在 animatedTint 定义后插入
-
 if "val isLightBg" not in s:
-    # 找 animatedTint 的定义
-    m = re.search(r'(val animatedTint[^\n]*\n(?:.*\n)*?\s*\})', s)
-    if not m:
-        # 简单版：找 animatedTint = 
-        m2 = re.search(r'(val animatedTint\s*=\s*animateColorAsState[^\n]*\n)', s)
-        if m2:
-            insert_pos = m2.end(1)
-            new_defs = '''
-    // [34v18] 亮度判断（补定义）
-    val isLightBg = androidx.core.graphics.ColorUtils.calculateLuminance(animatedTint.value.toArgb()) > 0.5f
+    m2 = re.search(r'(val animatedTint\s*=\s*animateColorAsState[^\n]*\n)', s)
+    if m2:
+        insert_pos = m2.end(1)
+        new_defs = '''
+    // [34v19] 亮度判断（补定义）
+    val isLightBg = androidx.core.graphics.ColorUtils.calculateLuminance(animatedTint.toArgb()) > 0.5f
     val isDarkBg = !isLightBg
     val primaryTextColor = if (isLightBg) Color(0xFF1C1C1E) else Color.White
     val secondaryTextColor = if (isLightBg) musicColors().textSecondary else Color.White.copy(alpha = 0.7f)
 '''
-            s = s[:insert_pos] + new_defs + s[insert_pos:]
-            print("✓ isLightBg/isDarkBg 已补定义")
-        else:
-            print("❌ 未找到 animatedTint 定义")
-            sys.exit(1)
+        s = s[:insert_pos] + new_defs + s[insert_pos:]
+        print("✓ isLightBg/isDarkBg 已补定义")
     else:
-        print("⚠ animatedTint 结构复杂，跳过自动插入")
+        print("❌ 未找到 animatedTint 定义")
+        sys.exit(1)
 else:
     print("✓ isLightBg 已存在")
-    # 如果 isLightBg 存在但 isDarkBg 不存在，补一个
     if "val isDarkBg" not in s and "isDarkBg" in s:
-        # 在 isLightBg 定义后加 isDarkBg
         m3 = re.search(r'(val isLightBg[^\n]*\n(?:.*?\n)*?\s*\})', s)
         if m3:
-            s = s.replace(m3.group(1), m3.group(1) + '\n    val isDarkBg = !isLightBg // [34v18]', 1)
+            s = s.replace(m3.group(1), m3.group(1) + '\n    val isDarkBg = !isLightBg // [34v19]', 1)
             print("✓ isDarkBg 已补")
 
-# --- 3. 确保 Icons import 存在 ---
 if "import androidx.compose.material.icons.filled" not in s:
     if "import androidx.compose.material3.*" not in s:
         print("❌ 未找到 material3 import")
         sys.exit(1)
     s = s.replace(
         "import androidx.compose.material3.*",
-        "import androidx.compose.material3.*\nimport androidx.compose.material.icons.Icons\nimport androidx.compose.material.icons.filled.* // [34v18]",
+        "import androidx.compose.material3.*\nimport androidx.compose.material.icons.Icons\nimport androidx.compose.material.icons.filled.* // [34v19]",
         1
     )
     print("✓ Icons import 已加")
 else:
     print("✓ Icons import 已存在")
 
-assert MARK in s or "34v18" in s, "❌ 断言失败"
-
 with open(path, "w", encoding="utf-8") as f:
     f.write(s)
-print("✓ 34 v18 完成")
-PYEOF18
+print("✓ 34 v19 完成")
+PYEOF19
 
-echo "=== 34 v18 完成 ==="
+echo "=== 34 v19 完成 ==="
