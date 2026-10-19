@@ -5862,3 +5862,51 @@ print("✓ 32 v92 完成")
 PYEOF92
 
 echo "=== 32 v92 完成 ==="
+
+# === 32 v93: 补 OutlinedTextFieldDefaults import ===
+echo "=== 32 v93 ==="
+
+python3 << 'PYEOF93'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+MARK = "// [32v93]"
+
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+if MARK in src:
+    print("32 v93: 已应用，跳过")
+    sys.exit(0)
+
+IMP = "import androidx.compose.material3.OutlinedTextFieldDefaults"
+
+if IMP in src:
+    print("✓ import 已存在，加标记")
+    # 在已有的 import 行尾加标记
+    src = src.replace(IMP, IMP + " " + MARK, 1)
+else:
+    # package 行后插入
+    lines = src.split("\n")
+    out = []
+    done = False
+    for ln in lines:
+        out.append(ln)
+        if not done and ln.startswith("package "):
+            out.append(IMP + " " + MARK)
+            done = True
+    if not done:
+        print("❌ 未找到 package 行")
+        sys.exit(1)
+    src = "\n".join(out)
+    print("✓ import 已插入")
+
+assert MARK in src, "❌ 断言失败"
+assert IMP in src, "❌ 断言失败：import 不在"
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("✓ 32 v93 完成")
+PYEOF93
+
+echo "=== 32 v93 完成 ==="
