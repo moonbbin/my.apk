@@ -884,3 +884,125 @@ print("✓ 34 v29 完成")
 PYEOF29
 
 echo "=== 34 v29 完成 ==="
+
+# === 34 v30: 查TOML + AutoMirrored 修复 ===
+echo "=== 34 v30 ==="
+
+# --- 1. 打印 TOML 里 icons.extended 的真实版本 ---
+echo "--- 【1】TOML 版本 ---"
+TOML=$(find . -maxdepth 2 -name "libs.versions.toml" 2>/dev/null | head -1)
+if [ -z "$TOML" ]; then
+    echo "⚠ 未找到 libs.versions.toml，尝试 gradle 目录"
+    TOML=$(find gradle -name "libs.versions.toml" 2>/dev/null | head -1)
+fi
+echo "TOML=$TOML"
+if [ -n "$TOML" ]; then
+    echo "--- icons.extended 相关行 ---"
+    grep -n "icons" "$TOML" | head -20
+    echo "--- compose-bom 版本 ---"
+    grep -n "compose-bom\|composeBom" "$TOML" | head -10
+else
+    echo "❌ TOML 未找到"
+fi
+
+# --- 1b. BOM 版本是否支持 AutoMirrored（1.6.0+） ---
+echo "--- 【1b】AutoMirrored 可用性预判 ---"
+if [ -n "$TOML" ]; then
+    BOM_VER=$(grep -oP 'compose-bom["\s=:]+"?\K[0-9.]+' "$TOML" | head -1)
+    if [ -z "$BOM_VER" ]; then
+        BOM_VER=$(grep -oP 'androidx-compose-bom["\s=:]+"?\K[0-9.]+' "$TOML" | head -1)
+    fi
+    echo "BOM 版本: ${BOM_VER:-未找到}"
+    if [ -n "$BOM_VER" ]; then
+        MAJOR=$(echo "$BOM_VER" | cut -d. -f1)
+        MINOR=$(echo "$BOM_VER" | cut -d. -f2)
+        if [ "$MAJOR" -gt 1 ] || ([ "$MAJOR" -eq 1 ] && [ "$MINOR" -ge 6 ]); then
+            echo "✓ BOM >= 1.6.0，AutoMirrored 图标应该可用"
+        else
+            echo "⚠ BOM < 1.6.0，AutoMirrored 可能不可用，需升级或回退到 Filled"
+        fi
+    fi
+    echo "--- material-icons-extended 别名映射 ---"
+    grep -n "material.icons.extended" "$TOML" | head -5
+fi
+
+# --- 2+3. 解码 LxPlayerActivity.kt，查 import，做 AutoMirrored 修复 ---
+python3 << 'PYEOF30'
+import re, sys, os
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v30]"
+
+with open(path, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("34 v30: 已应用，跳过")
+    sys.exit(0)
+
+print("--- 【2】当前 Icons import ---")
+for m in re.finditer(r'^import (androidx\.compose\.material\.icons[^\n]*)', s, re.M):
+    print(f"  {m.group(1)}")
+
+# --- 3. AutoMirrored 修复 ---
+# 方向相关图标 → Icons.AutoMirrored.Filled；Play/Pause → Icons.Filled（不变）
+# 需要改: import + 调用处
+
+# 先加 AutoMirrored 的 import（如果还没有）
+automirrored_imports = [
+    "import androidx.compose.material.icons.automirrored.filled.SkipPrevious",
+    "import androidx.compose.material.icons.automirrored.filled.SkipNext",
+    "import androidx.compose.material.icons.automirrored.filled.Shuffle",
+]
+# 找最后一个 material.icons import，在其后插入
+icon_imports = list(re.finditer(r'^import androidx\.compose\.material\.icons[^\n]*\n', s, re.M))
+if icon_imports:
+    last = icon_imports[-1]
+    insert_at = last.end()
+    to_add = ""
+    for imp in automirrored_imports:
+        if imp not in s:
+            to_add += imp + " // [34v30]\n"
+    if to_add:
+        s = s[:insert_at] + to_add + s[insert_at:]
+        print(f"✓ 已加 {to_add.count(chr(10))} 个 AutoMirrored import")
+    else:
+        print("✓ AutoMirrored import 已存在")
+else:
+    print("⚠ 未找到 material.icons import，跳过 import 插入")
+
+# 替换调用处：Icons.Filled.SkipPrevious → Icons.AutoMirrored.Filled.SkipPrevious 等
+# 注意：只替换这三个方向图标，Play/Pause/Repeat/RepeatOne 不动
+replacements = [
+    ("Icons.Filled.SkipPrevious", "Icons.AutoMirrored.Filled.SkipPrevious"),
+    ("Icons.Filled.SkipNext", "Icons.AutoMirrored.Filled.SkipNext"),
+    ("Icons.Filled.Shuffle", "Icons.AutoMirrored.Filled.Shuffle"),
+]
+for old, new in replacements:
+    n = s.count(old)
+    if n > 0:
+        s = s.replace(old, new)
+        print(f"✓ {old} → {new} ({n} 处)")
+    else:
+        print(f"  - {old} 未找到（0 处）")
+
+# 删掉旧的 filled.Shuffle/SkipPrevious/SkipNext import（如果存在，避免冲突）
+for old_imp in [
+    "import androidx.compose.material.icons.filled.SkipPrevious",
+    "import androidx.compose.material.icons.filled.SkipNext",
+    "import androidx.compose.material.icons.filled.Shuffle",
+]:
+    # 只删整行（带或不带 [34v26] 标记）
+    pattern = r'^' + re.escape(old_imp) + r'[^\n]*\n'
+    new_s, n = re.subn(pattern, '', s, flags=re.M)
+    if n > 0:
+        s = new_s
+        print(f"✓ 已删旧 import: {old_imp} ({n} 行)")
+
+assert "[34v30]" in s, "❌ v30 标记未写入"
+with open(path, "w", encoding="utf-8") as f:
+    f.write(s)
+print("✓ 34 v30 完成")
+PYEOF30
+
+echo "=== 34 v30 完成 ==="
