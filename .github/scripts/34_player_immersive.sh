@@ -263,16 +263,12 @@ PYEOF
 echo "✓ LxPlayerActivity.kt 34v12 补丁已应用"
 echo "=== 34 v12 完成 ==="
 
-# === 34 v19: 修正 gradle 路径（工作目录已在 avbox 内） ===
-echo "=== 34 v19 ==="
+# === 34 v20: 兼容 build.gradle.kts（Kotlin DSL） ===
+echo "=== 34 v20 ==="
 
-# v12 用相对路径 app/src/main/java/... 能成功，说明 cwd 已在 avbox/
-# 所以 gradle 文件是 app/build.gradle，不是 avbox/app/build.gradle
 GRADLE_FILE=$(find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1)
 if [ -z "$GRADLE_FILE" ]; then
-    echo "❌ 未找到 app/build.gradle"
-    echo "当前目录: $(pwd)"
-    ls -la
+    echo "❌ 未找到 app/build.gradle*"
     exit 1
 fi
 echo "Gradle 文件: $GRADLE_FILE"
@@ -286,19 +282,45 @@ gradle_path = os.popen('find app -maxdepth 1 -name "build.gradle*" 2>/dev/null |
 with open(gradle_path, encoding='utf-8') as f:
     g = f.read()
 
-m = re.search(r'(implementation\s+["\']androidx\.compose\.material3:material3[:0-9a-zA-Z\.\-]*["\'])', g)
+is_kts = gradle_path.endswith('.kts')
+
+# 匹配 material3 依赖行（兼容 Groovy 和 Kotlin DSL）
+# Groovy: implementation "androidx.compose.material3:material3:1.2.0"
+# KTS:    implementation("androidx.compose.material3:material3:1.2.0")
+if is_kts:
+    m = re.search(r'(implementation\("androidx\.compose\.material3:material3[^"]*"\))', g)
+else:
+    m = re.search(r'(implementation\s+["\']androidx\.compose\.material3:material3[^"\']*["\'])', g)
+
 if m:
     dep_line = m.group(1)
     vm = re.search(r'androidx\.compose:compose-bom:([0-9.\-]+)', g)
     if vm:
-        ver = vm.group(1)
-        new_dep = f'implementation "androidx.compose.material:material-icons-extended:{ver}"'
+        # 有 BOM，不写版本号（BOM 管理）
+        if is_kts:
+            new_dep = 'implementation("androidx.compose.material:material-icons-extended")'
+        else:
+            new_dep = 'implementation "androidx.compose.material:material-icons-extended"'
     else:
-        new_dep = 'implementation "androidx.compose.material:material-icons-extended"'
-    g = g.replace(dep_line, dep_line + '\n    ' + new_dep + ' // [34v19]', 1)
+        # 无 BOM，跟随 compose 版本（从 material3 行提取）
+        ver_m = re.search(r'material3:([0-9.\-]+)', dep_line)
+        ver = ver_m.group(1) if ver_m else ""
+        if not ver:
+            ver = "1.6.0"  # [34v20] 兜底：拿不到版本时用稳定版
+            print(f"⚠ 未找到 material3 版本号，使用兜底 {ver}")
+        if is_kts:
+            new_dep = f'implementation("androidx.compose.material:material-icons-extended:{ver}")'
+        else:
+            new_dep = f'implementation "androidx.compose.material:material-icons-extended:{ver}"'
+    g = g.replace(dep_line, dep_line + '\n    ' + new_dep + ' // [34v20]', 1)
     print(f"✓ 已加: {new_dep}")
 else:
     print("❌ 未找到 material3 依赖行")
+    # 打印 dependencies 块帮助诊断
+    dm = re.search(r'dependencies\s*\{([^}]{0,2000})', g, re.DOTALL)
+    if dm:
+        print("dependencies 块前 2000 字符:")
+        print(dm.group(1)[:2000])
     sys.exit(1)
 
 with open(gradle_path, 'w', encoding='utf-8') as f:
@@ -307,18 +329,18 @@ PYDEP
     if [ $? -ne 0 ]; then exit 1; fi
 fi
 
-# --- 确保 isLightBg / isDarkBg 定义存在 ---
-python3 << 'PYEOF19'
+# --- isLightBg/isDarkBg 补定义（与 v19 相同） ---
+python3 << 'PYEOF20'
 import re, sys
 
 path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
-MARK = "// [34v19]"
+MARK = "// [34v20]"
 
 with open(path, encoding="utf-8") as f:
     s = f.read()
 
 if MARK in s:
-    print("34 v19: 已应用，跳过")
+    print("34 v20: 已应用，跳过")
     sys.exit(0)
 
 if "val isLightBg" not in s:
@@ -326,7 +348,7 @@ if "val isLightBg" not in s:
     if m2:
         insert_pos = m2.end(1)
         new_defs = '''
-    // [34v19] 亮度判断（补定义）
+    // [34v20] 亮度判断（补定义）
     val isLightBg = androidx.core.graphics.ColorUtils.calculateLuminance(animatedTint.toArgb()) > 0.5f
     val isDarkBg = !isLightBg
     val primaryTextColor = if (isLightBg) Color(0xFF1C1C1E) else Color.White
@@ -339,11 +361,6 @@ if "val isLightBg" not in s:
         sys.exit(1)
 else:
     print("✓ isLightBg 已存在")
-    if "val isDarkBg" not in s and "isDarkBg" in s:
-        m3 = re.search(r'(val isLightBg[^\n]*\n(?:.*?\n)*?\s*\})', s)
-        if m3:
-            s = s.replace(m3.group(1), m3.group(1) + '\n    val isDarkBg = !isLightBg // [34v19]', 1)
-            print("✓ isDarkBg 已补")
 
 if "import androidx.compose.material.icons.filled" not in s:
     if "import androidx.compose.material3.*" not in s:
@@ -351,7 +368,7 @@ if "import androidx.compose.material.icons.filled" not in s:
         sys.exit(1)
     s = s.replace(
         "import androidx.compose.material3.*",
-        "import androidx.compose.material3.*\nimport androidx.compose.material.icons.Icons\nimport androidx.compose.material.icons.filled.* // [34v19]",
+        "import androidx.compose.material3.*\nimport androidx.compose.material.icons.Icons\nimport androidx.compose.material.icons.filled.* // [34v20]",
         1
     )
     print("✓ Icons import 已加")
@@ -360,7 +377,7 @@ else:
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(s)
-print("✓ 34 v19 完成")
-PYEOF19
+print("✓ 34 v20 完成")
+PYEOF20
 
-echo "=== 34 v19 完成 ==="
+echo "=== 34 v20 完成 ==="
