@@ -263,63 +263,99 @@ PYEOF
 echo "✓ LxPlayerActivity.kt 34v12 补丁已应用"
 echo "=== 34 v12 完成 ==="
 
-# === 34 v22: 用 v12 标记做锚点替换整个 luminance 块 ===
-echo "=== 34 v22 ==="
+# === 34 v23: 按行定位替换 v12 块（零正则回溯） ===
+echo "=== 34 v23 ==="
 
-GRADLE_FILE=$(find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1)
-if [ -n "$GRADLE_FILE" ] && ! grep -q "material-icons-extended" "$GRADLE_FILE"; then
-    echo "⚠ icons-extended 依赖缺失（v21 未成功），请检查"
-fi
-
-python3 << 'PYEOF22'
-import re, sys
+python3 << 'PYEOF23'
+import sys
 
 path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
-MARK = "// [34v22]"
+MARK = "// [34v23]"
 
 with open(path, encoding="utf-8") as f:
-    s = f.read()
+    lines = f.readlines()
 
-if MARK in s:
-    print("34 v22: 已应用，跳过")
+text = "".join(lines)
+if MARK in text:
+    print("34 v23: 已应用，跳过")
     sys.exit(0)
 
-# v12 块：从 "// [34v12] 背景提鲜" 到 secondaryTextColor 定义结束
-v12_pattern = re.compile(
-    r'    // \[34v12\] 背景提鲜[^\n]*\n'
-    r'(?:.*\n)*?'
-    r'    val secondaryTextColor = if \(isDarkBg\) \{.*?\n    \} else \{.*?\n    \}',
-    re.DOTALL
-)
-m = v12_pattern.search(s)
-if m:
-    # 三个定义都在：isLightBg / primaryTextColor / secondaryTextColor
-    new_block = '''    // [34v22] 用封面原色直接判亮度（替换 v12 复杂计算）
-    val isLightBg = androidx.core.graphics.ColorUtils.calculateLuminance(animatedTint.toArgb()) > 0.5f
-    val isDarkBg = !isLightBg // [34v22] 保留兼容
-    val primaryTextColor = if (isLightBg) Color(0xFF1C1C1E) else Color.White // [34v22]
-    val secondaryTextColor = if (isLightBg) musicColors().textSecondary else Color.White.copy(alpha = 0.7f) // [34v22]'''
-    # 自检：三个定义必须都在
-    assert "val isLightBg" in new_block, "缺少 isLightBg"
-    assert "val primaryTextColor" in new_block, "缺少 primaryTextColor"
-    assert "val secondaryTextColor" in new_block, "缺少 secondaryTextColor"
-    print("✓ 替换块自检通过：isLightBg / primaryTextColor / secondaryTextColor 都在")
-    s = s.replace(m.group(0), new_block, 1)
-    print("✓ v12 luminance 块已替换")
-    if ".background(vibrantBg)" in s:
-        s = s.replace(".background(vibrantBg)", ".background(animatedTint) // [34v22]", 1)
-        print("✓ 根背景已改用 animatedTint")
-else:
-    print("❌ 未找到 v12 块")
+# --- 按行定位 v12 块 ---
+# 起始行：包含 "[34v12] 背景提鲜"
+# 结束行：从 "val secondaryTextColor = if (isDarkBg)" 开始，数大括号到闭合
+start_idx = None
+sec_idx = None
+for i, line in enumerate(lines):
+    if "[34v12] 背景提鲜" in line and start_idx is None:
+        start_idx = i
+    if "val secondaryTextColor = if (isDarkBg)" in line and start_idx is not None and sec_idx is None:
+        sec_idx = i
+        break
+
+if start_idx is None:
+    print("❌ 未找到 v12 起始标记 [34v12] 背景提鲜")
+    sys.exit(1)
+if sec_idx is None:
+    print("❌ 未找到 secondaryTextColor 定义行")
     sys.exit(1)
 
+print(f"✓ v12 块起始行: {start_idx + 1}, secondaryTextColor 行: {sec_idx + 1}")
+
+# 从 sec_idx 开始数大括号，找到 if-else 表达式结束
+# 逻辑：depth 从 0 开始，遇到 { +1，遇到 } -1；当 depth 回到 0 且已见过 {，则该行是结束行
+depth = 0
+seen_open = False
+end_idx = sec_idx
+for i in range(sec_idx, min(sec_idx + 20, len(lines))):
+    line = lines[i]
+    # 跳过字符串内的括号（简单处理：v12 块内无复杂字符串）
+    for ch in line:
+        if ch == '{':
+            depth += 1
+            seen_open = True
+        elif ch == '}':
+            depth -= 1
+    if seen_open and depth == 0:
+        end_idx = i
+        break
+
+if not seen_open or depth != 0:
+    print(f"❌ 大括号未闭合 (depth={depth})")
+    sys.exit(1)
+
+print(f"✓ v12 块结束行: {end_idx + 1} (共 {end_idx - start_idx + 1} 行)")
+
+# 替换块（三定义都在）
+new_block_lines = [
+    "    // [34v23] 用封面原色直接判亮度（替换 v12 复杂计算）\n",
+    "    val isLightBg = androidx.core.graphics.ColorUtils.calculateLuminance(animatedTint.toArgb()) > 0.5f\n",
+    "    val isDarkBg = !isLightBg // [34v23] 保留兼容\n",
+    "    val primaryTextColor = if (isLightBg) Color(0xFF1C1C1E) else Color.White // [34v23]\n",
+    "    val secondaryTextColor = if (isLightBg) musicColors().textSecondary else Color.White.copy(alpha = 0.7f) // [34v23]\n",
+]
+# 自检
+joined = "".join(new_block_lines)
+assert "val isLightBg" in joined
+assert "val primaryTextColor" in joined
+assert "val secondaryTextColor" in joined
+print("✓ 替换块自检通过：三定义都在")
+
+new_lines = lines[:start_idx] + new_block_lines + lines[end_idx + 1:]
+s = "".join(new_lines)
+
+# 根背景 vibrantBg → animatedTint
+if ".background(vibrantBg)" in s:
+    s = s.replace(".background(vibrantBg)", ".background(animatedTint) // [34v23]", 1)
+    print("✓ 根背景已改用 animatedTint")
+
+# Icons import
 if "import androidx.compose.material.icons.filled" not in s:
     if "import androidx.compose.material3.*" not in s:
         print("❌ 未找到 material3 import")
         sys.exit(1)
     s = s.replace(
         "import androidx.compose.material3.*",
-        "import androidx.compose.material3.*\nimport androidx.compose.material.icons.Icons\nimport androidx.compose.material.icons.filled.* // [34v22]",
+        "import androidx.compose.material3.*\nimport androidx.compose.material.icons.Icons\nimport androidx.compose.material.icons.filled.* // [34v23]",
         1
     )
     print("✓ Icons import 已加")
@@ -329,7 +365,7 @@ else:
 assert MARK in s, "❌ 断言失败"
 with open(path, "w", encoding="utf-8") as f:
     f.write(s)
-print("✓ 34 v22 完成")
-PYEOF22
+print("✓ 34 v23 完成")
+PYEOF23
 
-echo "=== 34 v22 完成 ==="
+echo "=== 34 v23 完成 ==="
