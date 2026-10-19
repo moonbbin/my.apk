@@ -670,3 +670,73 @@ print("✓ 34 v26 完成")
 PYEOF26
 
 echo "=== 34 v26 完成 ==="
+
+# === 34 v27: 死磕 gradle icons-extended 依赖（带详细日志） ===
+echo "=== 34 v27 ==="
+
+GRADLE_FILE=$(find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1)
+echo "GRADLE_FILE=$GRADLE_FILE"
+if [ -z "$GRADLE_FILE" ]; then
+    echo "❌ 未找到 app/build.gradle*"
+    echo "pwd=$(pwd)"
+    ls app/ 2>/dev/null | head -20
+    exit 1
+fi
+
+COUNT=$(grep -c "material-icons-extended" "$GRADLE_FILE" 2>/dev/null || echo "0")
+echo "现有 material-icons-extended 出现次数: $COUNT"
+
+if [ "$COUNT" -gt 0 ]; then
+    echo "✓ 依赖已存在，跳过插入"
+    grep -n "material-icons-extended" "$GRADLE_FILE"
+else
+    echo "→ 开始插入依赖..."
+    python3 << 'PYDEP27'
+import re, sys, os
+gradle_path = os.popen('find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1').read().strip()
+print(f"Python 读取: {gradle_path}")
+with open(gradle_path, encoding='utf-8') as f:
+    g = f.read()
+print(f"文件大小: {len(g)} 字符")
+
+if "material-icons-extended" in g:
+    print("✓ Python 二次确认：已存在，跳过")
+    sys.exit(0)
+
+is_kts = gradle_path.endswith('.kts')
+print(f"is_kts={is_kts}")
+new_dep = 'implementation("androidx.compose.material:material-icons-extended")' if is_kts else 'implementation "androidx.compose.material:material-icons-extended"'
+print(f"待插入: {new_dep}")
+
+m = re.search(r'(dependencies\s*\{)', g)
+if not m:
+    print("❌ 未找到 dependencies 块")
+    # 打印前 500 字符帮助诊断
+    print("文件头500字符:")
+    print(g[:500])
+    sys.exit(1)
+
+print(f"✓ 找到 dependencies 块 at {m.start()}")
+g = g.replace(m.group(1), m.group(1) + '\n    ' + new_dep + ' // [34v27]', 1)
+with open(gradle_path, 'w', encoding='utf-8') as f:
+    f.write(g)
+print("✓ 写入完成")
+
+# 验证
+with open(gradle_path, encoding='utf-8') as f:
+    g2 = f.read()
+if "material-icons-extended" in g2:
+    print("✓ 验证通过：依赖已在文件中")
+    for line in g2.split('\n'):
+        if 'material-icons-extended' in line:
+            print(f"  → {line.strip()}")
+else:
+    print("❌ 验证失败：写入后仍找不到")
+    sys.exit(1)
+PYDEP27
+    PY_EXIT=$?
+    echo "Python 退出码: $PY_EXIT"
+    if [ $PY_EXIT -ne 0 ]; then exit 1; fi
+fi
+
+echo "=== 34 v27 完成 ==="
