@@ -426,3 +426,52 @@ print("✓ 34 v15 完成")
 PYEOF15
 
 echo "=== 34 v15 完成 ==="
+
+# === 34 v16: 歌词颜色根治 ===
+echo "=== 34 v16 ==="
+
+python3 << 'PYEOF16'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v16]"
+
+with open(path, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("34 v16: 已应用，跳过")
+    sys.exit(0)
+
+def need(old, name):
+    if old not in s:
+        print(f"❌ 替换失败：未找到锚点 {name}")
+        sys.exit(1)
+
+# --- 1. 主歌词：高亮→accent，未高亮→智能反转 ---
+old_main = '''                                        normalColor = Color(lyricColor),
+                                        highlightColor = if (karaokeOn) karaokeHl else Color(lyricHighlight),'''
+new_main = '''                                        normalColor = if (isLightBg) Color(0xFF1C1C1E).copy(alpha = 0.6f) else Color.White.copy(alpha = 0.6f), // [34v16] 智能反转
+                                        highlightColor = if (karaokeOn) karaokeHl else musicColors().accent, // [34v16] 强制粉色'''
+need(old_main, "主歌词颜色")
+s = s.replace(old_main, new_main, 1)
+print("✓ 主歌词颜色已改")
+
+# --- 2. 翻译行：同步修改（用户特别指出第 776 行） ---
+old_trans = '''                                            color = (if (isCurrent) Color(lyricHighlight) else Color(lyricColor)).copy(alpha = 0.65f),'''
+new_trans = '''                                            color = (if (isCurrent) musicColors().accent else if (isLightBg) Color(0xFF1C1C1E).copy(alpha = 0.6f) else Color.White.copy(alpha = 0.6f)).copy(alpha = 0.8f), // [34v16]'''
+need(old_trans, "翻译行颜色")
+s = s.replace(old_trans, new_trans, 1)
+print("✓ 翻译行颜色已改")
+
+assert MARK in s, "❌ 断言失败"
+# 确保无绿色残留
+if "0xFF1DB954" in s:
+    print("⚠ 还有绿色默认值残留（lyricHighlight 定义处，属用户可配置项，保留）")
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(s)
+print("✓ 34 v16 完成")
+PYEOF16
+
+echo "=== 34 v16 完成 ==="
