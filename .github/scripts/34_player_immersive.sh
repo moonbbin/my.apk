@@ -1006,3 +1006,52 @@ print("✓ 34 v30 完成")
 PYEOF30
 
 echo "=== 34 v30 完成 ==="
+
+# === 34 v31: 绕过 catalog，直接 pinned 版本 ===
+echo "=== 34 v31 ==="
+
+GRADLE_FILE=$(find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1)
+if [ -z "$GRADLE_FILE" ]; then
+    echo "❌ 未找到 app/build.gradle*"
+    exit 1
+fi
+echo "GRADLE_FILE=$GRADLE_FILE"
+
+python3 << 'PYEOF31'
+import re, sys, os
+
+gradle_path = os.popen('find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1').read().strip()
+MARK = "// [34v31]"
+
+with open(gradle_path, encoding="utf-8") as f:
+    g = f.read()
+
+if MARK in g:
+    print("34 v31: 已应用，跳过")
+    sys.exit(0)
+
+# 在 dependencies { 后第一行插入 pinned 版本
+m = re.search(r'(dependencies\s*\{\n)', g)
+if not m:
+    print("❌ 未找到 dependencies 块")
+    sys.exit(1)
+
+pinned = '    implementation("androidx.compose.material:material-icons-extended:1.7.3") // [34v31] 绕过catalog，直连\n'
+g = g.replace(m.group(1), m.group(1) + pinned, 1)
+print("✓ 已插入 pinned 版本: 1.7.3")
+
+# 验证
+with open(gradle_path, "w", encoding="utf-8") as f:
+    f.write(g)
+
+with open(gradle_path, encoding="utf-8") as f:
+    g2 = f.read()
+assert '[34v31]' in g2, "❌ 插入失败"
+assert 'material-icons-extended:1.7.3' in g2, "❌ 版本号未写入"
+print("✓ 验证通过")
+print("✓ 34 v31 完成")
+print("")
+print("注：如构建报 Duplicate class / 版本冲突，v32 将降级到 1.6.8")
+PYEOF31
+
+echo "=== 34 v31 完成 ==="
