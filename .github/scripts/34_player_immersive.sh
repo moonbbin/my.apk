@@ -263,93 +263,55 @@ PYEOF
 echo "✓ LxPlayerActivity.kt 34v12 补丁已应用"
 echo "=== 34 v12 完成 ==="
 
-# === 34 v21: 不依赖 material3 行，直接加 icons-extended ===
-echo "=== 34 v21 ==="
+# === 34 v22: 用 v12 标记做锚点替换整个 luminance 块 ===
+echo "=== 34 v22 ==="
 
 GRADLE_FILE=$(find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1)
-if [ -z "$GRADLE_FILE" ]; then
-    echo "❌ 未找到 app/build.gradle*"
-    exit 1
-fi
-echo "Gradle 文件: $GRADLE_FILE"
-
-if grep -q "material-icons-extended" "$GRADLE_FILE"; then
-    echo "✓ icons-extended 已存在"
-else
-    python3 << 'PYDEP'
-import re, sys, os
-gradle_path = os.popen('find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1').read().strip()
-with open(gradle_path, encoding='utf-8') as f:
-    g = f.read()
-
-is_kts = gradle_path.endswith('.kts')
-
-# 策略1：有 compose-bom → 不写版本号（BOM 管理）
-has_bom = "compose-bom" in g
-
-# 保险2：版本策略 — 有 BOM 则不写版本；无 BOM 则找版本号；找不到也不硬塞（让 Gradle 解析）
-ver = ""
-if not has_bom:
-    vm = re.search(r'androidx\.compose[^"\']*:([0-9]+\.[0-9]+\.[0-9]+)', g)
-    if vm:
-        ver = vm.group(1)
-        print(f"✓ 找到 compose 版本: {ver}")
-
-if has_bom or not ver:
-    # 有 BOM → BOM 管理；无版本 → 让 Gradle 自己解析（比硬塞 1.6.0 更安全，防 Duplicate class）
-    new_dep = 'implementation("androidx.compose.material:material-icons-extended")' if is_kts else 'implementation "androidx.compose.material:material-icons-extended"'
-    print("✓ 不写版本号（BOM 管理或 Gradle 自动解析）")
-else:
-    new_dep = f'implementation("androidx.compose.material:material-icons-extended:{ver}")' if is_kts else f'implementation "androidx.compose.material:material-icons-extended:{ver}"'
-
-# 保险1：插入位置 — 直接匹配 dependencies {，插在块内第一行（不依赖第一条是 implementation）
-m = re.search(r'(dependencies\s*\{)', g)
-if m:
-    anchor = m.group(1)
-    g = g.replace(anchor, anchor + '\n    ' + new_dep + ' // [34v21]', 1)
-    print(f"✓ 已加: {new_dep}")
-else:
-    print("❌ 未找到 dependencies 块")
-    sys.exit(1)
-
-with open(gradle_path, 'w', encoding='utf-8') as f:
-    f.write(g)
-PYDEP
-    if [ $? -ne 0 ]; then exit 1; fi
+if [ -n "$GRADLE_FILE" ] && ! grep -q "material-icons-extended" "$GRADLE_FILE"; then
+    echo "⚠ icons-extended 依赖缺失（v21 未成功），请检查"
 fi
 
-# --- isLightBg/isDarkBg 补定义（与 v20 相同） ---
-python3 << 'PYEOF21'
+python3 << 'PYEOF22'
 import re, sys
 
 path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
-MARK = "// [34v21]"
+MARK = "// [34v22]"
 
 with open(path, encoding="utf-8") as f:
     s = f.read()
 
 if MARK in s:
-    print("34 v21: 已应用，跳过")
+    print("34 v22: 已应用，跳过")
     sys.exit(0)
 
-if "val isLightBg" not in s:
-    m2 = re.search(r'(val animatedTint\s*=\s*animateColorAsState[^\n]*\n)', s)
-    if m2:
-        insert_pos = m2.end(1)
-        new_defs = '''
-    // [34v21] 亮度判断（补定义）
+# v12 块：从 "// [34v12] 背景提鲜" 到 secondaryTextColor 定义结束
+v12_pattern = re.compile(
+    r'    // \[34v12\] 背景提鲜[^\n]*\n'
+    r'(?:.*\n)*?'
+    r'    val secondaryTextColor = if \(isDarkBg\) \{.*?\n    \} else \{.*?\n    \}',
+    re.DOTALL
+)
+m = v12_pattern.search(s)
+if m:
+    # 三个定义都在：isLightBg / primaryTextColor / secondaryTextColor
+    new_block = '''    // [34v22] 用封面原色直接判亮度（替换 v12 复杂计算）
     val isLightBg = androidx.core.graphics.ColorUtils.calculateLuminance(animatedTint.toArgb()) > 0.5f
-    val isDarkBg = !isLightBg
-    val primaryTextColor = if (isLightBg) Color(0xFF1C1C1E) else Color.White
-    val secondaryTextColor = if (isLightBg) musicColors().textSecondary else Color.White.copy(alpha = 0.7f)
-'''
-        s = s[:insert_pos] + new_defs + s[insert_pos:]
-        print("✓ isLightBg/isDarkBg 已补定义")
-    else:
-        print("❌ 未找到 animatedTint 定义")
-        sys.exit(1)
+    val isDarkBg = !isLightBg // [34v22] 保留兼容
+    val primaryTextColor = if (isLightBg) Color(0xFF1C1C1E) else Color.White // [34v22]
+    val secondaryTextColor = if (isLightBg) musicColors().textSecondary else Color.White.copy(alpha = 0.7f) // [34v22]'''
+    # 自检：三个定义必须都在
+    assert "val isLightBg" in new_block, "缺少 isLightBg"
+    assert "val primaryTextColor" in new_block, "缺少 primaryTextColor"
+    assert "val secondaryTextColor" in new_block, "缺少 secondaryTextColor"
+    print("✓ 替换块自检通过：isLightBg / primaryTextColor / secondaryTextColor 都在")
+    s = s.replace(m.group(0), new_block, 1)
+    print("✓ v12 luminance 块已替换")
+    if ".background(vibrantBg)" in s:
+        s = s.replace(".background(vibrantBg)", ".background(animatedTint) // [34v22]", 1)
+        print("✓ 根背景已改用 animatedTint")
 else:
-    print("✓ isLightBg 已存在")
+    print("❌ 未找到 v12 块")
+    sys.exit(1)
 
 if "import androidx.compose.material.icons.filled" not in s:
     if "import androidx.compose.material3.*" not in s:
@@ -357,16 +319,17 @@ if "import androidx.compose.material.icons.filled" not in s:
         sys.exit(1)
     s = s.replace(
         "import androidx.compose.material3.*",
-        "import androidx.compose.material3.*\nimport androidx.compose.material.icons.Icons\nimport androidx.compose.material.icons.filled.* // [34v21]",
+        "import androidx.compose.material3.*\nimport androidx.compose.material.icons.Icons\nimport androidx.compose.material.icons.filled.* // [34v22]",
         1
     )
     print("✓ Icons import 已加")
 else:
     print("✓ Icons import 已存在")
 
+assert MARK in s, "❌ 断言失败"
 with open(path, "w", encoding="utf-8") as f:
     f.write(s)
-print("✓ 34 v21 完成")
-PYEOF21
+print("✓ 34 v22 完成")
+PYEOF22
 
-echo "=== 34 v21 完成 ==="
+echo "=== 34 v22 完成 ==="
