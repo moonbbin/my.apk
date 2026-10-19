@@ -1,1 +1,32 @@
-IyDwn5ug77iPIOmfs+S5kOS4k+WMuiDooaXkuIHohJrmnKzlvIDlj5Hop4TojIPvvIjpmLLph43lpI3miZPooaXkuIEv6Ziy6Z2Z6buY5aSx6LSl77yJCgo+ICoq8J+aqCDpgILnlKjojIPlm7TvvIjlvLrnuqbmnZ/vvIkqKu+8mgo+IOacrOinhOiMg+mAgueUqOS6juaJgOacieeUqOS6jueUn+aIkOOAgeS/ruaUueOAgeazqOWFpeS7o+eggeeahCBgLnNoYCDooaXkuIHohJrmnKzvvIjlpoIgYDEyX3h4eC5zaGDjgIFgMzJfeHh4LnNoYO+8ieOAggo+ICoq5qC45b+D5a6X5peoKirvvJrohJrmnKzlv4Xpobvnu53lr7nlronlhajjgIHlj6/ph43lhaXvvJvooaXkuIHmiZPkuI3kuIrlv4XpobvlpKflo7DmiqXplJnvvJvkuKXnpoHmsaHmn5PkuLvkvZPmnoTlu7rmtYHnqIvjgIIKCi0tLQoKIyMg8J+TjCDkuIDjgIEg5bmC562J5LiO5Y+v6YeN5YWl5Y6f5YiZ77yI6Ziy6YeN5aSN5omn6KGM5oql6ZSZ77yJCjEuICoq5bmC562J5omn6KGMKirvvJrmiYDmnInooaXkuIHohJrmnKzlv4XpobvmlK/mjIHluYLnrYnjgILph43lpI3miafooYzvvIjlpoLov57nu63ot5HkuKTpgY3vvInml7bvvIzlv4Xpobvog73mo4DmtYvliLDlt7LlpITnkIbnmoTlhoXlrrnlubboh6rliqjot7Pov4fvvIznu53kuI3ph43lpI3mj5LlhaXku6PnoIHmiJbmiqXplJnkuK3mlq3jgIIKMi4gKirniYjmnKzmoIforrAqKu+8muavj+asoeS/ruaUueaIluaWsOWinuS7o+eggeazqOWFpe+8jOW/hemhu+WcqOebruagh+aWh+S7tuWvueW6lOS9jee9ruWKoOS4iuazqOmHiuagh+iusO+8iOWmgiBgLy8gWzMydlhYXWAg5oiWIGAvLyBbQXVkaW9QYXRjaF92Ml1g77yJ77yM5pa55L6/5ZCO57ut5o6S5p+l5ZKM6Lez6L+H5qOA5rWL44CCCjMuICoq5paH5pys57yW56CB5LiO5o2i6KGM77yI5aSn5Y6C5b+F5p+l77yJKirvvJrmiYDmnInpgJrov4cgU2hlbGwg5rOo5YWl55qE5Luj56CB77yM5b+F6aG756Gu5L+d5Li6IGBVVEYtOGAg57yW56CB77yM5LiU5o2i6KGM5Li6IGBMRmDvvIhVbml4IOagvOW8j++8ieOAguS4peemgeWboCBgQ1JMRmDvvIhXaW5kb3dzIOagvOW8j++8ieWvvOiHtCBLb3RsaW4g57yW6K+R5oql6ZSZ5oiW5Lmx56CB44CCCgojIyDwn5OMIOS6jOOAgSDplJrngrnmoKHpqozkuI4gRmFpbC1GYXN077yI6Ziy6Z2Z6buY5aSx6LSl77yJCjEuICoq5pu/5o2i5YmN5qOA5p+lKirvvJrkvb/nlKggYGdyZXBgIOetieW3peWFt+ehruiupOebruagh+S7o+eggemUmueCueWtmOWcqOOAggoyLiAqKuabv+aNouWQjuagoemqjCoq77ya5omn6KGM5a6MIGBzZWRgL2Bhd2tgIOetieabv+aNouWQju+8jOW/hemhu+aJk+WNsOWHuuiiq+S/ruaUueeahOWMuuWfn++8jOaIluS9v+eUqCBgZ2l0IGRpZmZgIOS6jOasoeehruiupOabv+aNoue7k+aenOOAguWmguaenOmUmueCueacquWRveS4reaIluS4jeespuWQiOmihOacn++8jCoq5b+F6aG75omT5Y2w6ZSZ6K+v5L+h5oGv5bm2IGBleGl0IDFgIOe7iOatouaehOW7uuOAgioqCjMuICoq5a6J5YWo5aSH5Lu977yI5Y+v6YCJ77yJKirvvJrlnKjmiafooYznoLTlnY/mgKfkv67mlLnvvIjlpoLlpKfmrrXmraPliJnmm7/mjaLvvInliY3vvIzlu7rorq7lhYggYGNwYCDkuIDku70gYC5iYWtgIOaWh+S7tu+8jOS7pemYsuS4h+S4gOOAggoKIyMg8J+TjCDkuInjgIEg6ISa5pys5p625p6E5LiO6ZqU56a7CjEuICoq5LiN5aKe5paw6ISa5pys77yM5Y+q5pS55Y6f6ISa5pysKirvvJrlkIzlip/og73nmoTooaXkuIHlv4XpobvlkIjlubbliLDljp/ohJrmnKzkuK3vvIzkuKXnpoHml6DpmZDmlrDlop7ohJrmnKznoo7niYfjgIIKMi4gKirmiYvliqjmjqfliLblvIDlhbMqKu+8muaWsOWinuihpeS4geiEmuacrOWQju+8jGBidWlsZC55bWxgIOeahOiwg+eUqOihjOW/hemhu+eUseeUqOaIt+aJi+WKqOa3u+WKoO+8jOiEmuacrOWGhemDqOS4jeW+l+S/ruaUuSBgYnVpbGQueW1sYOOAggozLiAqKuS7o+eggeinhOiMg+acjeS7jiBVSV9TUEVDKirvvJrooaXkuIHohJrmnKzms6jlhaXnmoQgQ29tcG9zZSDku6PnoIHvvIzlv4XpobvkuKXmoLzpgbXlroggYC5naXRodWIvVUlfU1BFQy5tZGDvvIznpoHmraLlnKjohJrmnKzkuK3lhpnmrbvku7vkvZUgSGV4IOiJsuWAvOaIluehrOe8lueggeminOiJsuOAggo0LiAqKlNoZWxsQ2hlY2sg5qCh6aqM77yI5aSn5Y6C5b+F5p+l77yJKirvvJrnvJblhpnlrozmiJDnmoQgYC5zaGAg6ISa5pys77yM5o6o6I2Q5L2/55SoIGBzaGVsbGNoZWNrYCDlt6Xlhbfov4fkuIDpgY3vvIzmtojpmaTmnKrlrprkuYnnmoTlj5jph4/vvIjlpoLlm6Dmi7zlhpnplJnor6/lr7zoh7QgYCRQQUhUYCDkuLrnqbrvvInjgIHmnKrliqDlvJXlj7fnmoTlj5jph4/vvIjlr7zoh7Tot6/lvoTluKbnqbrmoLzml7bmiqXplJnvvInnrYnkvY7nuqfpmpDmgqPjgIIKCiMjIPCfk4wg5Zub44CBIOemgeatouepuuaWreiogOihpeS4ge+8iOmYsiLlj6rllorkuI3lgZoi77yJCgoxLiAqKuWunui0qOS/ruaUueW8uuWItioq77ya5aaC5p6c6ISa5pys5aOw56ew5L+u5pS55LqGIFVJ77yI5oiW5Lu75L2V5Yqf6IO977yJ77yM5b+F6aG75YyF5ZCr5a6e6ZmF5L+u5pS555uu5qCH5paH5Lu255qE5Luj56CB6YC76L6R77yI5pu/5o2i44CB5o+S5YWl44CB5Yig6Zmk5Z2H5Y+v77yJ44CCKirkuKXnpoHlj6rlhpkgYHByaW50KCLinJMgeHh45a6M5oiQIilgIOaXpeW/l+iAjOaXoOWunui0qOS7o+eggSoq4oCU4oCU6L+Z56eNIuepuuWjs+ihpeS4gSLkvJrpqpfov4fmnoTlu7rmo4Dmn6XvvIzlr7zoh7Tpl67popjmsLjov5zkv67kuI3lpb3jgIIKMi4gKiroh6rmn6XpobkqKu+8muavj+S4quWPt+ensCLkv67lpI3lrozmiJAi55qE5q2l6aqk77yM5b+F6aG76IO95Zue562UIuebruagh+aWh+S7tueahOWTquS4gOihjOiiq+aUueaIkOS6huS7gOS5iCLjgILnrZTkuI3kuIrmnaXlsLHmmK/nqbrooaXkuIHjgIIKMy4gKirov53op4TmoYjkvosqKu+8mjM0IHYxMiAi6Zeu6aKYM++8muatjOivjeacqumrmOS6ruihjCLmm77lj6rmnIkgYHByaW50KCLinJMg5q2M6K+N6aKc6Imy5qOA5p+l5a6M5oiQIilgIOiAjOaXoOS7u+S9leminOiJsuabv+aNouS7o+egge+8jOWvvOiHtOatjOivjeeci+S4jea4heeahOmXrumimOmVv+acn+acquS/ruWkje+8iDIwMjYtMTAtMTkg5Y+R546w5bm256uL6KeE77yJ44CCCgojIyDwn6SWIEFJIOeUn+aIkOiEmuacrOeahCBQcm9tcHQKPiDigJzlnKjnvJblhpnmiJbkv67mlLnku7vkvZUgU2hlbGwg6KGl5LiB6ISa5pys5YmN77yM6K+35Lil5qC86YG15a6IIGAuZ2l0aHViL1NDUklQVF9TUEVDLm1kYOOAguehruS/neiEmuacrOWFt+Wkh+W5guetieaAp+OAgeazqOWFpeS7o+eggeW4puacieeJiOacrOagh+iusOWSjCBMRiDmjaLooYzjgIHplJrngrnmnKrlkb3kuK3lv4XpobsgZXhpdCAx44CB5LiU5rOo5YWl55qEIFVJIOS7o+eggeS4jeW+l+i/neWPjSBgVUlfU1BFQy5tZGAg55qE6aKc6Imy57qm5p2f44CC4oCdCg==
+# 🛠️ 音乐专区 补丁脚本开发规范（防重复打补丁/防静默失败）
+
+> **🚨 适用范围（强约束）**：
+> 本规范适用于所有用于生成、修改、注入代码的 `.sh` 补丁脚本（如 `12_xxx.sh`、`32_xxx.sh`）。
+> **核心宗旨**：脚本必须绝对安全、可重入；补丁打不上必须大声报错；严禁污染主体构建流程。
+
+---
+
+## 📌 一、 幂等与可重入原则（防重复执行报错）
+1. **幂等执行**：所有补丁脚本必须支持幂等。重复执行（如连续跑两遍）时，必须能检测到已处理的内容并自动跳过，绝不重复插入代码或报错中断。
+2. **版本标记**：每次修改或新增代码注入，必须在目标文件对应位置加上注释标记（如 `// [32vXX]` 或 `// [AudioPatch_v2]`），方便后续排查和跳过检测。
+3. **文本编码与换行（大厂必查）**：所有通过 Shell 注入的代码，必须确保为 `UTF-8` 编码，且换行为 `LF`（Unix 格式）。严禁因 `CRLF`（Windows 格式）导致 Kotlin 编译报错或乱码。
+
+## 📌 二、 锚点校验与 Fail-Fast（防静默失败）
+1. **替换前检查**：使用 `grep` 等工具确认目标代码锚点存在。
+2. **替换后校验**：执行完 `sed`/`awk` 等替换后，必须打印出被修改的区域，或使用 `git diff` 二次确认替换结果。如果锚点未命中或不符合预期，**必须打印错误信息并 `exit 1` 终止构建。**
+3. **安全备份（可选）**：在执行破坏性修改（如大段正则替换）前，建议先 `cp` 一份 `.bak` 文件，以防万一。
+
+## 📌 三、 脚本架构与隔离
+1. **不增新脚本，只改原脚本**：同功能的补丁必须合并到原脚本中，严禁无限新增脚本碎片。
+2. **手动控制开关**：新增补丁脚本后，`build.yml` 的调用行必须由用户手动添加，脚本内部不得修改 `build.yml`。
+3. **代码规范服从 UI_SPEC**：补丁脚本注入的 Compose 代码，必须严格遵守 `.github/UI_SPEC.md`，禁止在脚本中写死任何 Hex 色值或硬编码颜色。
+4. **ShellCheck 校验（大厂必查）**：编写完成的 `.sh` 脚本，推荐使用 `shellcheck` 工具过一遍，消除未定义的变量（如因拼写错误导致 `$PAHT` 为空）、未加引号的变量（导致路径带空格时报错）等低级隐患。
+
+## 📌 四、 禁止空断言补丁（防"只喊不做"）
+
+1. **实质修改强制**：如果脚本声称修改了 UI（或任何功能），必须包含实际修改目标文件的代码逻辑（替换、插入、删除均可）。**严禁只写 `print("✓ xxx完成")` 日志而无实质代码**——这种"空壳补丁"会骗过构建检查，导致问题永远修不好。
+2. **自查项**：每个号称"修复完成"的步骤，必须能回答"目标文件的哪一行被改成了什么"。答不上来就是空补丁。
+3. **违规案例**：34 v12 "问题3：歌词未高亮行"曾只有 `print("✓ 歌词颜色检查完成")` 而无任何颜色替换代码，导致歌词看不清的问题长期未修复（2026-10-19 发现并立规）。
+
+## 🤖 AI 生成脚本的 Prompt
+> “在编写或修改任何 Shell 补丁脚本前，请严格遵守 `.github/SCRIPT_SPEC.md`。确保脚本具备幂等性、注入代码带有版本标记和 LF 换行、锚点未命中必须 exit 1、且注入的 UI 代码不得违反 `UI_SPEC.md` 的颜色约束。”
