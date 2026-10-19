@@ -839,3 +839,48 @@ print("=== 34 v28 诊断完成（未修改任何代码） ===")
 PYEOF28
 
 echo "=== 34 v28 完成 ==="
+
+# === 34 v29: 删除 v26 重复依赖 ===
+echo "=== 34 v29 ==="
+
+GRADLE_FILE=$(find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1)
+if [ -z "$GRADLE_FILE" ]; then
+    echo "❌ 未找到 app/build.gradle*"
+    exit 1
+fi
+
+python3 << 'PYEOF29'
+import sys, os
+
+gradle_path = os.popen('find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1').read().strip()
+with open(gradle_path, encoding="utf-8") as f:
+    lines = f.readlines()
+
+# 找到 v26 加的那行（带 [34v26] 标记的裸坐标）
+target = None
+for i, line in enumerate(lines):
+    if '[34v26]' in line and 'material-icons-extended' in line:
+        target = i
+        break
+
+if target is None:
+    print("✓ v26 重复行已不存在，跳过")
+    sys.exit(0)
+
+print(f"✓ 找到重复行第 {target+1} 行: {lines[target].strip()}")
+del lines[target]
+print("✓ 已删除")
+
+# 验证：原生 catalog 依赖还在
+with open(gradle_path, "w", encoding="utf-8") as f:
+    f.writelines(lines)
+
+with open(gradle_path, encoding="utf-8") as f:
+    g = f.read()
+assert 'libs.androidx.compose.material.icons.extended' in g, "❌ 原生依赖丢失！"
+assert '[34v26]' not in g, "❌ 重复行未删干净！"
+print("✓ 验证通过：原生 libs.androidx.compose.material.icons.extended 保留，重复项已删")
+print("✓ 34 v29 完成")
+PYEOF29
+
+echo "=== 34 v29 完成 ==="
