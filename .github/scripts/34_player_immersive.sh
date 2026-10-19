@@ -740,3 +740,102 @@ PYDEP27
 fi
 
 echo "=== 34 v27 完成 ==="
+
+# === 34 v28: 纯诊断（不改代码，只打印） ===
+echo "=== 34 v28 诊断 ==="
+
+GRADLE_FILE=$(find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1)
+if [ -z "$GRADLE_FILE" ]; then
+    echo "❌ 未找到 app/build.gradle*"
+    echo "pwd=$(pwd)"
+    ls app/ 2>/dev/null | head -20
+    exit 1
+fi
+echo "GRADLE_FILE=$GRADLE_FILE"
+
+python3 << 'PYEOF28'
+import re, sys, os
+
+gradle_path = os.popen('find app -maxdepth 1 -name "build.gradle*" 2>/dev/null | head -1').read().strip()
+print(f"诊断文件: {gradle_path}")
+
+with open(gradle_path, encoding="utf-8") as f:
+    g = f.read()
+
+print("=" * 60)
+print("【1】dependencies 块完整内容：")
+print("=" * 60)
+# 找到 dependencies { ... } 块（行定位法，防回溯）
+lines = g.split('\n')
+dep_start = -1
+for i, line in enumerate(lines):
+    if re.match(r'\s*dependencies\s*\{', line):
+        dep_start = i
+        break
+if dep_start == -1:
+    print("❌ 未找到 dependencies 块")
+    sys.exit(1)
+depth = 0
+dep_end = -1
+for i in range(dep_start, len(lines)):
+    depth += lines[i].count('{') - lines[i].count('}')
+    if i > dep_start and depth == 0:
+        dep_end = i
+        break
+for i in range(dep_start, dep_end + 1):
+    print(f"  {i+1:4d} | {lines[i]}")
+
+print("")
+print("=" * 60)
+print("【2】BOM 检查：")
+print("=" * 60)
+bom_patterns = [
+    r'platform\s*\(\s*"androidx\.compose:compose-bom[^"]*"',
+    r"platform\s*\(\s*'androidx\.compose:compose-bom[^']*'",
+    r'platform\s*\(\s*libs\.androidx\.compose\.bom',
+    r'compose-bom',
+]
+found_bom = False
+for pat in bom_patterns:
+    for m in re.finditer(pat, g):
+        # 打印该行
+        line_no = g[:m.start()].count('\n') + 1
+        line = g.split('\n')[line_no - 1].strip()
+        print(f"  ✓ 第{line_no}行: {line}")
+        found_bom = True
+if not found_bom:
+    print("  ✗ 未找到 compose-bom")
+
+print("")
+print("=" * 60)
+print("【3】现有 compose.material / material3 依赖及版本：")
+print("=" * 60)
+for i, line in enumerate(lines):
+    s = line.strip()
+    if 'androidx.compose.material' in s or 'material3' in s:
+        # 跳过注释
+        if s.startswith('//'):
+            continue
+        print(f"  第{i+1}行: {s}")
+        # 提取版本号
+        vm = re.search(r'["\']([^"\']*androidx\.compose[^"\']*)["\']', s)
+        if vm:
+            print(f"         → 坐标: {vm.group(1)}")
+
+print("")
+print("=" * 60)
+print("【4】material-icons 相关（core/extended）：")
+print("=" * 60)
+found_icons = False
+for i, line in enumerate(lines):
+    if 'material-icons' in line and not line.strip().startswith('//'):
+        print(f"  第{i+1}行: {line.strip()}")
+        found_icons = True
+if not found_icons:
+    print("  ✗ 无任何 material-icons 依赖")
+
+print("")
+print("=== 34 v28 诊断完成（未修改任何代码） ===")
+PYEOF28
+
+echo "=== 34 v28 完成 ==="
