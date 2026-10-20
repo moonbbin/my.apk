@@ -2477,6 +2477,246 @@ PYEOF45
 echo "=== 34 v45 完成 ==="
 
 
+# === 34 v48: 徽章检测中 + 四档回退（修正3：实测优先+估值取整防闪） ===
+echo "=== 34 v48 ==="
+
+python3 << 'PYEOF48'
+import sys, re
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v48]"
+
+with open(path, encoding="utf-8") as f:
+    content = f.read()
+
+if MARK in content:
+    print("34 v48: 已应用，跳过")
+    sys.exit(0)
+
+# --- 步骤1：加 collect ---
+anchor = "val currentQuality by LxPlayerManager.currentQuality.collectAsState()"
+if anchor not in content:
+    print("❌ 未找到 currentQuality 收集锚点")
+    sys.exit(1)
+new_collect = anchor + "\n    val isProbing by LxPlayerManager.isProbing.collectAsState() " + MARK + \
+    "\n    val probeTier by LxPlayerManager.probeTier.collectAsState() " + MARK
+content = content.replace(anchor, new_collect, 1)
+print("✓ isProbing/probeTier 收集已加")
+
+# --- 步骤2：徽章块行级替换 ---
+lines = content.split('\n')
+badge_start = -1
+for i, l in enumerate(lines):
+    if 'if (currentQuality.isNotEmpty())' in l:
+        badge_start = i
+        break
+if badge_start == -1:
+    print("❌ 未找到徽章 if 块")
+    sys.exit(1)
+
+depth = 0
+badge_end = -1
+for i in range(badge_start, len(lines)):
+    depth += lines[i].count('{') - lines[i].count('}')
+    if i > badge_start and depth == 0:
+        badge_end = i
+        break
+if badge_end == -1:
+    print("❌ 徽章块结束未找到")
+    sys.exit(1)
+print(f"✓ 徽章块定位：第 {badge_start+1}-{badge_end+1} 行")
+
+indent = lines[badge_start][:len(lines[badge_start]) - len(lines[badge_start].lstrip())]
+# 修正3：实测(measuredBitrate)优先，估值(bitrate)取整 /100*100 防跳动
+new_badge = f"""{indent}val badgeText: String? = when {{ {MARK}
+{indent}    isProbing -> "⏳ 检测中..."
+{indent}    currentQuality.isEmpty() -> null
+{indent}    measuredBitrate > 0 -> "${{LxPlayerManager.qualityLabel(currentQuality)}} · 实测约${{measuredBitrate}}kbps"
+{indent}    bitrate > 0 -> "${{LxPlayerManager.qualityLabel(currentQuality)}} · ${{bitrate / 100 * 100}}kbps"
+{indent}    probeTier >= 2 -> LxPlayerManager.qualityLabel(currentQuality)
+{indent}    probeTier == 1 -> "高品质"
+{indent}    probeTier == 0 -> LxPlayerManager.qualityLabel(currentQuality)
+{indent}    else -> null
+{indent}}}
+{indent}if (badgeText != null) {{
+{indent}    Box(
+{indent}        modifier = Modifier.fillMaxWidth(),
+{indent}        contentAlignment = Alignment.Center
+{indent}    ) {{
+{indent}        Text(
+{indent}            text = badgeText,
+{indent}            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+{indent}            color = musicColors().accent.copy(alpha = 0.8f),
+{indent}            modifier = Modifier
+{indent}                .border(0.5.dp, musicColors().accent.copy(alpha = 0.5f), RoundedCornerShape(3.dp))
+{indent}                .padding(horizontal = 5.dp, vertical = 1.dp)
+{indent}        )
+{indent}    }}
+{indent}    Spacer(modifier = Modifier.height(8.dp))
+{indent}}} else {{
+{indent}    Spacer(modifier = Modifier.height(24.dp))
+{indent}}}"""
+
+lines[badge_start:badge_end+1] = [new_badge]
+content = '\n'.join(lines)
+
+assert MARK in content
+with open(path, 'w', encoding='utf-8') as f:
+    f.write(content)
+print("✓ 34 v48: 徽章逻辑已替换")
+PYEOF48
+
+echo "=== 34 v48 完成 ==="
+
+# === 34 v49: 播放/暂停图标（v46 丢失后重做） ===
+echo "=== 34 v49 ==="
+
+python3 << 'PYEOF49'
+import sys, re
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v49]"
+
+with open(path, encoding="utf-8") as f:
+    lines = f.readlines()
+
+if MARK in "".join(lines):
+    print("34 v49: 已应用，跳过")
+    sys.exit(0)
+
+# 已有 PlayerPlayIcon 则只修 tint，不重复插入
+has_play = any('PlayerPlayIcon(' in l for l in lines)
+has_pause = any('PlayerPauseIcon(' in l for l in lines)
+print(f"已有 PlayerPlayIcon: {has_play}, PlayerPauseIcon: {has_pause}")
+
+fixed = []
+if has_play or has_pause:
+    for i, l in enumerate(lines):
+        if ('PlayerPlayIcon(' in l or 'PlayerPauseIcon(' in l) and 'tint = Color.White' not in l:
+            nl = re.sub(r'tint\s*=\s*[^,\)]+', 'tint = Color.White', l)
+            if nl != l:
+                lines[i] = nl
+                fixed.append(f'第{i+1}行 tint→White')
+else:
+    # 无调用：找播放键（isPlaying + 大尺寸按钮块）
+    for i, line in enumerate(lines):
+        if 'IconButton(' in line or 'Box(' in line:
+            block = "".join(lines[i:i+20])
+            if 'isPlaying' in block and re.search(r'(6[0-9]|7[0-9])\.dp', block):
+                for j in range(i, min(i+20, len(lines))):
+                    if ') {' in lines[j]:
+                        indent = lines[j][:len(lines[j]) - len(lines[j].lstrip())] + '    '
+                        icon_code = (
+                            f'{indent}if (isPlaying) {{ {MARK}\n'
+                            f'{indent}    PlayerPauseIcon(tint = Color.White, modifier = Modifier.size(32.dp))\n'
+                            f'{indent}}} else {{\n'
+                            f'{indent}    PlayerPlayIcon(tint = Color.White, modifier = Modifier.size(32.dp))\n'
+                            f'{indent}}}\n'
+                        )
+                        lines.insert(j+1, icon_code)
+                        fixed.append(f'第{j+2}行 写入播放/暂停图标')
+                        break
+                break
+
+if not fixed:
+    print("⚠ 34 v49: 未找到可修复处（可能已有正确图标）")
+else:
+    with open(path, 'w', encoding='utf-8') as f:
+        f.writelines(lines)
+    print(f"✓ 34 v49: {fixed}")
+PYEOF49
+
+echo "=== 34 v49 完成 ==="
+
+# === 34 v50: 播放键用真实锚点（Text emoji → Player*Icon） ===
+echo "=== 34 v50 ==="
+
+python3 << 'PYEOF50'
+import sys, re
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v50]"
+
+with open(path, encoding="utf-8") as f:
+    content = f.read()
+
+if MARK in content:
+    print("34 v50: 已应用，跳过")
+    sys.exit(0)
+
+# 真实锚点（13 号原始源码）：text = if (isPlaying) "⏸" else "▶",
+# 若已被 v49 修成 Player*Icon，则只确保 tint=White
+if 'PlayerPlayIcon(' in content and 'PlayerPauseIcon(' in content:
+    print("✓ 已有 Player*Icon，v50 只校验 tint")
+    lines = content.split('\n')
+    fixed = []
+    for i, l in enumerate(lines):
+        if ('PlayerPlayIcon(' in l or 'PlayerPauseIcon(' in l) and 'tint = Color.White' not in l and MARK not in l:
+            nl = re.sub(r'tint\s*=\s*[^,\)]+', 'tint = Color.White', l)
+            if nl != l:
+                lines[i] = nl + " " + MARK
+                fixed.append(i+1)
+    if fixed:
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(lines))
+        print(f"✓ tint 已修正：{fixed}")
+    else:
+        print("✓ tint 已是白色，无需改")
+    sys.exit(0)
+
+# 锚点：原始 Text emoji（可能已被改背景色，但 Text 结构应在）
+old_text = 'text = if (isPlaying) "⏸" else "▶",'
+if old_text not in content:
+    print(f"❌ 未找到锚点：{old_text}")
+    print("打印 isPlaying 相关行：")
+    for i, l in enumerate(content.split('\n')):
+        if 'isPlaying' in l and ('Text(' in l or 'Player' in l):
+            print(f"  {i+1}: {l.strip()[:80]}")
+    sys.exit(1)
+
+# 找到 Text( 块：从 text= 行向上找 Text(，向下找 )
+lines = content.split('\n')
+ti = -1
+for i, l in enumerate(lines):
+    if old_text in l:
+        ti = i
+        break
+# 向上找 Text(
+ts = ti
+for j in range(ti, max(0, ti-5), -1):
+    if 'Text(' in lines[j]:
+        ts = j
+        break
+# 向下找配对的 )
+depth = 0
+te = -1
+for j in range(ts, len(lines)):
+    depth += lines[j].count('(') - lines[j].count(')')
+    if j > ts and depth == 0:
+        te = j
+        break
+if te == -1:
+    print("❌ Text 块结束未找到")
+    sys.exit(1)
+print(f"✓ Text 块：第 {ts+1}-{te+1} 行")
+
+indent = lines[ts][:len(lines[ts]) - len(lines[ts].lstrip())]
+new_icon = (
+    f"{indent}if (isPlaying) PlayerPauseIcon(tint = Color.White, modifier = Modifier.size(30.dp)) {MARK}\n"
+    f"{indent}else PlayerPlayIcon(tint = Color.White, modifier = Modifier.size(30.dp)) {MARK}"
+)
+lines[ts:te+1] = [new_icon]
+content = '\n'.join(lines)
+
+assert MARK in content
+with open(path, 'w', encoding='utf-8') as f:
+    f.write(content)
+print("✓ 34 v50: Text emoji → Player*Icon（白色）")
+PYEOF50
+
+echo "=== 34 v50 完成 ==="
+
+
 # === 34 v51: 纯诊断（打印歌词色真实状态） ===
 echo "=== 34 v51 DIAGNOSTIC ==="
 
