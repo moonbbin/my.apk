@@ -1560,3 +1560,46 @@ print("✓ 21 v26 完成")
 PYEOF26
 
 echo "=== 21 v26 完成 ==="
+
+# === 21 v27: 无fallback出口补 _isProbing=false（防永久卡死检测中） ===
+echo "=== 21 v27 ==="
+
+python3 << 'PYEOF27'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+MARK = "// [21v27]"
+
+with open(path, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("21 v27: 已应用，跳过")
+    sys.exit(0)
+
+# 锚点：qualityIndex >= tryOrder.size 的无fallback post块
+# 特征序列：setLoading(false) + 自动切下一曲注释 + tryAutoNextOnFailure
+old = """                        mainHandler.post {
+                            setLoading(false)
+                            // 自动切下一曲，失败才报错
+                            if (!tryAutoNextOnFailure()) {"""
+if old not in s:
+    print("❌ 未找到无fallback出口锚点")
+    sys.exit(1)
+
+# 位置必须在 setLoading(false) 之后、tryAutoNextOnFailure() 之前
+new = """                        mainHandler.post {
+                            setLoading(false)
+                            _isProbing.value = false // [21v27] 全部音质耗尽无fallback，强制结束探针状态防卡死
+                            // 自动切下一曲，失败才报错
+                            if (!tryAutoNextOnFailure()) {"""
+s = s.replace(old, new, 1)
+print("✓ 无fallback出口已加 _isProbing=false")
+
+assert MARK in s
+with open(path, "w", encoding="utf-8") as f:
+    f.write(s)
+print("✓ 21 v27 完成")
+PYEOF27
+
+echo "=== 21 v27 完成 ==="
