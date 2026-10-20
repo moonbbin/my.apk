@@ -2686,3 +2686,91 @@ else:
 PYEOF49
 
 echo "=== 34 v49 完成 ==="
+
+# === 34 v50: 播放键用真实锚点（Text emoji → Player*Icon） ===
+echo "=== 34 v50 ==="
+
+python3 << 'PYEOF50'
+import sys, re
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v50]"
+
+with open(path, encoding="utf-8") as f:
+    content = f.read()
+
+if MARK in content:
+    print("34 v50: 已应用，跳过")
+    sys.exit(0)
+
+# 真实锚点（13 号原始源码）：text = if (isPlaying) "⏸" else "▶",
+# 若已被 v49 修成 Player*Icon，则只确保 tint=White
+if 'PlayerPlayIcon(' in content and 'PlayerPauseIcon(' in content:
+    print("✓ 已有 Player*Icon，v50 只校验 tint")
+    lines = content.split('\n')
+    fixed = []
+    for i, l in enumerate(lines):
+        if ('PlayerPlayIcon(' in l or 'PlayerPauseIcon(' in l) and 'tint = Color.White' not in l and MARK not in l:
+            nl = re.sub(r'tint\s*=\s*[^,\)]+', 'tint = Color.White', l)
+            if nl != l:
+                lines[i] = nl + " " + MARK
+                fixed.append(i+1)
+    if fixed:
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(lines))
+        print(f"✓ tint 已修正：{fixed}")
+    else:
+        print("✓ tint 已是白色，无需改")
+    sys.exit(0)
+
+# 锚点：原始 Text emoji（可能已被改背景色，但 Text 结构应在）
+old_text = 'text = if (isPlaying) "⏸" else "▶",'
+if old_text not in content:
+    print(f"❌ 未找到锚点：{old_text}")
+    print("打印 isPlaying 相关行：")
+    for i, l in enumerate(content.split('\n')):
+        if 'isPlaying' in l and ('Text(' in l or 'Player' in l):
+            print(f"  {i+1}: {l.strip()[:80]}")
+    sys.exit(1)
+
+# 找到 Text( 块：从 text= 行向上找 Text(，向下找 )
+lines = content.split('\n')
+ti = -1
+for i, l in enumerate(lines):
+    if old_text in l:
+        ti = i
+        break
+# 向上找 Text(
+ts = ti
+for j in range(ti, max(0, ti-5), -1):
+    if 'Text(' in lines[j]:
+        ts = j
+        break
+# 向下找配对的 )
+depth = 0
+te = -1
+for j in range(ts, len(lines)):
+    depth += lines[j].count('(') - lines[j].count(')')
+    if j > ts and depth == 0:
+        te = j
+        break
+if te == -1:
+    print("❌ Text 块结束未找到")
+    sys.exit(1)
+print(f"✓ Text 块：第 {ts+1}-{te+1} 行")
+
+indent = lines[ts][:len(lines[ts]) - len(lines[ts].lstrip())]
+new_icon = (
+    f"{indent}if (isPlaying) PlayerPauseIcon(tint = Color.White, modifier = Modifier.size(30.dp)) {MARK}\n"
+    f"{indent}else PlayerPlayIcon(tint = Color.White, modifier = Modifier.size(30.dp)) {MARK}"
+)
+lines[ts:te+1] = [new_icon]
+content = '\n'.join(lines)
+
+assert MARK in content
+with open(path, 'w', encoding='utf-8') as f:
+    f.write(content)
+print("✓ 34 v50: Text emoji → Player*Icon（白色）")
+PYEOF50
+
+echo "=== 34 v50 完成 ==="
