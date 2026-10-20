@@ -2628,98 +2628,6 @@ PYEOF49
 
 echo "=== 34 v49 完成 ==="
 
-# === 34 v50: 播放键用真实锚点（Text emoji → Player*Icon） ===
-echo "=== 34 v50 ==="
-
-python3 << 'PYEOF50'
-import sys, re
-
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
-MARK = "// [34v50]"
-
-with open(path, encoding="utf-8") as f:
-    content = f.read()
-
-if MARK in content:
-    print("34 v50: 已应用，跳过")
-    sys.exit(0)
-
-# 真实锚点（13 号原始源码）：text = if (isPlaying) "⏸" else "▶",
-# 若已被 v49 修成 Player*Icon，则只确保 tint=White
-if 'PlayerPlayIcon(' in content and 'PlayerPauseIcon(' in content:
-    print("✓ 已有 Player*Icon，v50 只校验 tint")
-    lines = content.split('\n')
-    fixed = []
-    for i, l in enumerate(lines):
-        if ('PlayerPlayIcon(' in l or 'PlayerPauseIcon(' in l) and 'tint = Color.White' not in l and MARK not in l:
-            nl = re.sub(r'tint\s*=\s*[^,\)]+', 'tint = Color.White', l)
-            if nl != l:
-                lines[i] = nl + " " + MARK
-                fixed.append(i+1)
-    if fixed:
-        with open(path, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(lines))
-        print(f"✓ tint 已修正：{fixed}")
-    else:
-        print("✓ tint 已是白色，无需改")
-    sys.exit(0)
-
-# 锚点：原始 Text emoji（可能已被改背景色，但 Text 结构应在）
-old_text = 'text = if (isPlaying) "⏸" else "▶",'
-if old_text not in content:
-    print(f"❌ 未找到锚点：{old_text}")
-    print("打印 isPlaying 相关行：")
-    for i, l in enumerate(content.split('\n')):
-        if 'isPlaying' in l and ('Text(' in l or 'Player' in l):
-            print(f"  {i+1}: {l.strip()[:80]}")
-    print("⚠ [34v54诊断] v50 锚点未命中，诊断模式放行（待 v55 按真实结构修复后恢复 exit 1）")
-    # TODO[34v55]：下面这行是临时放行——v55 拿到 DIAG2 真实代码并替换成功后，必须删掉这行
-    # sys.exit(0)，恢复 Fail-Fast：锚点未命中必须 exit 1 大声失败（ARCH_SPEC 红线）
-    sys.exit(0)
-
-# 找到 Text( 块：从 text= 行向上找 Text(，向下找 )
-lines = content.split('\n')
-ti = -1
-for i, l in enumerate(lines):
-    if old_text in l:
-        ti = i
-        break
-# 向上找 Text(
-ts = ti
-for j in range(ti, max(0, ti-5), -1):
-    if 'Text(' in lines[j]:
-        ts = j
-        break
-# 向下找配对的 )
-depth = 0
-te = -1
-for j in range(ts, len(lines)):
-    depth += lines[j].count('(') - lines[j].count(')')
-    if j > ts and depth == 0:
-        te = j
-        break
-if te == -1:
-    print("❌ Text 块结束未找到")
-    sys.exit(1)
-print(f"✓ Text 块：第 {ts+1}-{te+1} 行")
-
-indent = lines[ts][:len(lines[ts]) - len(lines[ts].lstrip())]
-new_icon = (
-    f"{indent}if (isPlaying) PlayerPauseIcon(tint = Color.White, modifier = Modifier.size(30.dp)) {MARK}\n"
-    f"{indent}else PlayerPlayIcon(tint = Color.White, modifier = Modifier.size(30.dp)) {MARK}"
-)
-lines[ts:te+1] = [new_icon]
-content = '\n'.join(lines)
-
-assert MARK in content
-with open(path, 'w', encoding='utf-8') as f:
-    f.write(content)
-print("✓ 34 v50: Text emoji → Player*Icon（白色）")
-PYEOF50
-
-echo "=== 34 v50 完成 ==="
-
-
 # === 34 v51: 纯诊断（打印歌词色真实状态） ===
 echo "=== 34 v51 DIAGNOSTIC ==="
 
@@ -2802,42 +2710,54 @@ PYEOF53
 
 echo "=== 34 v53 完成 ==="
 
-# === 34 v54: 纯诊断（打印播放键真实区块） ===
-echo "=== 34 v54 DIAGNOSTIC ==="
+# === 34 v55: 播放键空 else 填 Player*Icon（v54 诊断实锤） ===
+echo "=== 34 v55 ==="
 
-python3 << 'PYEOF54'
+python3 << 'PYEOF55'
+import sys
+
 path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v55]"
+
 with open(path, encoding="utf-8") as f:
     lines = f.readlines()
 
-print("="*60)
-print("DIAG1: emoji 残留行")
-print("="*60)
-for i, l in enumerate(lines):
-    if any(g in l for g in ['⏸', '▶', '⏯', '❚❚', '⏮', '⏭']):
-        print(f"{i+1:5d}: {l.rstrip()[:110]}")
-print("="*60)
-print("DIAG2: togglePlayPause 区域（前22/后25行）")
-print("="*60)
-ti = -1
-for i, l in enumerate(lines):
-    if 'togglePlayPause' in l:
-        ti = i
-        break
-if ti == -1:
-    print("❌ 未找到 togglePlayPause")
-else:
-    for j in range(max(0, ti - 22), min(len(lines), ti + 26)):
-        print(f"{j+1:5d}: {lines[j].rstrip()[:110]}")
-print("="*60)
-print("DIAG3: CircleShape 行")
-print("="*60)
-for i, l in enumerate(lines):
-    if 'CircleShape' in l:
-        print(f"{i+1:5d}: {l.rstrip()[:110]}")
-print("="*60)
-print("DIAGNOSTIC END")
-print("="*60)
-PYEOF54
+if MARK in "".join(lines):
+    print("34 v55: 已应用，跳过")
+    sys.exit(0)
 
-echo "=== 34 v54 诊断完成 ==="
+# 锚点：播放键加载圈（全文件唯一，v54 DIAG2 实测 1123 行形态）
+cands = [i for i, l in enumerate(lines)
+         if 'CircularProgressIndicator(color = musicColors().card' in l]
+if len(cands) != 1:
+    print(f"❌ 加载圈锚点应唯一，实得 {len(cands)} 处")
+    sys.exit(1)
+ci = cands[0]
+print(f"✓ 加载圈第 {ci+1} 行")
+
+# 形状断言：下一行必须是 } else {，再下一行必须是空 }
+if lines[ci+1].strip() != '} else {':
+    print(f"❌ 第 {ci+2} 行不是 '}} else {{'：{lines[ci+1].rstrip()[:80]}")
+    sys.exit(1)
+if lines[ci+2].strip() != '}':
+    print(f"❌ 第 {ci+3} 行不是空 '}}'：{lines[ci+2].rstrip()[:80]}")
+    sys.exit(1)
+print("✓ else 空块形状确认")
+
+# 在 } else { 与 } 之间插入图标 if/else（缩进对齐加载圈行）
+indent = lines[ci][:len(lines[ci]) - len(lines[ci].lstrip())]
+ins = [
+    f"{indent}if (isPlaying) PlayerPauseIcon(tint = Color.White, modifier = Modifier.size(30.dp)) {MARK}\n",
+    f"{indent}else PlayerPlayIcon(tint = Color.White, modifier = Modifier.size(30.dp)) {MARK}\n",
+]
+lines[ci+2:ci+2] = ins
+
+with open(path, 'w', encoding='utf-8') as f:
+    f.writelines(lines)
+
+out = "".join(lines)
+assert 'PlayerPauseIcon(tint = Color.White' in out and 'PlayerPlayIcon(tint = Color.White' in out, "❌ 图标插入断言失败"
+print("✓ 34 v55: 播放键 else 已填 Player*Icon")
+PYEOF55
+
+echo "=== 34 v55 完成 ==="
