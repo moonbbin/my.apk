@@ -2836,3 +2836,103 @@ with open(PATH, 'w', encoding='utf-8') as f:
 assert 'probeAndSetQuality(url) }.start() // [34v57]' in c
 print("OK 34 v57 完成")
 PYEOF57
+
+# === 34 v58: 纯诊断（徽章双头定位：v48 badgeText / [t= / probeDbg / 22徽章） ===
+# 本块只打印不修改，异常不中断构建；定案后随下刀版一并删除。
+echo "=== 34 v58 DIAGNOSTIC ==="
+
+python3 << 'PYEOF58' || echo "34 v58: 诊断异常已忽略"
+import sys, os, re
+
+BASE = "app/src/main/java"
+ACT = BASE + "/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+
+def show(lines, a, b):
+    for i in range(a, b + 1):
+        if 0 <= i < len(lines):
+            print(f"{i+1:5d}: {lines[i].rstrip()[:200]}")
+
+def occ(lines, needle, tag):
+    hits = [i for i, l in enumerate(lines) if needle in l]
+    print(f"-- [{tag}] needle '{needle}': {len(hits)} hits")
+    for i in hits:
+        print(f"{i+1:5d}: {lines[i].rstrip()[:200]}")
+    return hits
+
+def block_end(lines, start, cap):
+    depth = 0
+    for i in range(start, min(len(lines), start + cap)):
+        depth += lines[i].count('{') - lines[i].count('}')
+        if i > start and depth <= 0:
+            return i
+    return -1
+
+try:
+    with open(ACT, encoding="utf-8") as f:
+        L = f.readlines()
+    print(f"== LxPlayerActivity.kt total lines: {len(L)} ==")
+    for i, l in enumerate(L):
+        if 'val currentQuality by' in l:
+            print("-- collect region (currentQuality context) --")
+            show(L, i - 2, i + 8)
+            break
+    # Q1: badgeText 全部出现行 + 所属函数 + 徽章区全文
+    hits_bt = occ(L, 'badgeText', "Q1")
+    occ(L, 'currentQuality.isNotEmpty()', "Q1b")
+    occ(L, '检测中', "Q1c")
+    if hits_bt:
+        d = hits_bt[0]
+        fs = -1
+        for i in range(d, -1, -1):
+            if re.match(r'\s*(private\s+|internal\s+)?(suspend\s+)?fun\s+\w+\s*\(', L[i]):
+                fs = i
+                break
+        if fs >= 0:
+            fe = block_end(L, fs, 3000)
+            print(f"-- [Q1] badgeText enclosing fun: start line {fs+1}, end line {fe+1 if fe >= 0 else 'NOT FOUND'}")
+            print(f"-- [Q1] fun header: {L[fs].rstrip()[:200]}")
+            if fe >= 0 and fe - fs <= 170:
+                print("-- [Q1] enclosing fun FULL TEXT --")
+                show(L, fs, fe)
+            else:
+                bend = block_end(L, d, 200)
+                print(f"-- [Q1] fun too long; badge region only. def line {d+1}, badge block end {bend+1 if bend >= 0 else 'NOT FOUND'}")
+                a = max(fs, d - 60)
+                b = min(fe if fe >= 0 else len(L) - 1, (bend if bend >= 0 else d) + 60)
+                show(L, a, b)
+        else:
+            print("-- [Q1] enclosing fun NOT FOUND; def context +-80 --")
+            show(L, max(0, d - 40), min(len(L) - 1, d + 80))
+    # Q3: 22 徽章 hasBadgeData 块全文
+    hits_hd = occ(L, 'hasBadgeData', "Q3")
+    occ(L, '实测约', "Q3b")
+    if hits_hd:
+        d = hits_hd[0]
+        ifl = -1
+        for i in range(d, min(len(L), d + 6)):
+            if 'if (hasBadgeData)' in L[i]:
+                ifl = i
+                break
+        end = block_end(L, ifl if ifl >= 0 else d, 200)
+        print(f"-- [Q3] 22 badge block: def line {d+1}, if line {ifl+1 if ifl >= 0 else 'NOT FOUND'}, end line {end+1 if end >= 0 else 'NOT FOUND'}")
+        show(L, d, end if end >= 0 else d + 60)
+    # Q2: 全局搜 [t= 与 probeDbg（全部 .kt）
+    print("-- [Q2] global search: '[t=' and 'probeDbg' in all .kt --")
+    for root, dirs, files in os.walk(BASE):
+        for fn in sorted(files):
+            if fn.endswith(".kt"):
+                p = os.path.join(root, fn)
+                try:
+                    with open(p, encoding="utf-8") as fh:
+                        fl = fh.readlines()
+                except Exception:
+                    continue
+                for i, l in enumerate(fl):
+                    if '[t=' in l or 'probeDbg' in l:
+                        print(f"{p}:{i+1}: {l.rstrip()[:200]}")
+    print("== 34 v58 DIAGNOSTIC END ==")
+except Exception as e:
+    print(f"34 v58 diagnostic error (ignored): {e}")
+PYEOF58
+
+echo "=== 34 v58 诊断完成 ==="
