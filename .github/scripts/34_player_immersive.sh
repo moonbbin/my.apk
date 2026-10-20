@@ -1669,3 +1669,178 @@ print("✓ 34 v35 完成")
 PYEOF35
 
 echo "=== 34 v35 完成 ==="
+
+# === 34 v36: 放弃 ImageVector，改 Canvas.drawPath + 修文字色 ===
+echo "=== 34 v36 ==="
+
+python3 << 'PYEOF36'
+import re, sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v36]"
+
+with open(path, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("34 v36: 已应用，跳过")
+    sys.exit(0)
+
+# --- 步骤1：删除 v34/v35 的 ImageVector 函数 ---
+for marker in ["// [34v34] 手搓图标 ImageVector", "// [34v35]"]:
+    # v35 只有 MARK，没有独立块，跳过
+    if marker == "// [34v34] 手搓图标 ImageVector":
+        m1 = s.find(marker)
+        m2 = s.find("class LxPlayerActivity")
+        if m1 != -1 and m2 != -1 and m1 < m2:
+            s = s[:m1] + s[m2:]
+            print(f"✓ 已删 ImageVector 函数块")
+# 删 v34/v35 import
+s, n1 = re.subn(r'^import [^\n]*// \[34v34\]\n', '', s, flags=re.M)
+# v35 没有加 import，跳过
+if n1: print(f"✓ 已清 {n1} 个 v34 import")
+
+# --- 步骤2：插入 Canvas 版图标（DrawScope.drawPath 是正确 API） ---
+icons = '''
+// [34v36] 手搓图标 Canvas 版（DrawScope.drawPath，正确 API）
+@Composable
+private fun PlayerPlayIcon(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height
+        drawPath(Path().apply {
+            moveTo(w * 0.38f, h * 0.2f); lineTo(w * 0.84f, h * 0.5f); lineTo(w * 0.38f, h * 0.8f); close()
+        }, tint) // [34v36] 三角右移视觉居中
+    }
+}
+@Composable
+private fun PlayerPauseIcon(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height
+        val bw = w * 0.22f
+        drawRoundRect(tint, Offset(w * 0.22f, h * 0.2f), Size(bw, h * 0.6f), CornerRadius(bw / 2, bw / 2))
+        drawRoundRect(tint, Offset(w * 0.56f, h * 0.2f), Size(bw, h * 0.6f), CornerRadius(bw / 2, bw / 2))
+    }
+}
+@Composable
+private fun PlayerSkipNextIcon(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height
+        drawPath(Path().apply {
+            moveTo(w * 0.12f, h * 0.2f); lineTo(w * 0.57f, h * 0.5f); lineTo(w * 0.12f, h * 0.8f); close()
+        }, tint)
+        val bw = 2.dp.toPx()
+        drawRoundRect(tint, Offset(w * 0.67f, h * 0.2f), Size(bw, h * 0.6f), CornerRadius(bw / 2, bw / 2))
+    }
+}
+@Composable
+private fun PlayerSkipPrevIcon(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height
+        val bw = 2.dp.toPx()
+        drawRoundRect(tint, Offset(w * 0.20f, h * 0.2f), Size(bw, h * 0.6f), CornerRadius(bw / 2, bw / 2))
+        drawPath(Path().apply {
+            moveTo(w * 0.88f, h * 0.2f); lineTo(w * 0.43f, h * 0.5f); lineTo(w * 0.88f, h * 0.8f); close()
+        }, tint)
+    }
+}
+@Composable
+private fun PlayerShuffleIcon(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height; val sw = 2.dp.toPx()
+        drawLine(tint, Offset(w * 0.12f, h * 0.29f), Offset(w * 0.79f, h * 0.71f), sw, StrokeCap.Round)
+        drawLine(tint, Offset(w * 0.12f, h * 0.71f), Offset(w * 0.79f, h * 0.29f), sw, StrokeCap.Round)
+        // 箭头（简化折线）
+        drawPath(Path().apply {
+            moveTo(w * 0.79f, h * 0.71f); lineTo(w * 0.62f, h * 0.67f); moveTo(w * 0.79f, h * 0.71f); lineTo(w * 0.71f, h * 0.54f)
+            moveTo(w * 0.79f, h * 0.29f); lineTo(w * 0.62f, h * 0.33f); moveTo(w * 0.79f, h * 0.29f); lineTo(w * 0.71f, h * 0.46f)
+        }, tint, style = Stroke(sw, cap = StrokeCap.Round))
+    }
+}
+@Composable
+private fun PlayerRepeatIcon(tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width; val h = size.height; val sw = 2.dp.toPx()
+        drawArc(tint, 35f, 290f, false, Offset(w * 0.14f, h * 0.22f), Size(w * 0.72f, h * 0.56f), style = Stroke(sw, cap = StrokeCap.Round))
+        // 箭头
+        drawPath(Path().apply {
+            moveTo(w * 0.75f, h * 0.25f); lineTo(w * 0.75f, h * 0.17f); lineTo(w * 0.83f, h * 0.25f)
+        }, tint, style = Stroke(sw, cap = StrokeCap.Round))
+    }
+}
+@Composable
+private fun PlayerRepeatOneIcon(tint: Color, modifier: Modifier = Modifier) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        PlayerRepeatIcon(tint, Modifier.fillMaxSize(0.82f))
+        Text("1", color = tint, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+    }
+}
+'''
+m_class = re.search(r'^class LxPlayerActivity', s, re.M)
+if not m_class:
+    print("❌ 未找到 class LxPlayerActivity")
+    sys.exit(1)
+s = s[:m_class.start()] + icons + "\n" + s[m_class.start():]
+print("✓ 7 个 Canvas 图标已插入")
+
+# --- 步骤3：加 import ---
+for imp in [
+    "import androidx.compose.foundation.Canvas",
+    "import androidx.compose.ui.graphics.Path",
+    "import androidx.compose.ui.graphics.drawscope.Stroke",
+    "import androidx.compose.ui.geometry.Offset",
+    "import androidx.compose.ui.geometry.Size",
+    "import androidx.compose.ui.geometry.CornerRadius",
+    "import androidx.compose.ui.unit.dp",
+    "import androidx.compose.ui.unit.sp",
+    "import androidx.compose.ui.text.font.FontWeight",
+    "import androidx.compose.foundation.layout.Box",
+    "import androidx.compose.foundation.layout.fillMaxSize",
+    "import androidx.compose.ui.Alignment",
+]:
+    if imp not in s:
+        m = re.search(r'^import androidx\.compose[^\n]*\n', s, re.M)
+        if m: s = s[:m.end()] + imp + " // [34v36]\n" + s[m.end():]
+print("✓ import 已补")
+
+# --- 步骤4：替换 Icon(imageVector = playerXXXVector()) 为 Composable 调用 ---
+# v35 的代码：Icon(imageVector = playerPlayVector(), tint = X, modifier = Y)
+# v36 改为：PlayerPlayIcon(tint = X, modifier = Y)
+replacements = [
+    ("playerPlayVector()", "PlayerPlayIcon"),
+    ("playerPauseVector()", "PlayerPauseIcon"),
+    ("playerSkipNextVector()", "PlayerSkipNextIcon"),
+    ("playerSkipPrevVector()", "PlayerSkipPrevIcon"),
+    ("playerShuffleVector()", "PlayerShuffleIcon"),
+    ("playerRepeatOneVector()", "PlayerRepeatOneIcon"),  # 必须在 Repeat 之前
+    ("playerRepeatVector()", "PlayerRepeatIcon"),
+]
+# 按长度降序
+replacements.sort(key=lambda x: len(x[0]), reverse=True)
+
+# 用正则替换 Icon(imageVector = XXX(), tint = A, modifier = B) 为 XXX(tint = A, modifier = B)
+# 简化：先替换 imageVector 值，再把 Icon( 换成对应的 Composable
+# 实际上最简单：直接字符串替换 "Icon(imageVector = playerPlayVector()" → "PlayerPlayIcon("
+for old_vec, new_comp in replacements:
+    old_pattern = f"Icon(imageVector = {old_vec}"
+    new_pattern = f"{new_comp}("
+    n = s.count(old_pattern)
+    if n > 0:
+        s = s.replace(old_pattern, new_pattern)
+        print(f"✓ {old_pattern[:40]}... → {new_pattern} ({n})")
+
+# --- 步骤5：修 secondaryTextColor（不跟 App 主题） ---
+old_sec = "val secondaryTextColor = if (isLightBg) musicColors().textSecondary else Color.White.copy(alpha = 0.7f) // [34v23]"
+new_sec = "val secondaryTextColor = if (isLightBg) Color(0xFF1C1C1E).copy(alpha = 0.7f) else Color.White.copy(alpha = 0.7f) // [34v36] 不跟App主题"
+if old_sec in s:
+    s = s.replace(old_sec, new_sec)
+    print("✓ secondaryTextColor 已改：浅色用 0xFF1C1C1E，不跟主题")
+else:
+    print("⚠ 未找到 secondaryTextColor 旧定义（可能已被修改）")
+
+assert MARK in s, "❌ v36 标记未写入"
+with open(path, "w", encoding="utf-8") as f:
+    f.write(s)
+print("✓ 34 v36 完成")
+PYEOF36
+
+echo "=== 34 v36 完成 ==="
