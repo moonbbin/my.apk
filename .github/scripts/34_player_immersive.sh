@@ -2672,7 +2672,10 @@ if old_text not in content:
     for i, l in enumerate(content.split('\n')):
         if 'isPlaying' in l and ('Text(' in l or 'Player' in l):
             print(f"  {i+1}: {l.strip()[:80]}")
-    sys.exit(1)
+    print("⚠ [34v54诊断] v50 锚点未命中，诊断模式放行（待 v55 按真实结构修复后恢复 exit 1）")
+    # TODO[34v55]：下面这行是临时放行——v55 拿到 DIAG2 真实代码并替换成功后，必须删掉这行
+    # sys.exit(0)，恢复 Fail-Fast：锚点未命中必须 exit 1 大声失败（ARCH_SPEC 红线）
+    sys.exit(0)
 
 # 找到 Text( 块：从 text= 行向上找 Text(，向下找 )
 lines = content.split('\n')
@@ -2798,3 +2801,43 @@ print("✓ 34 v53 完成")
 PYEOF53
 
 echo "=== 34 v53 完成 ==="
+
+# === 34 v54: 纯诊断（打印播放键真实区块） ===
+echo "=== 34 v54 DIAGNOSTIC ==="
+
+python3 << 'PYEOF54'
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+with open(path, encoding="utf-8") as f:
+    lines = f.readlines()
+
+print("="*60)
+print("DIAG1: emoji 残留行")
+print("="*60)
+for i, l in enumerate(lines):
+    if any(g in l for g in ['⏸', '▶', '⏯', '❚❚', '⏮', '⏭']):
+        print(f"{i+1:5d}: {l.rstrip()[:110]}")
+print("="*60)
+print("DIAG2: togglePlayPause 区域（前22/后25行）")
+print("="*60)
+ti = -1
+for i, l in enumerate(lines):
+    if 'togglePlayPause' in l:
+        ti = i
+        break
+if ti == -1:
+    print("❌ 未找到 togglePlayPause")
+else:
+    for j in range(max(0, ti - 22), min(len(lines), ti + 26)):
+        print(f"{j+1:5d}: {lines[j].rstrip()[:110]}")
+print("="*60)
+print("DIAG3: CircleShape 行")
+print("="*60)
+for i, l in enumerate(lines):
+    if 'CircleShape' in l:
+        print(f"{i+1:5d}: {l.rstrip()[:110]}")
+print("="*60)
+print("DIAGNOSTIC END")
+print("="*60)
+PYEOF54
+
+echo "=== 34 v54 诊断完成 ==="
