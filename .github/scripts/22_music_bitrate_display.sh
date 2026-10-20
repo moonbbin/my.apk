@@ -467,3 +467,95 @@ print("v13：虚标拦截已应用")
 PYEOF22V13
 
 # ===== v13 结束 =====
+
+# ===== v14：解锁无损以上档位（位深钥匙、顶格 24-bit）+ 撤临时诊断 =====
+# 背景（979bf796 装机实证）：源站全员升频模板（96/24 壳 ~3600kbps、192/24 壳 5392），文件参数自洽、
+# 内容出身验不了；徽章旧阶梯的 24-bit 系分支钥匙是 currentQuality 的档位名，而探针接线时把它改写成
+# 格式名 "flac"，导致真 24-bit 文件（probeTier=3）也永远卡在「无损」。
+# 本版：① 实测分支的 24-bit 系条件并入 probeTier>=3（文件自报位深为准）；② 顶格词「母带」全徽章
+# 退役、统一改「24-bit」（只描述文件本身，不替源站认母带出身，用户 2026-10-20 定）；
+# ③ 撤除 v13 的 [临时诊断]：probeDbg 收集、dbgSuffix 定义与三处 $dbgSuffix 引用、maxLines=2 全删。
+python3 << 'PYEOF22V14'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [22v14]"
+
+with open(path, encoding="utf-8") as f:
+    c = f.read()
+
+if MARK in c:
+    print("跳过（已是 v14）")
+    sys.exit(0)
+
+# 前置断言：v13 产物必须齐全（虚标行 + 三处临时诊断）
+need_once = [
+    "val probeSuspect by LxPlayerManager.probeSuspect.collectAsState() // [22v13]",
+    "val probeDbg by LxPlayerManager.probeDbg.collectAsState() // [22v13][临时诊断]",
+    'val dbgSuffix = if (probeDbg.isNotEmpty()) " [$probeDbg]" else "" // [22v13][临时诊断]',
+    "maxLines = 2, // [22v13][临时诊断]",
+    'if (probeSuspect) "$rawLbl · 虚标⚠$dbgSuffix" else if (sus) "$lbl · 实测约${measuredBitrate}kbps ⚠$dbgSuffix" else "$lbl · 实测约${measuredBitrate}kbps$dbgSuffix" // [22v13]',
+]
+for need in need_once:
+    if c.count(need) != 1:
+        print(f"X v14 前置(v13 产物)计数异常: {c.count(need)} <- {need[:50]}")
+        sys.exit(1)
+print("  OK 前置 v13 产物齐全")
+
+# 1) 收集 probeTier（位深钥匙），锚：v13 的 probeSuspect 收集行
+anchor = "    val probeSuspect by LxPlayerManager.probeSuspect.collectAsState() // [22v13]"
+c = c.replace(anchor, anchor + "\n    val probeTier by LxPlayerManager.probeTier.collectAsState() // [22v14]", 1)
+print("  OK probeTier 收集")
+
+# 2) 虚标/实测文案行：剥掉三处 $dbgSuffix（标记换 v14）
+old_sus = 'if (probeSuspect) "$rawLbl · 虚标⚠$dbgSuffix" else if (sus) "$lbl · 实测约${measuredBitrate}kbps ⚠$dbgSuffix" else "$lbl · 实测约${measuredBitrate}kbps$dbgSuffix" // [22v13]'
+new_sus = 'if (probeSuspect) "$rawLbl · 虚标⚠" else if (sus) "$lbl · 实测约${measuredBitrate}kbps ⚠" else "$lbl · 实测约${measuredBitrate}kbps" // [22v14]'
+c = c.replace(old_sus, new_sus, 1)
+print("  OK 文案行去诊断后缀")
+
+# 3) 整行删除三处临时诊断（probeDbg 收集 / dbgSuffix 定义 / maxLines）
+drop_strips = [
+    "val probeDbg by LxPlayerManager.probeDbg.collectAsState() // [22v13][临时诊断]",
+    'val dbgSuffix = if (probeDbg.isNotEmpty()) " [$probeDbg]" else "" // [22v13][临时诊断]',
+    "maxLines = 2, // [22v13][临时诊断]",
+]
+lines = c.split("\n")
+for ds in drop_strips:
+    before = len(lines)
+    lines = [l for l in lines if l.strip() != ds]
+    if before - len(lines) != 1:
+        print(f"X v14 诊断行删除数异常: {before - len(lines)} <- {ds[:50]}")
+        sys.exit(1)
+    print(f"  OK 删除诊断行: {ds[:44]}")
+c = "\n".join(lines)
+
+# 4) 解锁：实测分支 24-bit 系三条条件并入 probeTier>=3（钥匙从档位名换成文件自报位深）
+old_cond = 'currentQuality in listOf("master", "hires", "flac24bit", "atmos", "atmos_plus") && measuredBitrate'
+if c.count(old_cond) != 3:
+    print(f"X v14 24-bit 系条件计数异常: {c.count(old_cond)}（应为 3）")
+    sys.exit(1)
+c = c.replace(old_cond, '(currentQuality in listOf("master", "hires", "flac24bit", "atmos", "atmos_plus") || probeTier >= 3) && measuredBitrate')
+print("  OK 24-bit 系条件并入 probeTier>=3 ×3")
+
+# 5) 顶格词退役：「母带」→「24-bit」（全徽章 4 处：实测≥1800 / 实测兜底 / 估算兜底 / 无数据兜底）
+if c.count('"母带"') != 4:
+    print(f"X v14 「母带」计数异常: {c.count(chr(34) + '母带' + chr(34))}（应为 4）")
+    sys.exit(1)
+c = c.replace('"母带"', '"24-bit"')
+print("  OK 「母带」→「24-bit」 ×4")
+
+# 终检
+assert MARK in c
+assert "probeDbg" not in c, "probeDbg 残留"
+assert "$dbgSuffix" not in c, "$dbgSuffix 残留"
+assert "[临时诊断]" not in c, "[临时诊断] 残留"
+assert '"母带"' not in c, "「母带」残留"
+assert c.count("val probeTier by LxPlayerManager.probeTier.collectAsState() // [22v14]") == 1
+assert c.count("|| probeTier >= 3) && measuredBitrate") == 3
+assert c.count("val probeSuspect by LxPlayerManager.probeSuspect.collectAsState() // [22v13]") == 1
+with open(path, "w", encoding="utf-8") as f:
+    f.write(c)
+print("v14：解锁无损以上（顶格 24-bit）+ 撤临时诊断 已应用")
+PYEOF22V14
+
+# ===== v14 结束 =====
