@@ -2510,56 +2510,51 @@ PYEOF51
 
 echo "=== 34 v51 诊断完成 ==="
 
-# === 34 v52: 全屏歌词色跟页面主题（不跟封面） ===
-echo "=== 34 v52 ==="
 
-python3 << 'PYEOF52'
+# === 34 v53: 全屏歌词色内联主题表达式（替代 v52） ===
+echo "=== 34 v53 ==="
+
+python3 << 'PYEOF53'
 import sys
 
 path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
-MARK = "// [34v52]"
+MARK = "// [34v53]"
 
 with open(path, encoding="utf-8") as f:
     lines = f.readlines()
 
 if MARK in "".join(lines):
-    print("34 v52: 已应用，跳过")
+    print("34 v53: 已应用，跳过")
     sys.exit(0)
 
-# 定位全屏歌词两处：含 accent + else lyricTextColor 的行，取最后两处
-# （817 normalColor 无 else；825 为主页面迷你歌词；最后两处为全屏主行+翻译行）
-cands = []
-for i, l in enumerate(lines):
-    if 'else lyricTextColor' in l and 'musicColors().accent' in l:
-        cands.append(i)
+EXPR = "(if (MusicThemeManager.isDarkTheme.value) Color.White.copy(alpha = 0.8f) else Color(0xFF1C1C1E).copy(alpha = 0.8f))"
+
+# 全屏两处：含 accent + else lyricTextColor 的行取最后两处（同 v52 定位）
+cands = [i for i, l in enumerate(lines)
+         if 'else lyricTextColor' in l and 'musicColors().accent' in l]
 print(f"候选行（1起）: {[i+1 for i in cands]}")
 if len(cands) < 2:
-    print("❌ 候选不足 2 处，无法定位全屏歌词")
+    print("❌ 候选不足 2 处")
     sys.exit(1)
-fs_main, fs_trans = cands[-2], cands[-1]
-print(f"✓ 全屏主行第 {fs_main+1} 行，翻译行第 {fs_trans+1} 行")
+targets = cands[-2:]
 
-# 替换两处 lyricTextColor → fsLyricColor（只替换 else 之后的那个）
-for idx in (fs_main, fs_trans):
+for idx in targets:
     pos = lines[idx].rfind('lyricTextColor')
-    lines[idx] = lines[idx][:pos] + 'fsLyricColor' + lines[idx][pos + len('lyricTextColor'):]
-    print(f"✓ 第 {idx+1} 行已换 fsLyricColor")
-
-# 在主行前插入定义（缩进对齐主行）
-indent = lines[fs_main][:len(lines[fs_main]) - len(lines[fs_main].lstrip())]
-defn = (
-    f"{indent}val isFsDark by MusicThemeManager.isDarkTheme {MARK}\n"
-    f"{indent}val fsLyricColor = if (isFsDark) Color.White.copy(alpha = 0.8f) else Color(0xFF1C1C1E).copy(alpha = 0.8f) {MARK}\n"
-)
-lines.insert(fs_main, defn)
+    line = lines[idx][:pos] + EXPR + lines[idx][pos + len('lyricTextColor'):]
+    # MARK 只放行尾（行内注释会吃掉行尾的逗号/括号——行内注释陷阱）
+    if line.endswith('\n'):
+        line = line[:-1] + ' ' + MARK + '\n'
+    else:
+        line = line + ' ' + MARK
+    lines[idx] = line
+    print(f"✓ 第 {idx+1} 行已内联主题色")
 
 with open(path, 'w', encoding='utf-8') as f:
     f.writelines(lines)
 
-# 断言
 out = "".join(lines)
-assert out.count('fsLyricColor') >= 3, "❌ fsLyricColor 引用不足"
-print("✓ 34 v52 完成")
-PYEOF52
+assert out.count('MusicThemeManager.isDarkTheme.value') >= 2, "❌ 内联表达式不足 2 处"
+print("✓ 34 v53 完成")
+PYEOF53
 
-echo "=== 34 v52 完成 ==="
+echo "=== 34 v53 完成 ==="
