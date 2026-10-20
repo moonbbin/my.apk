@@ -2115,3 +2115,76 @@ print("✓ 34 v39 完成")
 PYEOF39
 
 echo "=== 34 v39 完成 ==="
+
+# === 34 v40: 修 iconSize 同步 + when 块简化 ===
+echo "=== 34 v40 ==="
+
+python3 << 'PYEOF40'
+import re, sys, os
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+icon_path = "app/src/main/java/com/github/tvbox/osc/ui/music/component/LxIcons.kt"
+MARK = "// [34v40]"
+
+with open(path, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("34 v40: 已应用，跳过")
+    sys.exit(0)
+
+# --- 修复1：LxIcons.kt 里 size = size * 0.82f → iconSize = iconSize * 0.82f ---
+if os.path.exists(icon_path):
+    with open(icon_path, encoding="utf-8") as f:
+        lx = f.read()
+    # PlayerRepeatOneIcon 里调用 PlayerRepeatIcon(tint = tint, size = size * 0.82f)
+    # v39 改名后应该是 iconSize = iconSize * 0.82f
+    if "size = size * 0.82f" in lx:
+        lx = lx.replace("size = size * 0.82f", "iconSize = iconSize * 0.82f")
+        with open(icon_path, "w", encoding="utf-8") as f:
+            f.write(lx)
+        print("✓ LxIcons.kt: size = size * 0.82f → iconSize = iconSize * 0.82f")
+    else:
+        print("- LxIcons.kt 无需修复（可能已修）")
+else:
+    print("❌ LxIcons.kt 不存在")
+    sys.exit(1)
+
+# --- 修复2：when (modeIcon) 块简化 ---
+# v39 生成的 when 可能有语法问题，改用最简单的 if-else
+# 找到 v39 生成的 when 块，替换为 if-else
+m_when = re.search(r'when \(modeIcon\) \{ // \[34v39\]\n(.*?)\n    \}', s, re.S)
+if m_when:
+    when_body = m_when.group(1)
+    print(f"✓ 找到 v39 when 块（{len(when_body)} 字符）")
+    # 提取三个分支的 tint 和 modifier（它们应该是一样的）
+    m0 = re.search(r'0 -> PlayerShuffleIcon\(tint = ([^,]+), modifier = ([^\)]+)\)', when_body)
+    if m0:
+        tint_expr = m0.group(1).strip()
+        mod_expr = m0.group(2).strip()
+        print(f"  tint={tint_expr[:30]}, modifier={mod_expr[:30]}")
+        # 换成 if-else（更稳妥，避免 when 表达式类型问题）
+        new_ifelse = (
+            "if (modeIcon == 0) { // [34v40]\n"
+            f"        PlayerShuffleIcon(tint = {tint_expr}, modifier = {mod_expr})\n"
+            "    } else if (modeIcon == 1) {\n"
+            f"        PlayerRepeatOneIcon(tint = {tint_expr}, modifier = {mod_expr})\n"
+            "    } else {\n"
+            f"        PlayerRepeatIcon(tint = {tint_expr}, modifier = {mod_expr})\n"
+            "    }"
+        )
+        s = s[:m_when.start()] + new_ifelse + s[m_when.end():]
+        print("✓ when 已换为 if-else")
+    else:
+        print("⚠ 未解析出 when 分支参数")
+else:
+    print("- 未找到 v39 when 块（可能已被修改）")
+
+s += "\n" + MARK + "\n"
+assert MARK in s, "❌ v40 标记未写入"
+with open(path, "w", encoding="utf-8") as f:
+    f.write(s)
+print("✓ 34 v40 完成")
+PYEOF40
+
+echo "=== 34 v40 完成 ==="
