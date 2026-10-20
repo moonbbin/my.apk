@@ -2475,3 +2475,60 @@ for x in fixed:
 PYEOF45
 
 echo "=== 34 v45 完成 ==="
+# === 34 v46: 播放/暂停图标写入粉色圆按钮 ===
+echo "=== 34 v46 ==="
+
+python3 << 'PYEOF46'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v46]"
+
+with open(path, encoding="utf-8") as f:
+    lines = f.readlines()
+
+if MARK in "".join(lines):
+    print("34 v46: 已应用，跳过")
+    sys.exit(0)
+
+# 找粉色圆按钮：含 accent 背景的行，向后找内容块
+# 播放按钮特征：size 64.dp 或 72.dp + accent
+fixed = []
+for i, line in enumerate(lines):
+    # 找大尺寸按钮定义
+    if ('64.dp' in line or '72.dp' in line) and ('Button(' in line or 'Box(' in line):
+        # 检查后面 15 行内是否有 accent（粉色）
+        block = "".join(lines[i:i+15])
+        if 'accent' in block:
+            print(f"✓ 找到粉色大按钮第{i+1}行: {line.strip()[:60]}")
+            # 检查内容是否有图标
+            if 'PlayerPlayIcon' not in block and 'PlayerPauseIcon' not in block and 'Icon(' not in block:
+                # 找内容块的 ) { 行
+                for j in range(i, min(i+15, len(lines))):
+                    if ') {' in lines[j]:
+                        # 下一行插入图标
+                        indent = lines[j][:len(lines[j]) - len(lines[j].lstrip())] + '    '
+                        icon_code = (
+                            f'{indent}if (isPlaying) {{ {MARK}\n'
+                            f'{indent}    PlayerPauseIcon(tint = Color.White, modifier = Modifier.size(32.dp))\n'
+                            f'{indent}}} else {{\n'
+                            f'{indent}    PlayerPlayIcon(tint = Color.White, modifier = Modifier.size(32.dp))\n'
+                            f'{indent}}}\n'
+                        )
+                        lines.insert(j+1, icon_code)
+                        fixed.append(f'第{j+2}行: 写入播放/暂停图标')
+                        break
+            else:
+                print(f"  该按钮已有图标，跳过")
+            break
+
+if not fixed:
+    print("❌ 未找到粉色大按钮")
+    sys.exit(1)
+
+with open(path, 'w', encoding='utf-8') as f:
+    f.writelines(lines)
+print(f"✓ 34 v46: {fixed[0]}")
+PYEOF46
+
+echo "=== 34 v46 完成 ==="
