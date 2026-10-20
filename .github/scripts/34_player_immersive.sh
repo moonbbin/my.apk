@@ -1903,3 +1903,82 @@ print("✓ 34 v37 完成")
 PYEOF37
 
 echo "=== 34 v37 完成 ==="
+
+# === 34 v38: 修 v36 残留（StrokeCap import + when块旧调用） ===
+echo "=== 34 v38 ==="
+
+python3 << 'PYEOF38'
+import re, sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v38]"
+
+with open(path, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("34 v38: 已应用，跳过")
+    sys.exit(0)
+
+# --- 修复1：补 StrokeCap import（v36 漏了） ---
+# LxIcons.kt 里已有，这里是 LxPlayerActivity.kt 本地残留代码需要
+# 实际上 v37 已把图标搬到 LxIcons.kt，Activity 里不应再有 StrokeCap
+# 但 v36 的 when 块残留还在，先修调用
+print("✓ 修复1：LxIcons.kt 已有 StrokeCap，跳过 Activity 补 import")
+
+# --- 修复2：when 块里的 playerXXXVector() 改为新 Composable ---
+# v36 残留：Icon(imageVector = playerShuffleVector(), tint = X, modifier = Y)
+# v38 改为：PlayerShuffleIcon(tint = X, modifier = Y)
+# 用正则匹配 Icon(imageVector = playerXXXVector(), tint = A, modifier = B)
+fixes = [
+    ("playerShuffleVector", "PlayerShuffleIcon"),
+    ("playerRepeatOneVector", "PlayerRepeatOneIcon"),
+    ("playerRepeatVector", "PlayerRepeatIcon"),
+    ("playerPlayVector", "PlayerPlayIcon"),
+    ("playerPauseVector", "PlayerPauseIcon"),
+    ("playerSkipNextVector", "PlayerSkipNextIcon"),
+    ("playerSkipPrevVector", "PlayerSkipPrevIcon"),
+]
+# 按长度降序，防子串
+fixes.sort(key=lambda x: len(x[0]), reverse=True)
+total = 0
+for old_vec, new_comp in fixes:
+    # 匹配 Icon(imageVector = OLD(), tint = ..., modifier = ...) 整个调用
+    # 简化：直接替换 OLD() 为 NEW(，再把前面的 "Icon(imageVector = " 删掉
+    # 更安全：用正则找 Icon(imageVector = OLD\(\)
+    pattern = re.compile(r'Icon\s*\(\s*imageVector\s*=\s*' + re.escape(old_vec) + r'\(\s*\)')
+    matches = pattern.findall(s)
+    if matches:
+        s = pattern.sub(new_comp + '(', s)
+        total += len(matches)
+        print(f"✓ {old_vec}() → {new_comp}( ({len(matches)})")
+
+# --- 修复3：确保 LxIcons.kt 存在（v37 可能没跑完） ---
+import os
+icon_path = "app/src/main/java/com/github/tvbox/osc/ui/music/component/LxIcons.kt"
+if not os.path.exists(icon_path):
+    print("❌ LxIcons.kt 不存在！v37 未生效")
+    sys.exit(1)
+else:
+    print("✓ LxIcons.kt 存在")
+
+# --- 修复4：确保 import 存在 ---
+new_imp = "import com.github.tvbox.osc.ui.music.component.* // [34v37]"
+if new_imp not in s:
+    # 尝试 v38 的标记
+    new_imp38 = "import com.github.tvbox.osc.ui.music.component.* // [34v38]"
+    m = re.search(r'^import com\.github\.tvbox\.osc[^\n]*\n', s, re.M)
+    if m:
+        s = s[:m.end()] + new_imp38 + "\n" + s[m.end():]
+        print("✓ 已补 LxIcons import [34v38]")
+else:
+    print("✓ LxIcons import 已存在")
+
+s += "\n" + MARK + "\n"
+assert MARK in s, "❌ v38 标记未写入"
+with open(path, "w", encoding="utf-8") as f:
+    f.write(s)
+print(f"✓ 34 v38 完成，共修 {total} 处残留调用")
+PYEOF38
+
+echo "=== 34 v38 完成 ==="
