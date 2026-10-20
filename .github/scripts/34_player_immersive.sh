@@ -1982,3 +1982,136 @@ print(f"✓ 34 v38 完成，共修 {total} 处残留调用")
 PYEOF38
 
 echo "=== 34 v38 完成 ==="
+
+# === 34 v39: 修 size 遮蔽 + when 块残留 ===
+echo "=== 34 v39 ==="
+
+python3 << 'PYEOF39'
+import re, sys, os
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+icon_path = "app/src/main/java/com/github/tvbox/osc/ui/music/component/LxIcons.kt"
+MARK = "// [34v39]"
+
+with open(path, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("34 v39: 已应用，跳过")
+    sys.exit(0)
+
+# --- 修复1：LxIcons.kt 里 size: Dp 改名 iconSize，避免遮蔽 DrawScope.size ---
+if os.path.exists(icon_path):
+    with open(icon_path, encoding="utf-8") as f:
+        lx = f.read()
+    # 参数名 size: Dp -> iconSize: Dp；调用处 modifier.size(size) -> modifier.size(iconSize)
+    # 注意：DrawScope 里的 size.width/size.height 必须保留（那是 Size 类型）
+    # 策略：只替换函数签名里的 "size: Dp" 和 "modifier.size(size)"
+    orig = lx
+    lx = lx.replace("size: Dp = 24.dp", "iconSize: Dp = 24.dp")
+    lx = lx.replace("modifier.size(size)", "modifier.size(iconSize)")
+    # PlayerRepeatOneIcon 里有 size * 0.82f，改成 iconSize * 0.82f
+    lx = lx.replace("size * 0.82f", "iconSize * 0.82f")
+    # PlayerRepeatOneIcon 的 size 参数传递：PlayerRepeatIcon(tint = tint, size = size * 0.82f
+    # 已被上面替换覆盖
+    if lx != orig:
+        with open(icon_path, "w", encoding="utf-8") as f:
+            f.write(lx)
+        print("✓ LxIcons.kt: size → iconSize（防遮蔽）")
+    else:
+        print("- LxIcons.kt 无需改名（可能已修复）")
+else:
+    print("❌ LxIcons.kt 不存在")
+    sys.exit(1)
+
+# --- 修复2：when 块里的 playerXXXVector() ---
+# 形态：MODE_SHUFFLE -> playerShuffleVector()
+# 改为：MODE_SHUFFLE -> 0（Int 类型），然后 Icon 处改用 when 调 Composable
+# 更简单：直接把 when 块里的 vector 调用换成 Int，保留 Icon 外壳不动？不行，Icon 需要 ImageVector
+# 最彻底：把 "val modeIcon = when..." 整块换成直接调 Composable 的 when
+#
+# 先找到 when 块
+# 形态推测：
+#   val modeIcon = when (playMode) {
+#       MODE_SHUFFLE -> playerShuffleVector()
+#       MODE_LOOP_ONE -> playerRepeatOneVector()
+#       else -> playerRepeatVector()
+#   }
+#   ...
+#   Icon(imageVector = modeIcon, tint = modeColor, modifier = ...)
+#
+# 替换策略：把三个 vector 调用换成对应的 Composable 调用，但需要 tint 和 modifier
+# 由于 when 块里拿不到 tint/modifier，最干净的是把 Icon(imageVector = modeIcon...) 整行换成 when
+#
+# 步骤2a：先把 when 块的三个分支换成 Int 标记（0/1/2）
+replacements_when = [
+    ("MODE_SHUFFLE -> playerShuffleVector()", "MODE_SHUFFLE -> 0 // [34v39]"),
+    ("MODE_LOOP_ONE -> playerRepeatOneVector()", "MODE_LOOP_ONE -> 1 // [34v39]"),
+    ("else -> playerRepeatVector()", "else -> 2 // [34v39]"),
+]
+for old, new in replacements_when:
+    if old in s:
+        s = s.replace(old, new)
+        print(f"✓ when 分支已换 Int: {old[:40]}...")
+    else:
+        print(f"- 未找到 when 分支: {old[:40]}...")
+
+# 步骤2b：把 Icon(imageVector = modeIcon, ...) 换成 when 调 Composable
+# 需要找到 Icon(imageVector = modeIcon 的完整调用，提取 tint 和 modifier
+# 用 brace-matching 找到 Icon( 的完整调用
+def find_icon_modeicon(text):
+    idx = text.find("Icon(imageVector = modeIcon")
+    if idx == -1:
+        # 尝试其他形态：imageVector=modeIcon（无空格）
+        idx = text.find("imageVector=modeIcon")
+        if idx == -1:
+            return None
+        # 往前找 Icon(
+        idx = text.rfind("Icon", 0, idx)
+    # 从 Icon( 开始 brace匹配
+    start = text.find("(", idx)
+    depth = 0
+    i = start
+    while i < len(text):
+        if text[i] == '(':
+            depth += 1
+        elif text[i] == ')':
+            depth -= 1
+            if depth == 0:
+                return (idx, i+1)  # Icon( ... ) 的范围
+        i += 1
+    return None
+
+rng = find_icon_modeicon(s)
+if rng:
+    icon_call = s[rng[0]:rng[1]]
+    print(f"✓ 找到 Icon(modeIcon) 调用（{len(icon_call)} 字符）")
+    # 提取 tint 和 modifier
+    m_tint = re.search(r'tint\s*=\s*([^,]+)', icon_call)
+    m_mod = re.search(r'modifier\s*=\s*([^,]+?)(?:,|\))', icon_call, re.S)
+    tint_expr = m_tint.group(1).strip() if m_tint else "Color.White"
+    mod_expr = m_mod.group(1).strip() if m_mod else "Modifier"
+    print(f"  tint={tint_expr[:40]}, modifier={mod_expr[:40]}")
+    # 构造替换：when (modeType) { 0 -> PlayerShuffleIcon(...) ... }
+    # 注意：when 块里我们把 modeIcon 改成了 Int，需要改变量名避免混淆
+    # 实际上 modeIcon 现在是 Int，直接用它
+    new_when = (
+        "when (modeIcon) { // [34v39]\n"
+        f"        0 -> PlayerShuffleIcon(tint = {tint_expr}, modifier = {mod_expr})\n"
+        f"        1 -> PlayerRepeatOneIcon(tint = {tint_expr}, modifier = {mod_expr})\n"
+        f"        else -> PlayerRepeatIcon(tint = {tint_expr}, modifier = {mod_expr})\n"
+        "    }"
+    )
+    s = s[:rng[0]] + new_when + s[rng[1]:]
+    print("✓ Icon(modeIcon) 已换为 when 调 Composable")
+else:
+    print("⚠ 未找到 Icon(imageVector = modeIcon) 调用")
+
+s += "\n" + MARK + "\n"
+assert MARK in s, "❌ v39 标记未写入"
+with open(path, "w", encoding="utf-8") as f:
+    f.write(s)
+print("✓ 34 v39 完成")
+PYEOF39
+
+echo "=== 34 v39 完成 ==="
