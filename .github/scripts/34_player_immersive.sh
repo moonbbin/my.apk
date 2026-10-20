@@ -2770,11 +2770,11 @@ import sys
 PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
 with open(PATH, encoding='utf-8') as f:
     c = f.read()
-if '// [34v56]' in c:
+if '[t=${probeTier}]' in c:
     print("34 v56: 已应用，跳过")
     sys.exit(0)
-old = 'bitrate > 0 -> qualityLabel(currentQuality) + " \u00b7 ${(bitrate / 100 * 100)}kbps" // [34v48]'
-new = 'bitrate > 0 -> qualityLabel(currentQuality) + " \u00b7 ${(bitrate / 100 * 100)}kbps [t=${probeTier}]" // [34v48] [34v56]'
+old = 'bitrate > 0 -> "${LxPlayerManager.qualityLabel(currentQuality)} \u00b7 ${bitrate / 100 * 100}kbps"'
+new = 'bitrate > 0 -> "${LxPlayerManager.qualityLabel(currentQuality)} \u00b7 ${bitrate / 100 * 100}kbps [t=${probeTier}]"'
 if old not in c:
     print("X 未找到 v48 徽章估值分支")
     sys.exit(1)
