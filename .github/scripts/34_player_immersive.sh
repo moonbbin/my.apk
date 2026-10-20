@@ -2475,60 +2475,63 @@ for x in fixed:
 PYEOF45
 
 echo "=== 34 v45 完成 ==="
-# === 34 v46: 播放/暂停图标写入粉色圆按钮 ===
-echo "=== 34 v46 ==="
 
-python3 << 'PYEOF46'
-import sys
+# === 34 v47: 歌词全屏页非高亮色改 lyricTextColor ===
+echo "=== 34 v47 ==="
+
+python3 << 'PYEOF47'
+import sys, re
 
 path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
-MARK = "// [34v46]"
+MARK = "// [34v47]"
 
 with open(path, encoding="utf-8") as f:
-    lines = f.readlines()
+    content = f.read()
 
-if MARK in "".join(lines):
-    print("34 v46: 已应用，跳过")
+if MARK in content:
+    print("34 v47: 已应用，跳过")
     sys.exit(0)
 
-# 找粉色圆按钮：含 accent 背景的行，向后找内容块
-# 播放按钮特征：size 64.dp 或 72.dp + accent
+# 全屏歌词：找 KaraokeLine / 歌词行的颜色用法
+# lyricColor 是 SharedPreferences 读到的白色默认值 0x99FFFFFF
+# 非高亮歌词行应改用 lyricTextColor（v25 已有，按封面亮度算）
+
 fixed = []
+
+# 模式1：KaraokeLine 的 color 参数用了 lyricColor
+# 常见形态：KaraokeLine(..., color = lyricColor, ...) 或 Text(..., color = lyricColor)
+# 只处理歌词区域：找 "lyricColor" 的所有出现，打印上下文
+lines = content.split('\n')
 for i, line in enumerate(lines):
-    # 找大尺寸按钮定义
-    if ('64.dp' in line or '72.dp' in line) and ('Button(' in line or 'Box(' in line):
-        # 检查后面 15 行内是否有 accent（粉色）
-        block = "".join(lines[i:i+15])
-        if 'accent' in block:
-            print(f"✓ 找到粉色大按钮第{i+1}行: {line.strip()[:60]}")
-            # 检查内容是否有图标
-            if 'PlayerPlayIcon' not in block and 'PlayerPauseIcon' not in block and 'Icon(' not in block:
-                # 找内容块的 ) { 行
-                for j in range(i, min(i+15, len(lines))):
-                    if ') {' in lines[j]:
-                        # 下一行插入图标
-                        indent = lines[j][:len(lines[j]) - len(lines[j].lstrip())] + '    '
-                        icon_code = (
-                            f'{indent}if (isPlaying) {{ {MARK}\n'
-                            f'{indent}    PlayerPauseIcon(tint = Color.White, modifier = Modifier.size(32.dp))\n'
-                            f'{indent}}} else {{\n'
-                            f'{indent}    PlayerPlayIcon(tint = Color.White, modifier = Modifier.size(32.dp))\n'
-                            f'{indent}}}\n'
-                        )
-                        lines.insert(j+1, icon_code)
-                        fixed.append(f'第{j+2}行: 写入播放/暂停图标')
-                        break
-            else:
-                print(f"  该按钮已有图标，跳过")
-            break
+    if 'lyricColor' in line and 'val lyricColor' not in line and 'lyricColor =' not in line.split('//')[0].replace('val lyricColor', ''):
+        ctx = line.strip()[:90]
+        print(f"第{i+1}行 lyricColor 用法: {ctx}")
+
+# 策略：把歌词 Text/KaraokeLine 里的 "color = lyricColor" 换成 "color = lyricTextColor"
+# lyricTextColor 在 v25 已定义（封面亮度硬判）
+count_before = content.count('color = lyricColor')
+if count_before > 0:
+    content = content.replace('color = lyricColor', f'color = lyricTextColor {MARK}')
+    fixed.append(f'color = lyricColor → lyricTextColor ×{count_before}')
+
+# 也处理 color = Color(lyricColor) 形态
+if 'Color(lyricColor)' in content:
+    content = content.replace('Color(lyricColor)', 'lyricTextColor')
+    fixed.append('Color(lyricColor) → lyricTextColor')
+
+# 处理直接用 lyricColor 作参数的 KaraokeLine（无 color= 前缀）
+# 形如 KaraokeLine(text, lyricColor, ...) —— 保守处理，只打印
+for m in re.finditer(r'KaraokeLine\([^)]*lyricColor[^)]*\)', content):
+    print(f"  KaraokeLine 用法: {m.group(0)[:80]}")
 
 if not fixed:
-    print("❌ 未找到粉色大按钮")
+    print("❌ 未找到 color = lyricColor，歌词色用法已打印")
     sys.exit(1)
 
 with open(path, 'w', encoding='utf-8') as f:
-    f.writelines(lines)
-print(f"✓ 34 v46: {fixed[0]}")
-PYEOF46
+    f.write(content)
 
-echo "=== 34 v46 完成 ==="
+print(f"✓ 34 v47: {fixed}")
+PYEOF47
+
+echo "=== 34 v47 完成 ==="
