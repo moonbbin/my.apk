@@ -2406,3 +2406,72 @@ print("✓ 34 v43 完成")
 PYEOF43
 
 echo "=== 34 v43 完成 ==="
+# === 34 v45: 补四个播放按钮图标（高对比 tint） ===
+echo "=== 34 v45 ==="
+
+python3 << 'PYEOF45'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v45]"
+
+with open(path, encoding="utf-8") as f:
+    lines = f.readlines()
+
+full = "".join(lines)
+if MARK in full:
+    print("34 v45: 已应用，跳过")
+    sys.exit(0)
+
+fixed = []
+
+# --- 修复1：onNext 空按钮（v42 实锤 1124-1128 行内容为空）---
+# 找 "onClick = { onNext() }"，然后找其后的 ") {"，若下一行是 "}" 则插入图标
+for i, line in enumerate(lines):
+    if 'onClick = { onNext() }' in line:
+        # 向后找 ") {"
+        for j in range(i, min(i+6, len(lines))):
+            if ') {' in lines[j]:
+                # 检查下一行
+                if j+1 < len(lines) and lines[j+1].strip() == '}':
+                    indent = lines[j][:len(lines[j]) - len(lines[j].lstrip())] + '    '
+                    lines.insert(j+1, f'{indent}PlayerSkipNextIcon(tint = primaryTextColor, modifier = Modifier.size(28.dp)) {MARK}\n')
+                    fixed.append(f'第{j+2}行: onNext 补 PlayerSkipNextIcon')
+                elif j+1 < len(lines) and 'PlayerSkipNextIcon' not in lines[j+1]:
+                    print(f"⚠ onNext 按钮第{j+2}行内容非空但无图标: {lines[j+1].strip()[:50]}")
+                break
+        break
+
+# --- 修复2：onPrevious 空按钮 ---
+for i, line in enumerate(lines):
+    if 'onClick = { onPrevious() }' in line or 'onClick = { onPrev() }' in line:
+        for j in range(i, min(i+6, len(lines))):
+            if ') {' in lines[j]:
+                if j+1 < len(lines) and lines[j+1].strip() == '}':
+                    indent = lines[j][:len(lines[j]) - len(lines[j].lstrip())] + '    '
+                    lines.insert(j+1, f'{indent}PlayerSkipPrevIcon(tint = primaryTextColor, modifier = Modifier.size(28.dp)) {MARK}\n')
+                    fixed.append(f'第{j+2}行: onPrevious 补 PlayerSkipPrevIcon')
+                break
+        break
+
+# --- 修复3：播放/暂停图标 tint 确保白色 ---
+# 找现有的 PlayerPlayIcon / PlayerPauseIcon 调用，把 tint 改为 Color.White
+for i, line in enumerate(lines):
+    if 'PlayerPlayIcon(' in line or 'PlayerPauseIcon(' in line:
+        if 'tint = Color.White' not in line:
+            # 提取并替换 tint 参数
+            import re
+            new_line = re.sub(r'tint\s*=\s*[^,\)]+', 'tint = Color.White', line)
+            if new_line != line:
+                lines[i] = new_line
+                fixed.append(f'第{i+1}行: 播放图标 tint → Color.White')
+
+with open(path, 'w', encoding='utf-8') as f:
+    f.writelines(lines)
+
+print(f"✓ 34 v45: 修复 {len(fixed)} 处")
+for x in fixed:
+    print(f"  {x}")
+PYEOF45
+
+echo "=== 34 v45 完成 ==="
