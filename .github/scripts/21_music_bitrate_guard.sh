@@ -1778,3 +1778,154 @@ with open(PATH, 'w', encoding='utf-8') as f:
 assert c.count('// [21v30]') >= 8
 print("OK 21 v30 完成")
 PYEOF30
+
+# === 21 v31: 探针物理极限判定 + 双时长交叉验证 + 虚标信号流 ===
+# FLAC 分支：极限=R*D*2；S/R 时长与 UI 时长（ExoPlayer _duration）偏差>max(2s,5%) 或 S 缺失时，
+# 改用 B*8/UI时长 重算 kbps；重算后仍超极限*1.02 → _probeSuspect=true（供 22 徽章显示虚标⚠）。
+# 探针只报实测与矛盾判定，绝不编造码率。F 串改新格式 F:[S=,R=,D=,B=,K=,t(,SUS)]。
+echo "=== 21 v31 ==="
+
+python3 << 'PYEOF31'
+import sys
+
+PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+MARK = "// [21v31]"
+
+with open(PATH, encoding="utf-8") as f:
+    c = f.read()
+
+if MARK in c:
+    print("21 v31: 已应用，跳过")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global c
+    if c.count(old) != 1:
+        print(f"X 21 v31 锚点计数异常 [{tag}]: {c.count(old)}")
+        sys.exit(1)
+    c = c.replace(old, new, 1)
+    print(f"  OK {tag}")
+
+# 1) 虚标信号流 + 判定缓存声明（挂在 probeDbg 声明之后）
+rep(
+    "    val probeDbg: StateFlow<String> = _probeDbg // [21v30] // [21v26]",
+    "    val probeDbg: StateFlow<String> = _probeDbg // [21v30] // [21v26]\n"
+    "    private val _probeSuspect = MutableStateFlow(false) // [21v31]\n"
+    "    val probeSuspect: StateFlow<Boolean> = _probeSuspect // [21v31]\n"
+    "    private val _probeSuspectCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>() // [21v31]",
+    "probeSuspect 声明",
+)
+
+# 2) 缓存命中时恢复虚标判定
+rep(
+    '            _probeDbg.value = "C:t${cachedA.second},K${cachedA.third}" // [21v30]',
+    '            _probeDbg.value = "C:t${cachedA.second},K${cachedA.third}" // [21v30]\n'
+    "            _probeSuspect.value = _probeSuspectCache[url] ?: false // [21v31]",
+    "缓存命中恢复 suspect",
+)
+
+# 3) Path A 探针开始时复位判定
+rep(
+    "            _probeTier.value = -1",
+    "            _probeTier.value = -1\n"
+    "            _probeSuspect.value = false // [21v31]",
+    "Path A 复位 suspect",
+)
+
+# 4) Path A 写缓存时同步判定缓存
+rep(
+    "            if (prA.first >= 0) _probeCache[url] = Triple(lblA, prA.first, prA.second)",
+    "            if (prA.first >= 0) _probeCache[url] = Triple(lblA, prA.first, prA.second)\n"
+    "            if (prA.first >= 0) _probeSuspectCache[url] = _probeSuspect.value // [21v31]",
+    "Path A 判定缓存",
+)
+
+# 5) Chain B 写缓存时同步判定缓存
+rep(
+    "                                                _probeCache[url] = Triple(label, tier, kbps) // [21v26]",
+    "                                                _probeCache[url] = Triple(label, tier, kbps) // [21v26]\n"
+    "                                                _probeSuspectCache[url] = _probeSuspect.value // [21v31]",
+    "Chain B 判定缓存",
+)
+
+# 6) bytes-null 出口复位判定
+rep(
+    '        if (probed == null) { _probeDbg.value = "X:bytes-null" // [21v30]',
+    '        if (probed == null) { _probeSuspect.value = false; _probeDbg.value = "X:bytes-null" // [21v30] // [21v31]',
+    "X 出口复位",
+)
+
+# 7) 非 FLAC 路径统一不判虚标（FLAC 分支在此之前 return，不受影响）
+rep(
+    "        // MP3：先前64KB，找不到再试64KB-256KB（防大封面）",
+    "        _probeSuspect.value = false // [21v31] 非FLAC路径不判虚标\n"
+    "        // MP3：先前64KB，找不到再试64KB-256KB（防大封面）",
+    "非FLAC复位",
+)
+
+# 8) FLAC 分支整段替换（行级定位：flacStreamInfo 起，到其后第一个 return Pair(tier, kbps) 的下一行 } 止）
+lines = c.split("\n")
+start = -1
+for i, l in enumerate(lines):
+    if "val info = flacStreamInfo(bytes)" in l:
+        start = i
+        break
+if start == -1:
+    print("X 21 v31 未找到 FLAC 分支起点")
+    sys.exit(1)
+ret = -1
+for i in range(start, min(len(lines), start + 30)):
+    if "return Pair(tier, kbps)" in lines[i]:
+        ret = i
+        break
+if ret == -1 or lines[ret + 1].strip() != "}":
+    print("X 21 v31 FLAC 分支终点异常")
+    sys.exit(1)
+seg = "\n".join(lines[start:ret + 2])
+if "F:t$tier" not in seg or "flacBitrateEstimate" not in seg:
+    print("X 21 v31 FLAC 分支内容校验失败（不是预期的现行分支）")
+    sys.exit(1)
+new_branch = """        val info = flacStreamInfo(bytes)
+        if (info != null) {
+            var tier = if (info.second >= 24) 3 else 2
+            var kbps = 0
+            val durHdr = if (info.third > 0 && info.first > 0) info.third.toDouble() / info.first else 0.0 // [21v31] STREAMINFO 时长 S/R
+            if (totalBytes > 0 && durHdr > 0) kbps = (totalBytes * 8.0 / durHdr / 1000).toInt()
+            if (kbps <= 0) kbps = flacBitrateEstimate(bytes, info.first)
+            // [21v31] 物理极限判定 + 双时长交叉验证：B 与 UI 时长是物理量，S/R 可造假
+            val limitKbps = info.first * info.second * 2 / 1000
+            var waitMs = 0
+            while (_duration.value <= 0L && waitMs < 1500) { Thread.sleep(150); waitMs += 150 }
+            val uiDur = _duration.value / 1000.0
+            var distrust = false
+            if (totalBytes > 0 && uiDur > 0 && durHdr <= 0) {
+                distrust = true
+                val kbpsUi = (totalBytes * 8.0 / uiDur / 1000).toInt()
+                if (kbpsUi > 0) kbps = kbpsUi
+            } else if (totalBytes > 0 && uiDur > 0 && durHdr > 0 && kotlin.math.abs(durHdr - uiDur) > kotlin.math.max(2.0, uiDur * 0.05)) {
+                distrust = true
+                val kbpsUi = (totalBytes * 8.0 / uiDur / 1000).toInt()
+                if (kbpsUi > 0) kbps = kbpsUi
+            }
+            val sus = kbps > (limitKbps * 1.02).toInt()
+            if (sus) distrust = true
+            _probeSuspect.value = sus // [21v31]
+            if (kbps > 0 && kbps < 400) tier = 0
+            if (distrust) {
+                val cap = if (kbps >= 800) 2 else if (kbps >= 320) 1 else 0
+                if (cap < tier) tier = cap
+            }
+            _probeDbg.value = "F:[S=${info.third},R=${info.first},D=${info.second},B=$totalBytes,K=$kbps,t$tier${if (sus) ",SUS" else ""}]" // [21v31]
+            return Pair(tier, kbps)
+        }"""
+lines[start:ret + 2] = new_branch.split("\n")
+c = "\n".join(lines)
+print("  OK FLAC 分支极限判定+交叉验证")
+
+assert MARK in c and "_probeSuspect" in c and "limitKbps" in c
+with open(PATH, "w", encoding="utf-8") as f:
+    f.write(c)
+print("OK 21 v31 完成")
+PYEOF31
+
+echo "=== 21 v31 完成 ==="

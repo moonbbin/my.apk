@@ -390,3 +390,80 @@ else:
     sys.exit(1)
 PYEOF
 # ===== v12 结束 =====
+
+# ===== v13：虚标拦截（探针侧判定）+ F 串临时上屏 =====
+# 探针（21 v31）判定自报参数物理不可能时置 probeSuspect：徽章显示「格式名 · 虚标⚠」，不显示假数。
+# [临时诊断] probeDbg 的 F 串后缀挂在实测文案后、Text 放开 maxLines=2，定性后随收敛版撤除。
+python3 << 'PYEOF22V13'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [22v13]"
+
+with open(path, encoding="utf-8") as f:
+    c = f.read()
+
+if MARK in c:
+    print("跳过（已是 v13）")
+    sys.exit(0)
+
+# 1) 收集 probeSuspect / probeDbg（锚：原版 measuredBitrate 收集行）
+anchor = "    val measuredBitrate by LxPlayerManager.measuredBitrate.collectAsState()"
+if c.count(anchor) != 1:
+    print(f"X v13 收集锚点计数异常: {c.count(anchor)}")
+    sys.exit(1)
+c = c.replace(anchor, anchor + "\n    val probeSuspect by LxPlayerManager.probeSuspect.collectAsState() // [22v13]\n    val probeDbg by LxPlayerManager.probeDbg.collectAsState() // [22v13][临时诊断]", 1)
+print("  OK probeSuspect/probeDbg 收集")
+
+# 2) 徽章区行级手术（hasBadgeData 起 120 行窗口内定位）
+lines = c.split("\n")
+base = -1
+for i, l in enumerate(lines):
+    if "val hasBadgeData" in l:
+        base = i
+        break
+if base == -1:
+    print("X v13 未找到 hasBadgeData")
+    sys.exit(1)
+win_end = min(len(lines), base + 120)
+comment_i = sus_i = color_i = -1
+for i in range(base, win_end):
+    if "验货实测优先显示" in lines[i]:
+        comment_i = i
+    if 'if (sus) "$lbl · 实测约' in lines[i]:
+        if sus_i != -1:
+            print("X v13 sus 行不唯一")
+            sys.exit(1)
+        sus_i = i
+    if sus_i != -1 and color_i == -1 and "color = musicColors().accent.copy(alpha = 0.8f)," in lines[i]:
+        color_i = i
+if comment_i == -1 or sus_i == -1 or color_i == -1:
+    print(f"X v13 徽章区定位失败: comment={comment_i} sus={sus_i} color={color_i}")
+    sys.exit(1)
+text_i = comment_i - 1
+if "Text(" not in lines[text_i]:
+    print("X v13 comment 上一行不是 Text(")
+    sys.exit(1)
+
+def indent_of(line):
+    return line[:len(line) - len(line.lstrip())]
+
+# 2c) maxLines=2（先插最下方，保持上方行号不变）
+lines.insert(color_i + 1, indent_of(lines[color_i]) + "maxLines = 2, // [22v13][临时诊断]")
+print("  OK maxLines=2")
+# 2b) sus 文案行替换（虚标拦截优先，实测文案挂 F 串后缀）
+ind = indent_of(lines[sus_i])
+lines[sus_i] = ind + 'if (probeSuspect) "$rawLbl · 虚标⚠$dbgSuffix" else if (sus) "$lbl · 实测约${measuredBitrate}kbps ⚠$dbgSuffix" else "$lbl · 实测约${measuredBitrate}kbps$dbgSuffix" // [22v13]'
+print("  OK 虚标拦截文案")
+# 2a) dbgSuffix 定义（插在 Text( 之前）
+lines.insert(text_i, indent_of(lines[text_i]) + 'val dbgSuffix = if (probeDbg.isNotEmpty()) " [$probeDbg]" else "" // [22v13][临时诊断]')
+print("  OK dbgSuffix 定义")
+
+c = "\n".join(lines)
+assert MARK in c and "probeSuspect" in c and "dbgSuffix" in c
+with open(path, "w", encoding="utf-8") as f:
+    f.write(c)
+print("v13：虚标拦截已应用")
+PYEOF22V13
+
+# ===== v13 结束 =====

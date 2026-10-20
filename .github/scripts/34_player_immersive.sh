@@ -2477,97 +2477,6 @@ PYEOF45
 echo "=== 34 v45 完成 ==="
 
 
-# === 34 v48: 徽章检测中 + 四档回退（修正3：实测优先+估值取整防闪） ===
-echo "=== 34 v48 ==="
-
-python3 << 'PYEOF48'
-import sys, re
-
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
-MARK = "// [34v48]"
-
-with open(path, encoding="utf-8") as f:
-    content = f.read()
-
-if MARK in content:
-    print("34 v48: 已应用，跳过")
-    sys.exit(0)
-
-# --- 步骤1：加 collect ---
-anchor = "val currentQuality by LxPlayerManager.currentQuality.collectAsState()"
-if anchor not in content:
-    print("❌ 未找到 currentQuality 收集锚点")
-    sys.exit(1)
-new_collect = anchor + "\n    val isProbing by LxPlayerManager.isProbing.collectAsState() " + MARK + \
-    "\n    val probeTier by LxPlayerManager.probeTier.collectAsState() " + MARK
-content = content.replace(anchor, new_collect, 1)
-print("✓ isProbing/probeTier 收集已加")
-
-# --- 步骤2：徽章块行级替换 ---
-lines = content.split('\n')
-badge_start = -1
-for i, l in enumerate(lines):
-    if 'if (currentQuality.isNotEmpty())' in l:
-        badge_start = i
-        break
-if badge_start == -1:
-    print("❌ 未找到徽章 if 块")
-    sys.exit(1)
-
-depth = 0
-badge_end = -1
-for i in range(badge_start, len(lines)):
-    depth += lines[i].count('{') - lines[i].count('}')
-    if i > badge_start and depth == 0:
-        badge_end = i
-        break
-if badge_end == -1:
-    print("❌ 徽章块结束未找到")
-    sys.exit(1)
-print(f"✓ 徽章块定位：第 {badge_start+1}-{badge_end+1} 行")
-
-indent = lines[badge_start][:len(lines[badge_start]) - len(lines[badge_start].lstrip())]
-# 修正3：实测(measuredBitrate)优先，估值(bitrate)取整 /100*100 防跳动
-new_badge = f"""{indent}val badgeText: String? = when {{ {MARK}
-{indent}    isProbing -> "⏳ 检测中..."
-{indent}    currentQuality.isEmpty() -> null
-{indent}    measuredBitrate > 0 -> "${{LxPlayerManager.qualityLabel(currentQuality)}} · 实测约${{measuredBitrate}}kbps"
-{indent}    bitrate > 0 -> "${{LxPlayerManager.qualityLabel(currentQuality)}} · ${{bitrate / 100 * 100}}kbps"
-{indent}    probeTier >= 2 -> LxPlayerManager.qualityLabel(currentQuality)
-{indent}    probeTier == 1 -> "高品质"
-{indent}    probeTier == 0 -> LxPlayerManager.qualityLabel(currentQuality)
-{indent}    else -> null
-{indent}}}
-{indent}if (badgeText != null) {{
-{indent}    Box(
-{indent}        modifier = Modifier.fillMaxWidth(),
-{indent}        contentAlignment = Alignment.Center
-{indent}    ) {{
-{indent}        Text(
-{indent}            text = badgeText,
-{indent}            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-{indent}            color = musicColors().accent.copy(alpha = 0.8f),
-{indent}            modifier = Modifier
-{indent}                .border(0.5.dp, musicColors().accent.copy(alpha = 0.5f), RoundedCornerShape(3.dp))
-{indent}                .padding(horizontal = 5.dp, vertical = 1.dp)
-{indent}        )
-{indent}    }}
-{indent}    Spacer(modifier = Modifier.height(8.dp))
-{indent}}} else {{
-{indent}    Spacer(modifier = Modifier.height(24.dp))
-{indent}}}"""
-
-lines[badge_start:badge_end+1] = [new_badge]
-content = '\n'.join(lines)
-
-assert MARK in content
-with open(path, 'w', encoding='utf-8') as f:
-    f.write(content)
-print("✓ 34 v48: 徽章逻辑已替换")
-PYEOF48
-
-echo "=== 34 v48 完成 ==="
-
 # === 34 v49: 播放/暂停图标（v46 丢失后重做） ===
 echo "=== 34 v49 ==="
 
@@ -2762,32 +2671,9 @@ PYEOF55
 
 echo "=== 34 v55 完成 ==="
 
-# === 34 v56: [临时诊断] 徽章估值分支加 [t=probeTier] 后缀 ===
-# TODO[34v56]: 探针分支定性后删除本块，恢复 v48 原文案
-echo "=== 34 v56: 徽章探针档位诊断后缀 ==="
-python3 << 'PYEOF56'
-import sys
-PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
-with open(PATH, encoding='utf-8') as f:
-    c = f.read()
-if '[t=${probeTier}]' in c:
-    print("34 v56: 已应用，跳过")
-    sys.exit(0)
-old = 'bitrate > 0 -> "${LxPlayerManager.qualityLabel(currentQuality)} \u00b7 ${bitrate / 100 * 100}kbps"'
-new = 'bitrate > 0 -> "${LxPlayerManager.qualityLabel(currentQuality)} \u00b7 ${bitrate / 100 * 100}kbps [t=${probeTier}]"'
-if old not in c:
-    print("X 未找到 v48 徽章估值分支")
-    sys.exit(1)
-c = c.replace(old, new, 1)
-assert '[t=${probeTier}]' in c
-with open(PATH, 'w', encoding='utf-8') as f:
-    f.write(c)
-print("OK 34 v56 完成（临时诊断后缀）")
-PYEOF56
-
-# === 34 v57: 点歌链补探针接线 + probeDbg 徽章回传 ===
-# TODO[34v57]: 探针定性修复后，删除 v56/v57 全部诊断后缀与本接线外的诊断显示
-echo "=== 34 v57: 点歌链探针接线 + probeDbg ==="
+# === 34 v57: 点歌链补探针接线 ===
+# [收敛] 原 v57 的诊断收集/后缀/maxLines 步骤已删（诊断面改由 22 v13 承担），本块仅保留探针接线。
+echo "=== 34 v57: 点歌链探针接线 ==="
 python3 << 'PYEOF57'
 import sys
 PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
@@ -2796,143 +2682,15 @@ with open(PATH, encoding='utf-8') as f:
 if '// [34v57]' in c:
     print("34 v57: 已应用，跳过")
     sys.exit(0)
-# 1) onSuccess play 后补探针（后台 Thread，不阻塞主线程）
+# 点歌链 onSuccess play 后补探针（后台 Thread，不阻塞主线程）
 old_play = "                                LxPlayerManager.play(url, title, artist)"
 if c.count(old_play) != 1:
     print(f"X play 锚点计数异常: {c.count(old_play)}")
     sys.exit(1)
 c = c.replace(old_play, old_play + "\n                                Thread { LxPlayerManager.probeAndSetQuality(url) }.start() // [34v57] 点歌链补探针", 1)
 print("  OK 探针接线")
-# 2) probeDbg collect
-old_col = "    val probeTier by LxPlayerManager.probeTier.collectAsState() // [34v48]"
-if old_col not in c:
-    print("X 未找到 probeTier collect 锚点")
-    sys.exit(1)
-c = c.replace(old_col, old_col + "\n    val probeDbg by LxPlayerManager.probeDbg.collectAsState() // [34v57]", 1)
-print("  OK probeDbg collect")
-# 3) tier 分支挂诊断后缀
-old_br = "probeTier >= 2 -> LxPlayerManager.qualityLabel(currentQuality)"
-if old_br not in c:
-    print("X 未找到 tier>=2 分支")
-    sys.exit(1)
-c = c.replace(old_br, "probeTier >= 2 -> LxPlayerManager.qualityLabel(currentQuality) + if (probeDbg.isNotEmpty()) \" [$probeDbg]\" else \"\"", 1)
-print("  OK tier 分支后缀")
-# 4) 徽章 Text 加 maxLines=2（行级插入，沿用原行缩进）
-lines = c.split('\n')
-done = False
-for i, l in enumerate(lines):
-    if 'text = badgeText,' in l:
-        indent = l[:len(l) - len(l.lstrip())]
-        lines.insert(i + 1, indent + "maxLines = 2, // [34v57]")
-        done = True
-        break
-if not done:
-    print("X 未找到 text = badgeText 行")
-    sys.exit(1)
-c = '\n'.join(lines)
-print("  OK maxLines=2")
 with open(PATH, 'w', encoding='utf-8') as f:
     f.write(c)
 assert 'probeAndSetQuality(url) }.start() // [34v57]' in c
 print("OK 34 v57 完成")
 PYEOF57
-
-# === 34 v58: 纯诊断（徽章双头定位：v48 badgeText / [t= / probeDbg / 22徽章） ===
-# 本块只打印不修改，异常不中断构建；定案后随下刀版一并删除。
-echo "=== 34 v58 DIAGNOSTIC ==="
-
-python3 << 'PYEOF58' || echo "34 v58: 诊断异常已忽略"
-import sys, os, re
-
-BASE = "app/src/main/java"
-ACT = BASE + "/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
-
-def show(lines, a, b):
-    for i in range(a, b + 1):
-        if 0 <= i < len(lines):
-            print(f"{i+1:5d}: {lines[i].rstrip()[:200]}")
-
-def occ(lines, needle, tag):
-    hits = [i for i, l in enumerate(lines) if needle in l]
-    print(f"-- [{tag}] needle '{needle}': {len(hits)} hits")
-    for i in hits:
-        print(f"{i+1:5d}: {lines[i].rstrip()[:200]}")
-    return hits
-
-def block_end(lines, start, cap):
-    depth = 0
-    for i in range(start, min(len(lines), start + cap)):
-        depth += lines[i].count('{') - lines[i].count('}')
-        if i > start and depth <= 0:
-            return i
-    return -1
-
-try:
-    with open(ACT, encoding="utf-8") as f:
-        L = f.readlines()
-    print(f"== LxPlayerActivity.kt total lines: {len(L)} ==")
-    for i, l in enumerate(L):
-        if 'val currentQuality by' in l:
-            print("-- collect region (currentQuality context) --")
-            show(L, i - 2, i + 8)
-            break
-    # Q1: badgeText 全部出现行 + 所属函数 + 徽章区全文
-    hits_bt = occ(L, 'badgeText', "Q1")
-    occ(L, 'currentQuality.isNotEmpty()', "Q1b")
-    occ(L, '检测中', "Q1c")
-    if hits_bt:
-        d = hits_bt[0]
-        fs = -1
-        for i in range(d, -1, -1):
-            if re.match(r'\s*(private\s+|internal\s+)?(suspend\s+)?fun\s+\w+\s*\(', L[i]):
-                fs = i
-                break
-        if fs >= 0:
-            fe = block_end(L, fs, 3000)
-            print(f"-- [Q1] badgeText enclosing fun: start line {fs+1}, end line {fe+1 if fe >= 0 else 'NOT FOUND'}")
-            print(f"-- [Q1] fun header: {L[fs].rstrip()[:200]}")
-            if fe >= 0 and fe - fs <= 170:
-                print("-- [Q1] enclosing fun FULL TEXT --")
-                show(L, fs, fe)
-            else:
-                bend = block_end(L, d, 200)
-                print(f"-- [Q1] fun too long; badge region only. def line {d+1}, badge block end {bend+1 if bend >= 0 else 'NOT FOUND'}")
-                a = max(fs, d - 60)
-                b = min(fe if fe >= 0 else len(L) - 1, (bend if bend >= 0 else d) + 60)
-                show(L, a, b)
-        else:
-            print("-- [Q1] enclosing fun NOT FOUND; def context +-80 --")
-            show(L, max(0, d - 40), min(len(L) - 1, d + 80))
-    # Q3: 22 徽章 hasBadgeData 块全文
-    hits_hd = occ(L, 'hasBadgeData', "Q3")
-    occ(L, '实测约', "Q3b")
-    if hits_hd:
-        d = hits_hd[0]
-        ifl = -1
-        for i in range(d, min(len(L), d + 6)):
-            if 'if (hasBadgeData)' in L[i]:
-                ifl = i
-                break
-        end = block_end(L, ifl if ifl >= 0 else d, 200)
-        print(f"-- [Q3] 22 badge block: def line {d+1}, if line {ifl+1 if ifl >= 0 else 'NOT FOUND'}, end line {end+1 if end >= 0 else 'NOT FOUND'}")
-        show(L, d, end if end >= 0 else d + 60)
-    # Q2: 全局搜 [t= 与 probeDbg（全部 .kt）
-    print("-- [Q2] global search: '[t=' and 'probeDbg' in all .kt --")
-    for root, dirs, files in os.walk(BASE):
-        for fn in sorted(files):
-            if fn.endswith(".kt"):
-                p = os.path.join(root, fn)
-                try:
-                    with open(p, encoding="utf-8") as fh:
-                        fl = fh.readlines()
-                except Exception:
-                    continue
-                for i, l in enumerate(fl):
-                    if '[t=' in l or 'probeDbg' in l:
-                        print(f"{p}:{i+1}: {l.rstrip()[:200]}")
-    print("== 34 v58 DIAGNOSTIC END ==")
-except Exception as e:
-    print(f"34 v58 diagnostic error (ignored): {e}")
-PYEOF58
-
-echo "=== 34 v58 诊断完成 ==="
