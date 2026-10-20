@@ -2626,3 +2626,63 @@ print("✓ 34 v48: 徽章逻辑已替换")
 PYEOF48
 
 echo "=== 34 v48 完成 ==="
+
+# === 34 v49: 播放/暂停图标（v46 丢失后重做） ===
+echo "=== 34 v49 ==="
+
+python3 << 'PYEOF49'
+import sys, re
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v49]"
+
+with open(path, encoding="utf-8") as f:
+    lines = f.readlines()
+
+if MARK in "".join(lines):
+    print("34 v49: 已应用，跳过")
+    sys.exit(0)
+
+# 已有 PlayerPlayIcon 则只修 tint，不重复插入
+has_play = any('PlayerPlayIcon(' in l for l in lines)
+has_pause = any('PlayerPauseIcon(' in l for l in lines)
+print(f"已有 PlayerPlayIcon: {has_play}, PlayerPauseIcon: {has_pause}")
+
+fixed = []
+if has_play or has_pause:
+    for i, l in enumerate(lines):
+        if ('PlayerPlayIcon(' in l or 'PlayerPauseIcon(' in l) and 'tint = Color.White' not in l:
+            nl = re.sub(r'tint\s*=\s*[^,\)]+', 'tint = Color.White', l)
+            if nl != l:
+                lines[i] = nl
+                fixed.append(f'第{i+1}行 tint→White')
+else:
+    # 无调用：找播放键（isPlaying + 大尺寸按钮块）
+    for i, line in enumerate(lines):
+        if 'IconButton(' in line or 'Box(' in line:
+            block = "".join(lines[i:i+20])
+            if 'isPlaying' in block and re.search(r'(6[0-9]|7[0-9])\.dp', block):
+                for j in range(i, min(i+20, len(lines))):
+                    if ') {' in lines[j]:
+                        indent = lines[j][:len(lines[j]) - len(lines[j].lstrip())] + '    '
+                        icon_code = (
+                            f'{indent}if (isPlaying) {{ {MARK}\n'
+                            f'{indent}    PlayerPauseIcon(tint = Color.White, modifier = Modifier.size(32.dp))\n'
+                            f'{indent}}} else {{\n'
+                            f'{indent}    PlayerPlayIcon(tint = Color.White, modifier = Modifier.size(32.dp))\n'
+                            f'{indent}}}\n'
+                        )
+                        lines.insert(j+1, icon_code)
+                        fixed.append(f'第{j+2}行 写入播放/暂停图标')
+                        break
+                break
+
+if not fixed:
+    print("⚠ 34 v49: 未找到可修复处（可能已有正确图标）")
+else:
+    with open(path, 'w', encoding='utf-8') as f:
+        f.writelines(lines)
+    print(f"✓ 34 v49: {fixed}")
+PYEOF49
+
+echo "=== 34 v49 完成 ==="
