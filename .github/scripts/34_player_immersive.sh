@@ -2305,3 +2305,29 @@ print("✓ 34 v41 完成")
 PYEOF41
 
 echo "=== 34 v41 完成 ==="
+
+# === 34 v42: 纯诊断（打印 1142 行真实代码） ===
+echo "=== 34 v42 DIAGNOSTIC ==="
+
+python3 << 'PYEOF42'
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+with open(path, encoding="utf-8") as f:
+    lines = f.readlines()
+
+print("="*60)
+print("DIAGNOSTIC: LxPlayerActivity.kt lines 1120-1170")
+print("="*60)
+for i in range(1119, min(1170, len(lines))):
+    print(f"{i+1:5d}: {lines[i]}", end='')
+print("="*60)
+print("DIAGNOSTIC: modeIcon 相关行")
+print("="*60)
+for i, line in enumerate(lines):
+    if 'modeIcon' in line or 'PlayerShuffleIcon' in line or 'PlayerRepeatIcon' in line or 'PlayerRepeatOneIcon' in line:
+        print(f"{i+1:5d}: {lines[i]}", end='')
+print("="*60)
+print("DIAGNOSTIC END")
+print("="*60)
+PYEOF42
+
+echo "=== 34 v42 诊断完成（不改代码） ==="
