@@ -2188,3 +2188,120 @@ print("✓ 34 v40 完成")
 PYEOF40
 
 echo "=== 34 v40 完成 ==="
+
+# === 34 v41: 精确修复残留 ===
+echo "=== 34 v41 ==="
+
+python3 << 'PYEOF41'
+import re, sys, os
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+icon_path = "app/src/main/java/com/github/tvbox/osc/ui/music/component/LxIcons.kt"
+MARK = "// [34v41]"
+
+with open(path, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("34 v41: 已应用，跳过")
+    sys.exit(0)
+
+# --- 修复1：LxIcons.kt 参数名同步 ---
+# 实际残留：PlayerRepeatIcon(tint = tint, size = iconSize * 0.82f, ...)
+# 目标：PlayerRepeatIcon(tint = tint, iconSize = iconSize * 0.82f, ...)
+if os.path.exists(icon_path):
+    with open(icon_path, encoding="utf-8") as f:
+        lx = f.read()
+    # 精确匹配：", size = iconSize *"
+    if ", size = iconSize *" in lx:
+        lx = lx.replace(", size = iconSize *", ", iconSize = iconSize *")
+        with open(icon_path, "w", encoding="utf-8") as f:
+            f.write(lx)
+        print("✓ LxIcons.kt: size = iconSize * → iconSize = iconSize *")
+    elif "size = " in lx and "iconSize" in lx:
+        # 兜底：找所有 "size =" 后面跟 iconSize 的
+        lx2 = re.sub(r',\s*size\s*=\s*iconSize', ', iconSize = iconSize', lx)
+        if lx2 != lx:
+            with open(icon_path, "w", encoding="utf-8") as f:
+                f.write(lx2)
+            print("✓ LxIcons.kt: 正则兜底修复参数名")
+        else:
+            print("- LxIcons.kt 未找到残留（可能已修）")
+    else:
+        print("- LxIcons.kt 无需修复")
+else:
+    print("❌ LxIcons.kt 不存在")
+    sys.exit(1)
+
+# --- 修复2：Activity 里残留的 when/Icon(modeIcon) ---
+# 不管 v39 是否成功，直接处理所有可能形态
+# 形态A：when (modeIcon) { // [34v39] ... } → 换成 if-else
+m_when39 = re.search(r'when \(modeIcon\) \{ // \[34v39\]\n(.*?)\n    \}', s, re.S)
+if m_when39:
+    print("✓ 找到 v39 when 块，换成 if-else")
+    body = m_when39.group(1)
+    m0 = re.search(r'0 -> PlayerShuffleIcon\(tint = ([^,]+), modifier = ([^\)]+)\)', body)
+    if m0:
+        tint_e = m0.group(1).strip(); mod_e = m0.group(2).strip()
+        new_if = (
+            "if (modeIcon == 0) { // [34v41]\n"
+            f"        PlayerShuffleIcon(tint = {tint_e}, modifier = {mod_e})\n"
+            "    } else if (modeIcon == 1) {\n"
+            f"        PlayerRepeatOneIcon(tint = {tint_e}, modifier = {mod_e})\n"
+            "    } else {\n"
+            f"        PlayerRepeatIcon(tint = {tint_e}, modifier = {mod_e})\n"
+            "    }"
+        )
+        s = s[:m_when39.start()] + new_if + s[m_when39.end():]
+        print("✓ v39 when → if-else")
+    else:
+        print("⚠ v39 when 块参数解析失败")
+else:
+    print("- 未找到 v39 when 块")
+
+# 形态B：如果还有 Icon(imageVector = modeIcon...) 残留（v39 没处理到）
+# 直接找 Icon( ... modeIcon ... ) 并替换
+# 用简单字符串查找
+if "modeIcon" in s and "Icon(" in s:
+    # 找 Icon(imageVector = modeIcon
+    idx = s.find("Icon(imageVector = modeIcon")
+    if idx == -1:
+        idx = s.find("Icon(imageVector=modeIcon")
+    if idx != -1:
+        print(f"✓ 找到 Icon(modeIcon) 残留 at {idx}")
+        # brace matching 找完整调用
+        start_paren = s.find("(", idx)
+        depth = 0; i = start_paren
+        while i < len(s):
+            if s[i] == '(': depth += 1
+            elif s[i] == ')':
+                depth -= 1
+                if depth == 0: break
+            i += 1
+        icon_call = s[idx:i+1]
+        m_t = re.search(r'tint\s*=\s*([^,]+)', icon_call)
+        m_m = re.search(r'modifier\s*=\s*([^,]+?)(?:,|\))', icon_call, re.S)
+        tint_e = m_t.group(1).strip() if m_t else "Color.White"
+        mod_e = m_m.group(1).strip() if m_m else "Modifier"
+        new_if = (
+            "if (modeIcon == 0) { // [34v41]\n"
+            f"        PlayerShuffleIcon(tint = {tint_e}, modifier = {mod_e})\n"
+            "    } else if (modeIcon == 1) {\n"
+            f"        PlayerRepeatOneIcon(tint = {tint_e}, modifier = {mod_e})\n"
+            "    } else {\n"
+            f"        PlayerRepeatIcon(tint = {tint_e}, modifier = {mod_e})\n"
+            "    }"
+        )
+        s = s[:idx] + new_if + s[i+1:]
+        print("✓ Icon(modeIcon) → if-else")
+    else:
+        print("- 未找到 Icon(modeIcon) 残留")
+
+s += "\n" + MARK + "\n"
+assert MARK in s, "❌ v41 标记未写入"
+with open(path, "w", encoding="utf-8") as f:
+    f.write(s)
+print("✓ 34 v41 完成")
+PYEOF41
+
+echo "=== 34 v41 完成 ==="
