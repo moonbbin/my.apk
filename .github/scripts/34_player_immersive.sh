@@ -2535,3 +2535,94 @@ print(f"✓ 34 v47: {fixed}")
 PYEOF47
 
 echo "=== 34 v47 完成 ==="
+
+# === 34 v48: 徽章检测中 + 四档回退（修正3：实测优先+估值取整防闪） ===
+echo "=== 34 v48 ==="
+
+python3 << 'PYEOF48'
+import sys, re
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v48]"
+
+with open(path, encoding="utf-8") as f:
+    content = f.read()
+
+if MARK in content:
+    print("34 v48: 已应用，跳过")
+    sys.exit(0)
+
+# --- 步骤1：加 collect ---
+anchor = "val currentQuality by LxPlayerManager.currentQuality.collectAsState()"
+if anchor not in content:
+    print("❌ 未找到 currentQuality 收集锚点")
+    sys.exit(1)
+new_collect = anchor + "\n    val isProbing by LxPlayerManager.isProbing.collectAsState() " + MARK + \
+    "\n    val probeTier by LxPlayerManager.probeTier.collectAsState() " + MARK
+content = content.replace(anchor, new_collect, 1)
+print("✓ isProbing/probeTier 收集已加")
+
+# --- 步骤2：徽章块行级替换 ---
+lines = content.split('\n')
+badge_start = -1
+for i, l in enumerate(lines):
+    if 'if (currentQuality.isNotEmpty())' in l:
+        badge_start = i
+        break
+if badge_start == -1:
+    print("❌ 未找到徽章 if 块")
+    sys.exit(1)
+
+depth = 0
+badge_end = -1
+for i in range(badge_start, len(lines)):
+    depth += lines[i].count('{') - lines[i].count('}')
+    if i > badge_start and depth == 0:
+        badge_end = i
+        break
+if badge_end == -1:
+    print("❌ 徽章块结束未找到")
+    sys.exit(1)
+print(f"✓ 徽章块定位：第 {badge_start+1}-{badge_end+1} 行")
+
+indent = lines[badge_start][:len(lines[badge_start]) - len(lines[badge_start].lstrip())]
+# 修正3：实测(measuredBitrate)优先，估值(bitrate)取整 /100*100 防跳动
+new_badge = f"""{indent}val badgeText: String? = when {{ {MARK}
+{indent}    isProbing -> "⏳ 检测中..."
+{indent}    currentQuality.isEmpty() -> null
+{indent}    measuredBitrate > 0 -> "${{LxPlayerManager.qualityLabel(currentQuality)}} · 实测约${{measuredBitrate}}kbps"
+{indent}    bitrate > 0 -> "${{LxPlayerManager.qualityLabel(currentQuality)}} · ${{bitrate / 100 * 100}}kbps"
+{indent}    probeTier >= 2 -> LxPlayerManager.qualityLabel(currentQuality)
+{indent}    probeTier == 1 -> "高品质"
+{indent}    probeTier == 0 -> LxPlayerManager.qualityLabel(currentQuality)
+{indent}    else -> null
+{indent}}}
+{indent}if (badgeText != null) {{
+{indent}    Box(
+{indent}        modifier = Modifier.fillMaxWidth(),
+{indent}        contentAlignment = Alignment.Center
+{indent}    ) {{
+{indent}        Text(
+{indent}            text = badgeText,
+{indent}            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+{indent}            color = musicColors().accent.copy(alpha = 0.8f),
+{indent}            modifier = Modifier
+{indent}                .border(0.5.dp, musicColors().accent.copy(alpha = 0.5f), RoundedCornerShape(3.dp))
+{indent}                .padding(horizontal = 5.dp, vertical = 1.dp)
+{indent}        )
+{indent}    }}
+{indent}    Spacer(modifier = Modifier.height(8.dp))
+{indent}}} else {{
+{indent}    Spacer(modifier = Modifier.height(24.dp))
+{indent}}}"""
+
+lines[badge_start:badge_end+1] = [new_badge]
+content = '\n'.join(lines)
+
+assert MARK in content
+with open(path, 'w', encoding='utf-8') as f:
+    f.write(content)
+print("✓ 34 v48: 徽章逻辑已替换")
+PYEOF48
+
+echo "=== 34 v48 完成 ==="

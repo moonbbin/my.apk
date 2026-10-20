@@ -1439,3 +1439,124 @@ print("✓ 21 v25 完成")
 PYEOF25
 
 echo "=== 21 v25 完成 ==="
+
+# === 21 v26: 探针状态 + 结果缓存（含三并发修正） ===
+echo "=== 21 v26 ==="
+
+python3 << 'PYEOF26'
+import sys, re
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+MARK = "// [21v26]"
+
+with open(path, encoding="utf-8") as f:
+    s = f.read()
+
+if MARK in s:
+    print("21 v26: 已应用，跳过")
+    sys.exit(0)
+
+# --- 步骤1：加 StateFlow 声明（修正1：ConcurrentHashMap 线程安全） ---
+anchor1 = "    val measuredBitrate: StateFlow<Int> = _measuredBitrate"
+if anchor1 not in s:
+    print("❌ 未找到 _measuredBitrate 声明锚点")
+    sys.exit(1)
+new_decls = anchor1 + "\n" + \
+    "    private val _probeTier = MutableStateFlow(-1) " + MARK + "\n" + \
+    "    val probeTier: StateFlow<Int> = _probeTier " + MARK + "\n" + \
+    "    private val _isProbing = MutableStateFlow(false) " + MARK + "\n" + \
+    "    val isProbing: StateFlow<Boolean> = _isProbing " + MARK + "\n" + \
+    "    private val _probeCache = java.util.concurrent.ConcurrentHashMap<String, Triple<String, Int, Int>>() " + MARK
+s = s.replace(anchor1, new_decls, 1)
+print("✓ StateFlow 声明已加（含 ConcurrentHashMap）")
+
+# --- 步骤2：probeAndSetQuality 整函数替换 ---
+lines = s.split('\n')
+fs = -1
+for i, l in enumerate(lines):
+    if re.search(r'^\s*fun probeAndSetQuality\(url: String\)', l):
+        fs = i
+        break
+if fs == -1:
+    print("❌ 未找到 probeAndSetQuality")
+    sys.exit(1)
+depth = 0
+fe = -1
+for i in range(fs, len(lines)):
+    depth += lines[i].count('{') - lines[i].count('}')
+    if i > fs and depth == 0:
+        fe = i
+        break
+if fe == -1:
+    print("❌ probeAndSetQuality 结束未找到")
+    sys.exit(1)
+
+new_func = """    fun probeAndSetQuality(url: String) { // [21v26]
+        try {
+            val cached = _probeCache[url]
+            if (cached != null) {
+                _currentQuality.value = cached.first
+                _probeTier.value = cached.second
+                _measuredBitrate.value = cached.third
+                _isProbing.value = false
+                return
+            }
+            _isProbing.value = true
+            _probeTier.value = -1
+            _currentQuality.value = ""
+            _measuredBitrate.value = 0
+            _currentQuality.value = detectQualityFromUrl(url)
+        } catch (_: Exception) {
+            _isProbing.value = false
+        }
+    }"""
+lines[fs:fe+1] = [new_func]
+s = '\n'.join(lines)
+print("✓ probeAndSetQuality 已替换（含 try-catch）")
+
+# --- 步骤3：探针完成处（修正2：try-catch 包 probeAudio，防卡死） ---
+# 找到 onSuccess 里的 probeAudio 调用，加 try-catch
+old_probe = "                                        val probed = probeAudio(url) // first="
+if old_probe in s:
+    new_probe = "                                        val probed = try { probeAudio(url) } catch (_: Exception) { mainHandler.post { _isProbing.value = false } ; Pair(-1, 0) } // [21v26] 异常兜底"
+    s = s.replace(old_probe, new_probe, 1)
+    print("✓ probeAudio 已包 try-catch")
+else:
+    print("⚠ 未找到 probeAudio 调用锚点，尝试宽松匹配")
+    # 宽松：找 val probed = probeAudio(url)
+    m = re.search(r'(val probed = probeAudio\(url\))', s)
+    if m:
+        s = s.replace(m.group(1), "val probed = try { probeAudio(url) } catch (_: Exception) { Pair(-1, 0) } // [21v26]", 1)
+        print("✓ probeAudio 已包 try-catch（宽松）")
+    else:
+        print("❌ probeAudio 锚点完全未找到")
+        sys.exit(1)
+
+# --- 步骤4：mainHandler.post 内加 tier/缓存/isProbing=false ---
+old_m = "                                                _measuredBitrate.value = kbps"
+if old_m not in s:
+    print("❌ 未找到 _measuredBitrate.value = kbps 锚点")
+    sys.exit(1)
+new_m = old_m + "\n" + \
+    "                                                _probeTier.value = tier " + MARK + "\n" + \
+    "                                                _probeCache[url] = Triple(label, tier, kbps) " + MARK + "\n" + \
+    "                                                _isProbing.value = false " + MARK
+s = s.replace(old_m, new_m, 1)
+print("✓ 探针完成处已加")
+
+# fallback 路径
+old_f = "                                                _measuredBitrate.value = bestKbps"
+if old_f in s:
+    new_f = old_f + "\n" + \
+        "                                                _probeTier.value = bestTier " + MARK + "\n" + \
+        "                                                _isProbing.value = false " + MARK
+    s = s.replace(old_f, new_f, 1)
+    print("✓ fallback 路径已加")
+
+assert MARK in s
+with open(path, "w", encoding="utf-8") as f:
+    f.write(s)
+print("✓ 21 v26 完成")
+PYEOF26
+
+echo "=== 21 v26 完成 ==="
