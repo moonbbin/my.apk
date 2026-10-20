@@ -2509,3 +2509,57 @@ print("="*60)
 PYEOF51
 
 echo "=== 34 v51 诊断完成 ==="
+
+# === 34 v52: 全屏歌词色跟页面主题（不跟封面） ===
+echo "=== 34 v52 ==="
+
+python3 << 'PYEOF52'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v52]"
+
+with open(path, encoding="utf-8") as f:
+    lines = f.readlines()
+
+if MARK in "".join(lines):
+    print("34 v52: 已应用，跳过")
+    sys.exit(0)
+
+# 定位全屏歌词两处：含 accent + else lyricTextColor 的行，取最后两处
+# （817 normalColor 无 else；825 为主页面迷你歌词；最后两处为全屏主行+翻译行）
+cands = []
+for i, l in enumerate(lines):
+    if 'else lyricTextColor' in l and 'musicColors().accent' in l:
+        cands.append(i)
+print(f"候选行（1起）: {[i+1 for i in cands]}")
+if len(cands) < 2:
+    print("❌ 候选不足 2 处，无法定位全屏歌词")
+    sys.exit(1)
+fs_main, fs_trans = cands[-2], cands[-1]
+print(f"✓ 全屏主行第 {fs_main+1} 行，翻译行第 {fs_trans+1} 行")
+
+# 替换两处 lyricTextColor → fsLyricColor（只替换 else 之后的那个）
+for idx in (fs_main, fs_trans):
+    pos = lines[idx].rfind('lyricTextColor')
+    lines[idx] = lines[idx][:pos] + 'fsLyricColor' + lines[idx][pos + len('lyricTextColor'):]
+    print(f"✓ 第 {idx+1} 行已换 fsLyricColor")
+
+# 在主行前插入定义（缩进对齐主行）
+indent = lines[fs_main][:len(lines[fs_main]) - len(lines[fs_main].lstrip())]
+defn = (
+    f"{indent}val isFsDark by MusicThemeManager.isDarkTheme {MARK}\n"
+    f"{indent}val fsLyricColor = if (isFsDark) Color.White.copy(alpha = 0.8f) else Color(0xFF1C1C1E).copy(alpha = 0.8f) {MARK}\n"
+)
+lines.insert(fs_main, defn)
+
+with open(path, 'w', encoding='utf-8') as f:
+    f.writelines(lines)
+
+# 断言
+out = "".join(lines)
+assert out.count('fsLyricColor') >= 3, "❌ fsLyricColor 引用不足"
+print("✓ 34 v52 完成")
+PYEOF52
+
+echo "=== 34 v52 完成 ==="
