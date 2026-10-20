@@ -2331,3 +2331,78 @@ print("="*60)
 PYEOF42
 
 echo "=== 34 v42 诊断完成（不改代码） ==="
+
+# === 34 v43: 按 v42 诊断的真实代码精确修复 ===
+echo "=== 34 v43 ==="
+
+python3 << 'PYEOF43'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v43]"
+
+with open(path, encoding="utf-8") as f:
+    lines = f.readlines()
+
+full = "".join(lines)
+if MARK in full:
+    print("34 v43: 已应用，跳过")
+    sys.exit(0)
+
+# --- 步骤1：定位 val modeIconVector 的 when 块（行级） ---
+start_idx = -1
+for i, line in enumerate(lines):
+    if "val modeIconVector = when (playMode)" in line:
+        start_idx = i
+        break
+if start_idx == -1:
+    print("❌ 未找到 val modeIconVector when 块")
+    sys.exit(1)
+print(f"✓ when 块起始行: {start_idx + 1}")
+
+# 找 Icon(modeIconVector 行（when 块之后第一处）
+icon_idx = -1
+for i in range(start_idx + 1, len(lines)):
+    if "Icon(modeIconVector" in lines[i]:
+        icon_idx = i
+        break
+if icon_idx == -1:
+    print("❌ 未找到 Icon(modeIconVector 行")
+    sys.exit(1)
+print(f"✓ Icon(modeIconVector 行: {icon_idx + 1}: {lines[icon_idx].strip()[:80]}")
+
+# --- 步骤2：when 分支里的 vector 调用换 Int（只处理 start..icon 之间） ---
+vec2int = [
+    ("playerShuffleVector()", "0"),
+    ("playerRepeatOneVector()", "1"),  # 先于 Repeat
+    ("playerRepeatVector()", "2"),
+]
+for j in range(start_idx, icon_idx):
+    for old, new in vec2int:
+        if old in lines[j]:
+            lines[j] = lines[j].replace(old, new)
+            print(f"✓ 第 {j+1} 行: {old} → {new}")
+
+# --- 步骤3：Icon(modeIconVector, ...) 整行换 when 调 Composable ---
+# 诊断实锤原行（允许空白差异）：Icon(modeIconVector, contentDescription = null, tint = modeColor, modifier = Modifier.size(24.dp)) // [34v26]
+indent = lines[icon_idx][:len(lines[icon_idx]) - len(lines[icon_idx].lstrip())]
+new_block = (
+    f"{indent}when (modeIconVector) {{ // [34v43]\n"
+    f"{indent}    0 -> PlayerShuffleIcon(tint = modeColor, modifier = Modifier.size(24.dp))\n"
+    f"{indent}    1 -> PlayerRepeatOneIcon(tint = modeColor, modifier = Modifier.size(24.dp))\n"
+    f"{indent}    else -> PlayerRepeatIcon(tint = modeColor, modifier = Modifier.size(24.dp))\n"
+    f"{indent}}}\n"
+)
+lines[icon_idx] = new_block
+print("✓ Icon(modeIconVector) 已换为 when 调 Player*Icon")
+
+# --- 步骤4：断言无残留 ---
+out = "".join(lines)
+assert "playerShuffleVector()" not in out.split("val modeIconVector")[1].split("Spacer")[0] if "val modeIconVector" in out else True
+assert MARK in out, "❌ v43 标记未写入"
+with open(path, "w", encoding="utf-8") as f:
+    f.write(out)
+print("✓ 34 v43 完成")
+PYEOF43
+
+echo "=== 34 v43 完成 ==="
