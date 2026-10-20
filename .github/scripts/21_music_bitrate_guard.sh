@@ -1617,3 +1617,74 @@ print(f"✓ 21 v28: 第 {si+2} 行已插入 _isProbing=false")
 PYEOF28
 
 echo "=== 21 v28 完成 ==="
+
+# === 21 v29: isProbing 闭环修复（Path A 真探针 try-finally + Path B 探针前置位） ===
+echo "=== 21 v29: isProbing 状态闭环 ==="
+python3 << 'PYEOF29'
+import sys, re
+PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+with open(PATH, encoding='utf-8') as f:
+    content = f.read()
+if '// [21v29]' in content:
+    print("21 v29: 已应用，跳过")
+    sys.exit(0)
+lines = content.split('\n')
+NEW_FN = """    fun probeAndSetQuality(url: String) { // [21v29] Path A 真探针：置位→探针→finally 复位
+        val cachedA = _probeCache[url]
+        if (cachedA != null) {
+            _currentQuality.value = cachedA.first
+            _probeTier.value = cachedA.second
+            _measuredBitrate.value = cachedA.third
+            _isProbing.value = false
+            return
+        }
+        _isProbing.value = true
+        try {
+            _probeTier.value = -1
+            _currentQuality.value = ""
+            _measuredBitrate.value = 0
+            val lblA = detectQualityFromUrl(url)
+            _currentQuality.value = lblA
+            val prA = try { probeAudio(url) } catch (_: Exception) { Pair(-1, 0) }
+            _probeTier.value = prA.first
+            if (prA.second > 0) _measuredBitrate.value = prA.second
+            if (prA.first >= 0) _probeCache[url] = Triple(lblA, prA.first, prA.second)
+        } catch (_: Exception) {
+        } finally {
+            _isProbing.value = false
+        }
+    }"""
+start = None
+for i, l in enumerate(lines):
+    if 'fun probeAndSetQuality(url: String)' in l:
+        start = i
+        break
+if start is None:
+    print("X 未找到 probeAndSetQuality")
+    sys.exit(1)
+depth = 0; end = None; begun = False
+for j in range(start, len(lines)):
+    depth += lines[j].count('{') - lines[j].count('}')
+    if '{' in lines[j]: begun = True
+    if begun and depth == 0:
+        end = j; break
+if end is None:
+    print("X probeAndSetQuality 花括号计数失败")
+    sys.exit(1)
+print(f"  probeAndSetQuality 定位: {start+1}~{end+1} 行")
+lines = lines[:start] + NEW_FN.split('\n') + lines[end+1:]
+content = '\n'.join(lines)
+m = re.search(r'^([ ]*)val probed = try \{ probeAudio\(url\) \} catch.*$', content, re.MULTILINE)
+if not m:
+    print("X 未找到 onSuccess 探针行（v26 包裹形态）")
+    sys.exit(1)
+indent = m.group(1)
+replacement = (indent + "_isProbing.value = true // [21v29] Path B 探针开始置位（终局 post 复位）\n"
+    + indent + "val probed = try { probeAudio(url) } catch (_: Exception) { Pair(-1, 0) } // [21v29]")
+content = content[:m.start()] + replacement + content[m.end():]
+with open(PATH, 'w', encoding='utf-8') as f:
+    f.write(content)
+assert '_isProbing.value = true // [21v29]' in content
+assert 'finally {' in content
+print("OK 21 v29 完成（Path A try-finally / Path B 前置位）")
+PYEOF29

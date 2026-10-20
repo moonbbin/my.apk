@@ -2761,3 +2761,26 @@ print("✓ 34 v55: 播放键 else 已填 Player*Icon")
 PYEOF55
 
 echo "=== 34 v55 完成 ==="
+
+# === 34 v56: [临时诊断] 徽章估值分支加 [t=probeTier] 后缀 ===
+# TODO[34v56]: 探针分支定性后删除本块，恢复 v48 原文案
+echo "=== 34 v56: 徽章探针档位诊断后缀 ==="
+python3 << 'PYEOF56'
+import sys
+PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+with open(PATH, encoding='utf-8') as f:
+    c = f.read()
+if '// [34v56]' in c:
+    print("34 v56: 已应用，跳过")
+    sys.exit(0)
+old = 'bitrate > 0 -> qualityLabel(currentQuality) + " \u00b7 ${(bitrate / 100 * 100)}kbps" // [34v48]'
+new = 'bitrate > 0 -> qualityLabel(currentQuality) + " \u00b7 ${(bitrate / 100 * 100)}kbps [t=${probeTier}]" // [34v48] [34v56]'
+if old not in c:
+    print("X 未找到 v48 徽章估值分支")
+    sys.exit(1)
+c = c.replace(old, new, 1)
+assert '[t=${probeTier}]' in c
+with open(PATH, 'w', encoding='utf-8') as f:
+    f.write(c)
+print("OK 34 v56 完成（临时诊断后缀）")
+PYEOF56
