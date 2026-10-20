@@ -2694,3 +2694,195 @@ with open(PATH, 'w', encoding='utf-8') as f:
 assert 'probeAndSetQuality(url) }.start() // [34v57]' in c
 print("OK 34 v57 完成")
 PYEOF57
+
+# === 34 v59: 播放器跨平台兜底（中央兜底）+ 寻源提示 ===
+# 背景：歌手页等入口的歌被钉死在单一平台解析（网易歌手曲库大量 privilege.st<0 下架歌、
+# VIP 歌），原平台全音质失败即死、无任何换源。用户定案（2026-10-20）：播放器中央兜底——
+# 全档失败后用 searchFull 五平台搜同曲，按 歌名全等+歌手包含+时长±3s 三重校验换源重解析。
+# 红线：① 兜底只触发一次（换源解析 allowFallback=false，终端失败直接报错，绝不递归）；
+# ② 匹配保守（无时长基准且无 ≥2 候选互洽时不换源）；③ 寻源期间 UI 小字提示（Manager.sourceHint）；
+# ④ 身份隔离：不改 extras/队列/setCurrentSong/收藏键（收藏键为界面参数 "$platform:$songId"），
+#    只换本次解析的 musicInfo；历史按解析成功的源记录（title/artist 仍为原歌）。
+echo "=== 34 v59: 跨平台兜底 ==="
+python3 << 'PYEOF59'
+import sys
+
+PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+MARK = "// [34v59]"
+with open(PATH, encoding="utf-8") as f:
+    c = f.read()
+if MARK in c:
+    print("34 v59: 已应用，跳过")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global c
+    if c.count(old) != 1:
+        print(f"X 34v59 {tag} 锚点计数异常: {c.count(old)}")
+        sys.exit(1)
+    c = c.replace(old, new, 1)
+    print(f"  OK {tag}")
+
+# 1) doResolveAndPlay 加 allowFallback 参数（默认 true，向下透传）
+rep(
+    '    private fun doResolveAndPlay(songId: String, platform: String, title: String, artist: String, hash: String = "", albumAudioId: String = "") {',
+    '    private fun doResolveAndPlay(songId: String, platform: String, title: String, artist: String, hash: String = "", albumAudioId: String = "", allowFallback: Boolean = true) { // [34v59]',
+    "doResolveAndPlay 签名")
+rep(
+    "        tryResolveWithRetry(platform, musicInfo, title, artist, retryCount = 0)",
+    "        tryResolveWithRetry(platform, musicInfo, title, artist, retryCount = 0, allowFallback = allowFallback)",
+    "doResolveAndPlay 透传")
+
+# 2) tryResolveWithRetry 加 allowFallback 参数
+rep(
+    """    private fun tryResolveWithRetry(
+        sourceId: String,
+        musicInfo: Map<String, String>,
+        title: String,
+        artist: String,
+        retryCount: Int
+    ) {""",
+    """    private fun tryResolveWithRetry(
+        sourceId: String,
+        musicInfo: Map<String, String>,
+        title: String,
+        artist: String,
+        retryCount: Int,
+        allowFallback: Boolean = true
+    ) {""",
+    "tryResolveWithRetry 签名")
+# 引擎未就绪的内部重试必须原样透传 allowFallback（兜底解析重试后仍为 false，防递归复活）
+rep(
+    "tryResolveWithRetry(sourceId, musicInfo, title, artist, retryCount + 1)",
+    "tryResolveWithRetry(sourceId, musicInfo, title, artist, retryCount + 1, allowFallback)",
+    "内部重试透传")
+
+# 3) 终端失败块：allowFallback 时先走跨平台兜底，否则维持原报错
+rep(
+    """            if (qualityIndex >= tryOrder.size) {
+                android.util.Log.e("LxPlayer", "所有音质档位均失败")
+                runOnUiThread {
+                    LxPlayerManager.setLoading(false)
+                    LxPlayerManager.setError("获取播放地址失败（已尝试所有音质）")
+                }
+                return
+            }""",
+    """            if (qualityIndex >= tryOrder.size) {
+                android.util.Log.e("LxPlayer", "所有音质档位均失败")
+                if (allowFallback) { // [34v59] 先跨平台兜底；兜底解析 allowFallback=false，到此直接报错，绝不递归
+                    tryCrossPlatformFallback(sourceId, musicInfo, title, artist)
+                } else {
+                    runOnUiThread {
+                        LxPlayerManager.setLoading(false)
+                        LxPlayerManager.setError("获取播放地址失败（已尝试所有音质）")
+                    }
+                }
+                return
+            }""",
+    "终端失败分流")
+
+# 4) 新增兜底两函数（插在 onDestroy 之前）
+NEW_FUNCS = """    // [34v59] 跨平台兜底：原平台全档失败后五平台搜同曲换源；本函数只被 allowFallback=true 的
+    // 终端失败调用一次，换源后以 allowFallback=false 重新解析，失败即报错，不存在递归路径。
+    private fun tryCrossPlatformFallback(sourceId: String, musicInfo: Map<String, String>, title: String, artist: String) {
+        LxPlayerManager.setSourceHint("[正在跨平台寻源...]") // [34v59]
+        Thread {
+            try {
+                val candidates = kotlinx.coroutines.runBlocking { LxMusicSearchApi.searchFull(title) }
+                val picked = pickFallbackCandidate(title, artist, sourceId, musicInfo["songId"].orEmpty(), candidates)
+                runOnUiThread {
+                    LxPlayerManager.setSourceHint("")
+                    if (picked != null) {
+                        android.util.Log.i("LxPlayer", "跨平台兜底命中: ${picked.platform}/${picked.id}")
+                        doResolveAndPlay(picked.id, picked.platform, title, artist, picked.hash, picked.albumAudioId, allowFallback = false)
+                    } else {
+                        LxPlayerManager.setLoading(false)
+                        LxPlayerManager.setError("获取播放地址失败（已尝试所有音质）")
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("LxPlayer", "跨平台兜底异常", e)
+                runOnUiThread {
+                    LxPlayerManager.setSourceHint("")
+                    LxPlayerManager.setLoading(false)
+                    LxPlayerManager.setError("获取播放地址失败（已尝试所有音质）")
+                }
+            }
+        }.start()
+    }
+
+    // [34v59] 候选筛选：歌名规范化（去空白/小写）全等 + 歌手分段包含 + 时长 ±3 秒。
+    // 时长基准：同一次 searchFull 结果中原平台同曲条目的 duration（平台自家目录时长）；
+    // 无原平台条目时，要求至少 2 个候选时长互洽（±3s 聚类）才确立基准，否则不换源。
+    private fun pickFallbackCandidate(
+        title: String,
+        artist: String,
+        origPlatform: String,
+        origId: String,
+        candidates: List<LxMusicSearchApi.SongInfo>
+    ): LxMusicSearchApi.SongInfo? {
+        fun norm(s: String) = s.filter { !it.isWhitespace() }.lowercase()
+        fun parts(s: String) = s.split('/', '、', ',', '，', '&').map { norm(it) }.filter { it.isNotEmpty() }
+        val tKey = norm(title)
+        val aParts = parts(artist)
+        if (tKey.isEmpty() || aParts.isEmpty()) return null
+        val matched = candidates.filter { cand ->
+            cand.id.isNotEmpty() && norm(cand.title) == tKey &&
+                !(cand.platform == origPlatform && cand.id == origId) &&
+                parts(cand.artist).any { cp -> aParts.any { ap -> cp.contains(ap) || ap.contains(cp) } }
+        }
+        if (matched.isEmpty()) return null
+        val refDur = matched.firstOrNull { it.platform == origPlatform && it.duration > 0 }?.duration
+            ?: run {
+                val ds = matched.map { it.duration }.filter { it > 0 }
+                if (ds.size < 2) return null
+                var best: Long? = null
+                var bestCount = 0
+                for (d in ds) {
+                    val cnt = ds.count { kotlin.math.abs(it - d) <= 3 }
+                    if (cnt > bestCount) { bestCount = cnt; best = d }
+                }
+                if (bestCount < 2) return null
+                best
+            }
+        val rd = refDur ?: return null
+        val accepted = matched.filter { it.duration > 0 && kotlin.math.abs(it.duration - rd) <= 3 }
+        if (accepted.isEmpty()) return null
+        val prio = listOf("kg", "kw", "tx", "mg", "wy")
+        return accepted.sortedWith(
+            compareBy(
+                { val i = prio.indexOf(it.platform); if (i < 0) 99 else i },
+                { kotlin.math.abs(it.duration - rd) }
+            )
+        ).first()
+    }
+
+"""
+rep("    override fun onDestroy() {", NEW_FUNCS + "    override fun onDestroy() {", "新增兜底函数")
+
+# 5) 寻源提示：收集 + 渲染（徽章下方、控制栏上方的小字，颜色走 musicColors Token）
+rep(
+    "    val isPlaying by LxPlayerManager.isPlaying.collectAsState()",
+    "    val isPlaying by LxPlayerManager.isPlaying.collectAsState()\n    val sourceHint by LxPlayerManager.sourceHint.collectAsState() // [34v59]",
+    "sourceHint 收集")
+rep(
+    "            val playMode by LxPlayerManager.playMode.collectAsState()",
+    """            if (sourceHint.isNotEmpty()) { // [34v59] 跨平台寻源提示（小字，控制栏上方）
+                Text(
+                    text = sourceHint,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = musicColors().textSecondary,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+            val playMode by LxPlayerManager.playMode.collectAsState()""",
+    "sourceHint 渲染")
+
+with open(PATH, "w", encoding="utf-8") as f:
+    f.write(c)
+assert MARK in c and "tryCrossPlatformFallback" in c and "pickFallbackCandidate" in c
+assert c.count("allowFallback = false") >= 1 and "setSourceHint" in c
+print("OK 34 v59 完成")
+PYEOF59
