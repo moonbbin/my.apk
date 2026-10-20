@@ -1688,3 +1688,93 @@ assert '_isProbing.value = true // [21v29]' in content
 assert 'finally {' in content
 print("OK 21 v29 完成（Path A try-finally / Path B 前置位）")
 PYEOF29
+
+# === 21 v30: isProbing 密封复位 + probeDbg 探针分支诊断 ===
+echo "=== 21 v30: 密封复位 + probeDbg ==="
+python3 << 'PYEOF30'
+import sys
+PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+with open(PATH, encoding='utf-8') as f:
+    c = f.read()
+if '// [21v30]' in c:
+    print("21 v30: 已应用，跳过")
+    sys.exit(0)
+def rep(old, new, tag):
+    global c
+    if old not in c:
+        print(f"X 未找到锚点: {tag}")
+        sys.exit(1)
+    c = c.replace(old, new, 1)
+    print(f"  OK {tag}")
+# 1) probeDbg 声明（紧跟 v26 的 isProbing 声明）
+rep("    val isProbing: StateFlow<Boolean> = _isProbing",
+    "    val isProbing: StateFlow<Boolean> = _isProbing\n    private val _probeDbg = MutableStateFlow(\"\") // [21v30]\n    val probeDbg: StateFlow<String> = _probeDbg // [21v30]",
+    "probeDbg 声明")
+# 2) setLoading 密封
+rep("""    fun setLoading(loading: Boolean) {
+        _isLoading.value = loading
+    }""",
+    """    fun setLoading(loading: Boolean) { // [21v30] 密封：加载结束必复位探针态
+        _isLoading.value = loading
+        if (!loading) _isProbing.value = false // [21v30]
+    }""",
+    "setLoading 密封")
+# 3) setError 密封
+rep("""    fun setError(msg: String?) {
+        _error.value = msg
+        if (msg != null) _isLoading.value = false
+    }""",
+    """    fun setError(msg: String?) { // [21v30] 密封：报错必复位探针态
+        _error.value = msg
+        if (msg != null) { _isLoading.value = false; _isProbing.value = false } // [21v30]
+    }""",
+    "setError 密封")
+# 4) probeAudio 首行失败记录
+rep("        val probed = probeBytes(url, 65536) ?: return Pair(-1, 0)",
+    "        val probed = probeBytes(url, 65536)\n        if (probed == null) { _probeDbg.value = \"X:bytes-null\" // [21v30]\n            return Pair(-1, 0) }",
+    "probeAudio 首行")
+# 5) FLAC 分支记录
+rep("""            if (kbps > 0 && kbps < 400) tier = 0
+            return Pair(tier, kbps)""",
+    """            if (kbps > 0 && kbps < 400) tier = 0
+            _probeDbg.value = "F:t$tier,B$totalBytes,S${info.third},R${info.first},D${info.second},K$kbps" // [21v30]
+            return Pair(tier, kbps)""",
+    "FLAC 分支记录")
+# 6) MP3 分支记录
+rep("        if (mp3br > 0) return Pair(if (mp3br >= 224) 1 else 0, mp3br)",
+    "        if (mp3br > 0) _probeDbg.value = \"M:K$mp3br\" // [21v30]\n        if (mp3br > 0) return Pair(if (mp3br >= 224) 1 else 0, mp3br)",
+    "MP3 分支记录")
+# 7) AAC 分支记录
+rep("        if (isAacBytes(bytes)) return Pair(1, 0)",
+    "        if (isAacBytes(bytes)) _probeDbg.value = \"A:B$totalBytes\" // [21v30]\n        if (isAacBytes(bytes)) return Pair(1, 0)",
+    "AAC 分支记录")
+# 8) 盲猜分支记录
+rep("""            Log.i(TAG, "[21v25] 大小盲猜: ${totalBytes}字节 tier=${g.first}")
+            return g""",
+    """            Log.i(TAG, "[21v25] 大小盲猜: ${totalBytes}字节 tier=${g.first}")
+            _probeDbg.value = "G:t${g.first},B$totalBytes,K${g.second}" // [21v30]
+            return g""",
+    "盲猜分支记录")
+# 9) 末尾未知分支记录
+rep("""            return g
+        }
+        return Pair(-1, 0)""",
+    """            return g
+        }
+        _probeDbg.value = "U:B$totalBytes" // [21v30]
+        return Pair(-1, 0)""",
+    "未知分支记录")
+# 10) 缓存命中记录（v29 probeAndSetQuality）
+rep("""            _measuredBitrate.value = cachedA.third
+            _isProbing.value = false
+            return""",
+    """            _measuredBitrate.value = cachedA.third
+            _probeDbg.value = "C:t${cachedA.second},K${cachedA.third}" // [21v30]
+            _isProbing.value = false
+            return""",
+    "缓存命中记录")
+with open(PATH, 'w', encoding='utf-8') as f:
+    f.write(c)
+assert c.count('// [21v30]') >= 8
+print("OK 21 v30 完成")
+PYEOF30

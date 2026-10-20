@@ -2770,11 +2770,11 @@ import sys
 PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
 with open(PATH, encoding='utf-8') as f:
     c = f.read()
-if '[t=${probeTier}]' in c:
+if '// [34v56]' in c:
     print("34 v56: 已应用，跳过")
     sys.exit(0)
-old = 'bitrate > 0 -> "${LxPlayerManager.qualityLabel(currentQuality)} \u00b7 ${bitrate / 100 * 100}kbps"'
-new = 'bitrate > 0 -> "${LxPlayerManager.qualityLabel(currentQuality)} \u00b7 ${bitrate / 100 * 100}kbps [t=${probeTier}]"'
+old = 'bitrate > 0 -> qualityLabel(currentQuality) + " \u00b7 ${(bitrate / 100 * 100)}kbps" // [34v48]'
+new = 'bitrate > 0 -> qualityLabel(currentQuality) + " \u00b7 ${(bitrate / 100 * 100)}kbps [t=${probeTier}]" // [34v48] [34v56]'
 if old not in c:
     print("X 未找到 v48 徽章估值分支")
     sys.exit(1)
@@ -2784,3 +2784,55 @@ with open(PATH, 'w', encoding='utf-8') as f:
     f.write(c)
 print("OK 34 v56 完成（临时诊断后缀）")
 PYEOF56
+
+# === 34 v57: 点歌链补探针接线 + probeDbg 徽章回传 ===
+# TODO[34v57]: 探针定性修复后，删除 v56/v57 全部诊断后缀与本接线外的诊断显示
+echo "=== 34 v57: 点歌链探针接线 + probeDbg ==="
+python3 << 'PYEOF57'
+import sys
+PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+with open(PATH, encoding='utf-8') as f:
+    c = f.read()
+if '// [34v57]' in c:
+    print("34 v57: 已应用，跳过")
+    sys.exit(0)
+# 1) onSuccess play 后补探针（后台 Thread，不阻塞主线程）
+old_play = "                                LxPlayerManager.play(url, title, artist)"
+if c.count(old_play) != 1:
+    print(f"X play 锚点计数异常: {c.count(old_play)}")
+    sys.exit(1)
+c = c.replace(old_play, old_play + "\n                                Thread { LxPlayerManager.probeAndSetQuality(url) }.start() // [34v57] 点歌链补探针", 1)
+print("  OK 探针接线")
+# 2) probeDbg collect
+old_col = "    val probeTier by LxPlayerManager.probeTier.collectAsState() // [34v48]"
+if old_col not in c:
+    print("X 未找到 probeTier collect 锚点")
+    sys.exit(1)
+c = c.replace(old_col, old_col + "\n    val probeDbg by LxPlayerManager.probeDbg.collectAsState() // [34v57]", 1)
+print("  OK probeDbg collect")
+# 3) tier 分支挂诊断后缀
+old_br = "probeTier >= 2 -> LxPlayerManager.qualityLabel(currentQuality)"
+if old_br not in c:
+    print("X 未找到 tier>=2 分支")
+    sys.exit(1)
+c = c.replace(old_br, "probeTier >= 2 -> LxPlayerManager.qualityLabel(currentQuality) + if (probeDbg.isNotEmpty()) \" [$probeDbg]\" else \"\"", 1)
+print("  OK tier 分支后缀")
+# 4) 徽章 Text 加 maxLines=2（行级插入，沿用原行缩进）
+lines = c.split('\n')
+done = False
+for i, l in enumerate(lines):
+    if 'text = badgeText,' in l:
+        indent = l[:len(l) - len(l.lstrip())]
+        lines.insert(i + 1, indent + "maxLines = 2, // [34v57]")
+        done = True
+        break
+if not done:
+    print("X 未找到 text = badgeText 行")
+    sys.exit(1)
+c = '\n'.join(lines)
+print("  OK maxLines=2")
+with open(PATH, 'w', encoding='utf-8') as f:
+    f.write(c)
+assert 'probeAndSetQuality(url) }.start() // [34v57]' in c
+print("OK 34 v57 完成")
+PYEOF57
