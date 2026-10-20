@@ -1561,45 +1561,59 @@ PYEOF26
 
 echo "=== 21 v26 完成 ==="
 
-# === 21 v27: 无fallback出口补 _isProbing=false（防永久卡死检测中） ===
-echo "=== 21 v27 ==="
 
-python3 << 'PYEOF27'
+# === 21 v28: 无fallback出口补 _isProbing=false（行级定位） ===
+echo "=== 21 v28 ==="
+
+python3 << 'PYEOF28'
 import sys
 
 path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
-MARK = "// [21v27]"
+MARK = "// [21v28]"
 
 with open(path, encoding="utf-8") as f:
-    s = f.read()
+    lines = f.readlines()
 
-if MARK in s:
-    print("21 v27: 已应用，跳过")
+if MARK in "".join(lines):
+    print("21 v28: 已应用，跳过")
     sys.exit(0)
 
-# 锚点：qualityIndex >= tryOrder.size 的无fallback post块
-# 特征序列：setLoading(false) + 自动切下一曲注释 + tryAutoNextOnFailure
-old = """                        mainHandler.post {
-                            setLoading(false)
-                            // 自动切下一曲，失败才报错
-                            if (!tryAutoNextOnFailure()) {"""
-if old not in s:
-    print("❌ 未找到无fallback出口锚点")
+# 前置：_isProbing 必须已由 v26 声明
+if "_isProbing" not in "".join(lines):
+    print("❌ _isProbing 未声明（v26 未生效？）")
     sys.exit(1)
 
-# 位置必须在 setLoading(false) 之后、tryAutoNextOnFailure() 之前
-new = """                        mainHandler.post {
-                            setLoading(false)
-                            _isProbing.value = false // [21v27] 全部音质耗尽无fallback，强制结束探针状态防卡死
-                            // 自动切下一曲，失败才报错
-                            if (!tryAutoNextOnFailure()) {"""
-s = s.replace(old, new, 1)
-print("✓ 无fallback出口已加 _isProbing=false")
+# 行级定位：找 if (!tryAutoNextOnFailure()) 行
+ti = -1
+for i, l in enumerate(lines):
+    if 'if (!tryAutoNextOnFailure())' in l:
+        ti = i
+        break
+if ti == -1:
+    print("❌ 未找到 tryAutoNextOnFailure 行")
+    sys.exit(1)
+print(f"✓ tryAutoNextOnFailure 第 {ti+1} 行")
 
-assert MARK in s
-with open(path, "w", encoding="utf-8") as f:
-    f.write(s)
-print("✓ 21 v27 完成")
-PYEOF27
+# 向上一行找 setLoading(false)（应在 post 块内、tryAutoNext 之前）
+si = -1
+for j in range(ti - 1, max(0, ti - 6), -1):
+    if 'setLoading(false)' in lines[j]:
+        si = j
+        break
+if si == -1:
+    print("❌ tryAutoNext 上方 6 行内未找到 setLoading(false)")
+    for j in range(max(0, ti - 6), ti):
+        print(f"  {j+1}: {lines[j].rstrip()[:70]}")
+    sys.exit(1)
+print(f"✓ setLoading(false) 第 {si+1} 行")
 
-echo "=== 21 v27 完成 ==="
+# 在 setLoading(false) 后插入 _isProbing=false
+indent = lines[si][:len(lines[si]) - len(lines[si].lstrip())]
+lines.insert(si + 1, f"{indent}_isProbing.value = false {MARK} // 全部音质耗尽无fallback，强制结束探针防卡死\n")
+
+with open(path, 'w', encoding='utf-8') as f:
+    f.writelines(lines)
+print(f"✓ 21 v28: 第 {si+2} 行已插入 _isProbing=false")
+PYEOF28
+
+echo "=== 21 v28 完成 ==="
