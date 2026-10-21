@@ -3216,3 +3216,122 @@ open(ACT, "w", encoding="utf-8").write(out)
 print(f"✓ 34v62 抽离完成：跨度 94 行 → 调用 {len(CALL)} 行；另删 seek 声明 2 行、formatTime 定义 6 行；PlayerProgressBar.kt {len(PROG_CONTENT.splitlines())} 行")
 PYEOF62
 echo "=== 34 v62 完成 ==="
+
+# === 34 v63: 抽离播放页大封面 → PlayerCover.kt（UI 解耦第四批，逻辑零改动） ===
+echo "=== 34 v63 ==="
+python3 << 'PYEOF63'
+import sys
+ACT = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+COV = "app/src/main/java/com/github/tvbox/osc/ui/activity/PlayerCover.kt"
+COV_CONTENT = r'''package com.github.tvbox.osc.ui.activity
+
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+
+// [34v63] 播放页大封面：自 LxPlayerActivity 原样抽离，逻辑零改动
+@Composable
+fun PlayerCover(
+    coverUrl: String,
+    isLoading: Boolean,
+    duration: Long,
+    displayTitle: String,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+    // 大封面
+    val _isDarkCover by MusicThemeManager.isDarkTheme
+    Box(
+        modifier = Modifier
+            .size(280.dp)
+            .align(Alignment.CenterHorizontally)
+            .shadow(
+                elevation = 32.dp, // [34v12]
+                shape = RoundedCornerShape(20.dp),
+                ambientColor = Color.Black.copy(alpha = 0.4f),
+                spotColor = Color.Black
+            )
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = 0.5f), // [34v12]
+                shape = RoundedCornerShape(20.dp)
+            )
+            .clip(RoundedCornerShape(20.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        if (coverUrl.isNotEmpty()) {
+            AsyncImage(
+                model = coverUrl,
+                contentDescription = "封面",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else if (isLoading && duration <= 0) {
+            CircularProgressIndicator(color = musicColors().textPrimary)
+        } else {
+            Text(
+                text = displayTitle.take(1).ifEmpty { "♪" },
+                style = MaterialTheme.typography.displayLarge,
+                color = musicColors().textPrimary.copy(alpha = 0.9f)
+            )
+        }
+    }
+    }
+}
+'''
+CALL = [
+    '            PlayerCover(',
+    '                coverUrl = coverUrl,',
+    '                isLoading = isLoading,',
+    '                duration = duration,',
+    '                displayTitle = displayTitle',
+    '            )'
+]
+src = open(ACT, encoding="utf-8").read()
+if "PlayerCover(" in src:
+    c = open(COV, encoding="utf-8").read()
+    assert "// [34v63]" in c, "❌ 状态不一致：Activity 已接线但 PlayerCover.kt 标记缺失"
+    print("✓ 34v63 已应用，跳过")
+    sys.exit(0)
+lines = src.split("\n")
+st = [i for i, l in enumerate(lines) if l.strip() == "// 大封面"]
+assert len(st) == 1, f"❌ 跨度起点计数 {len(st)}"
+s = st[0]
+assert lines[s] == "            // 大封面"
+sp = None
+for i in range(s, len(lines)):
+    if lines[i] == "            Spacer(modifier = Modifier.height(8.dp))":
+        sp = i
+        break
+assert sp is not None, "❌ 未找到 8dp 间隔锚点"
+e = sp - 2
+assert lines[e] == "            }", f"❌ 跨度终点行不符: {lines[e]!r}"
+assert lines[e + 1] == "", "❌ 跨度后空行不符"
+assert e - s + 1 == 37, f"❌ 跨度行数 {e - s + 1} != 37"
+seg = "\n".join(lines[s:e + 1])
+assert "AsyncImage" in seg and "280.dp" in seg and "_isDarkCover" in seg, "❌ 跨度内容校验失败"
+lines[s:e + 1] = CALL
+out = "\n".join(lines)
+assert out.count("PlayerCover(") == 1, "❌ 调用点计数异常"
+assert out.count("AsyncImage(") == 0, "❌ Activity 残留 AsyncImage"
+assert out.count("280.dp") == 0, "❌ Activity 残留 280.dp"
+assert out.count("{") == out.count("}"), "❌ Activity 括号失衡"
+assert COV_CONTENT.count("{") == COV_CONTENT.count("}"), "❌ PlayerCover.kt 括号失衡"
+open(COV, "w", encoding="utf-8").write(COV_CONTENT)
+open(ACT, "w", encoding="utf-8").write(out)
+print(f"✓ 34v63 抽离完成：删 {e + 1 - s} 行 → 调用 {len(CALL)} 行；PlayerCover.kt {len(COV_CONTENT.splitlines())} 行")
+PYEOF63
+echo "=== 34 v63 完成 ==="
