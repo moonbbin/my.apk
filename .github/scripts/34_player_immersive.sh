@@ -3014,3 +3014,205 @@ open(ACT, "w", encoding="utf-8").write(out)
 print(f"✓ 34v61 抽离完成：删 {e + 1 - s} 行 → 调用 {len(CALL)} 行；PlayerTopBar.kt {len(TOP_CONTENT.splitlines())} 行")
 PYEOF61
 echo "=== 34 v61 完成 ==="
+
+# === 34 v62: 抽离播放进度条 → PlayerProgressBar.kt（UI 解耦第三批，逻辑零改动） ===
+echo "=== 34 v62 ==="
+python3 << 'PYEOF62'
+import sys
+ACT = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+PROG = "app/src/main/java/com/github/tvbox/osc/ui/activity/PlayerProgressBar.kt"
+PROG_CONTENT = r'''package com.github.tvbox.osc.ui.activity
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+
+// [34v62] 播放进度条：自 LxPlayerActivity 原样抽离（拖拽进度条 + 时间行），逻辑零改动
+@Composable
+fun PlayerProgressBar(
+    position: Long,
+    duration: Long,
+    buffered: Long,
+    isLoading: Boolean,
+    modifier: Modifier = Modifier
+) {
+    var isSeeking by remember { mutableStateOf(false) }
+    var seekPos by remember { mutableStateOf(0f) }
+    Column(modifier = modifier.fillMaxWidth()) {
+    // 进度条（细白/灰）
+    if (duration > 0) {
+        // 进度条
+        val durF: Float = duration.toFloat().coerceAtLeast(1f)
+        val curPos: Float = if (isSeeking) seekPos else position.toFloat().coerceIn(0f, durF)
+        val progFrac: Float = (curPos / durF).coerceIn(0f, 1f)
+        val bufFrac: Float = (buffered.toFloat() / durF).coerceIn(0f, 1f)
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(20.dp)
+                .pointerInput(durF) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { isSeeking = true },
+                        onDragEnd = { LxPlayerManager.seekTo(seekPos.toLong()); isSeeking = false },
+                        onHorizontalDrag = { change, _ ->
+                            val frac: Float = (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
+                            seekPos = frac * durF
+                            change.consume()
+                        }
+                    )
+                }
+                .pointerInput(durF) {
+                    detectTapGestures { tapOffset ->
+                        val frac: Float = (tapOffset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                        LxPlayerManager.seekTo((frac * durF).toLong())
+                    }
+                }
+        ) {
+            // 底
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .align(Alignment.Center)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color(0xFF535353))
+            )
+            // 缓冲
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(bufFrac)
+                    .height(3.dp)
+                    .align(Alignment.CenterStart)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(musicColors().textHint)
+            )
+            // 已播
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(progFrac)
+                    .height(3.dp)
+                    .align(Alignment.CenterStart)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(musicColors().accent)
+            )
+            // 点
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .align(Alignment.CenterStart)
+                    .offset(x = (maxWidth * progFrac - 5.dp).coerceIn(0.dp, (maxWidth - 10.dp).coerceAtLeast(0.dp)))
+                    .clip(CircleShape)
+                    .background(musicColors().accent)
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = formatTime(if (isSeeking) seekPos.toLong() else position),
+                style = MaterialTheme.typography.bodySmall,
+                color = PlayerGray
+            )
+            Text(
+                text = formatTime(duration),
+                style = MaterialTheme.typography.bodySmall,
+                color = PlayerGray
+            )
+        }
+    } else {
+        Spacer(modifier = Modifier.height(16.dp))
+        if (isLoading) {
+            Text(
+                "正在获取播放地址…",
+                style = MaterialTheme.typography.bodySmall,
+                color = PlayerGray,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+    }
+}
+
+private fun formatTime(ms: Long): String {
+    val totalSeconds = ms / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return String.format("%02d:%02d", minutes, seconds)
+}
+'''
+CALL = [
+    '            PlayerProgressBar(',
+    '                position = position,',
+    '                duration = duration,',
+    '                buffered = buffered,',
+    '                isLoading = isLoading',
+    '            )'
+]
+src = open(ACT, encoding="utf-8").read()
+if "PlayerProgressBar(" in src:
+    c = open(PROG, encoding="utf-8").read()
+    assert "// [34v62]" in c, "❌ 状态不一致：Activity 已接线但 PlayerProgressBar.kt 标记缺失"
+    print("✓ 34v62 已应用，跳过")
+    sys.exit(0)
+lines = src.split("\n")
+# 锚点 1：进度条跨度（注释行起，error?.let 前收尾）
+st = [i for i, l in enumerate(lines) if l == "            // 进度条（细白/灰）"]
+assert len(st) == 1, f"❌ 跨度起点计数 {len(st)}"
+s = st[0]
+el = None
+for i in range(s, len(lines)):
+    if lines[i].strip().startswith("error?.let"):
+        el = i
+        break
+assert el is not None, "❌ 未找到 error?.let 锚点"
+e = el - 2
+assert lines[e] == "            }", f"❌ 跨度终点行不符: {lines[e]!r}"
+assert lines[e + 1] == "", "❌ 跨度后空行不符"
+assert e - s + 1 == 94, f"❌ 跨度行数 {e - s + 1} != 94"
+seg = "\n".join(lines[s:e + 1])
+assert "detectHorizontalDragGestures" in seg and "正在获取播放地址" in seg, "❌ 跨度内容校验失败"
+lines[s:e + 1] = CALL
+# 锚点 2：seek 状态声明（已随抽离搬入组件，Screen 侧删除）
+d1 = [i for i, l in enumerate(lines) if l == "    var isSeeking by remember { mutableStateOf(false) }"]
+d2 = [i for i, l in enumerate(lines) if l == "    var seekPos by remember { mutableStateOf(0f) }"]
+assert len(d1) == 1 and len(d2) == 1 and d2[0] == d1[0] + 1, "❌ seek 声明锚点异常"
+del lines[d1[0]:d1[0] + 2]
+# 锚点 3：formatTime 定义（已搬入 PlayerProgressBar.kt 作 private fun，Activity 侧删除）
+f = [i for i, l in enumerate(lines) if l == "private fun formatTime(ms: Long): String {"]
+assert len(f) == 1, f"❌ formatTime 定义计数 {len(f)}"
+fi = f[0]
+assert lines[fi + 5] == "}", "❌ formatTime 定义收尾不符"
+del lines[fi:fi + 6]
+out = "\n".join(lines)
+# 事后断言
+assert out.count("PlayerProgressBar(") == 1, "❌ 调用点计数异常"
+assert out.count("var isSeeking") == 0, "❌ Activity 残留 isSeeking 声明"
+assert out.count("fun formatTime") == 0, "❌ Activity 残留 formatTime 定义"
+assert out.count("{") == out.count("}"), "❌ Activity 括号失衡"
+assert PROG_CONTENT.count("{") == PROG_CONTENT.count("}"), "❌ PlayerProgressBar.kt 括号失衡"
+assert PROG_CONTENT.count("private fun formatTime") == 1, "❌ PlayerProgressBar.kt formatTime 应为 private 且恰 1 处"
+open(PROG, "w", encoding="utf-8").write(PROG_CONTENT)
+open(ACT, "w", encoding="utf-8").write(out)
+print(f"✓ 34v62 抽离完成：跨度 94 行 → 调用 {len(CALL)} 行；另删 seek 声明 2 行、formatTime 定义 6 行；PlayerProgressBar.kt {len(PROG_CONTENT.splitlines())} 行")
+PYEOF62
+echo "=== 34 v62 完成 ==="
