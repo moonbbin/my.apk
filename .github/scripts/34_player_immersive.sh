@@ -3335,3 +3335,166 @@ open(ACT, "w", encoding="utf-8").write(out)
 print(f"✓ 34v63 抽离完成：删 {e + 1 - s} 行 → 调用 {len(CALL)} 行；PlayerCover.kt {len(COV_CONTENT.splitlines())} 行")
 PYEOF63
 echo "=== 34 v63 完成 ==="
+
+# === 34 v64: 抽离播放页歌词预览 → PlayerLyricPreview.kt（UI 解耦第五批，逻辑零改动） ===
+echo "=== 34 v64 ==="
+python3 << 'PYEOF64'
+import sys
+ACT = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+LYR = "app/src/main/java/com/github/tvbox/osc/ui/activity/PlayerLyricPreview.kt"
+LYR_CONTENT = r'''package com.github.tvbox.osc.ui.activity
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+// [34v64] 播放页歌词预览：自 LxPlayerActivity 原样抽离（预览行 + 卡拉OK进度），逻辑零改动
+@Composable
+fun PlayerLyricPreview(
+    lyricLines: List<LyricLine>,
+    currentLyricIndex: Int,
+    position: Long,
+    lyricTextSize: Float,
+    lyricLineCount: Int,
+    karaokeOn: Boolean,
+    karaokeHl: Color,
+    lyricTextColor: Color,
+    lyricLoading: Boolean,
+    displayTitle: String,
+    onLyricClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val lyricAreaHeight = ((lyricTextSize * 1.5f + (lyricTextSize - 3f) * 1.4f) * lyricLineCount).dp
+    Box(
+        modifier = modifier
+            .height(lyricAreaHeight)
+            .clipToBounds(),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        if (lyricLines.isNotEmpty()) {
+            val half = lyricLineCount / 2
+            val startIdx = (currentLyricIndex - half).coerceAtLeast(0)
+                .coerceAtMost((lyricLines.size - lyricLineCount).coerceAtLeast(0))
+            val endIdx = (startIdx + lyricLineCount).coerceAtMost(lyricLines.size)
+            Column(
+                modifier = Modifier.clickable { onLyricClick() }
+            ) {
+                for (idx in startIdx until endIdx) {
+                    val isCurrent = idx == currentLyricIndex
+                    val line = lyricLines[idx]
+                    // 当前行卡拉OK进度：(now-lineStart)/(lineEnd-lineStart)
+                    val karaokeProgress = if (isCurrent) {
+                        val start = line.timeMs
+                        val end = lyricLines.getOrNull(idx + 1)?.timeMs ?: (start + 4000L)
+                        ((position - start).toFloat() / (end - start).coerceAtLeast(1L)).coerceIn(0f, 1f)
+                    } else 0f
+                    Column {
+                        KaraokeLine(
+                            text = line.text,
+                            progress = if (karaokeOn) karaokeProgress else 0f,
+                            textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = lyricTextSize.sp),
+                            normalColor = lyricTextColor, // [34v25] 歌词跟随背景亮度
+                            highlightColor = if (karaokeOn) karaokeHl else musicColors().accent, // [34v24] 高亮走主题accent
+                            isBold = isCurrent
+                        )
+                        if (!line.trans.isNullOrEmpty()) {
+                            Text(
+                                text = line.trans,
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = (lyricTextSize - 3).sp),
+                                color = (if (isCurrent) musicColors().accent else lyricTextColor).copy(alpha = 0.65f), // [34v25]
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            Text(
+                text = if (lyricLoading) "歌词加载中…" else displayTitle,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = musicColors().textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+'''
+CALL = [
+    '                PlayerLyricPreview(',
+    '                    lyricLines = lyricLines,',
+    '                    currentLyricIndex = currentLyricIndex,',
+    '                    position = position,',
+    '                    lyricTextSize = lyricTextSize,',
+    '                    lyricLineCount = lyricLineCount,',
+    '                    karaokeOn = karaokeOn,',
+    '                    karaokeHl = karaokeHl,',
+    '                    lyricTextColor = lyricTextColor,',
+    '                    lyricLoading = lyricLoading,',
+    '                    displayTitle = displayTitle,',
+    '                    onLyricClick = { showFullLyric = true },',
+    '                    modifier = Modifier.weight(1f)',
+    '                )'
+]
+src = open(ACT, encoding="utf-8").read()
+if "PlayerLyricPreview(" in src:
+    c = open(LYR, encoding="utf-8").read()
+    assert "// [34v64]" in c, "❌ 状态不一致：Activity 已接线但 PlayerLyricPreview.kt 标记缺失"
+    print("✓ 34v64 已应用，跳过")
+    sys.exit(0)
+lines = src.split("\n")
+# 段位 A：lyricAreaHeight 计算行（只服务于预览 Box，随抽离搬入组件）
+va = [i for i, l in enumerate(lines) if "val lyricAreaHeight" in l]
+assert len(va) == 1, f"❌ 高度计算行计数 {len(va)}"
+# 段位 B：预览 Box 块（val 行之后第一个 Box( 起，写真歌词注释前收尾）
+b = None
+for i in range(va[0], len(lines)):
+    if lines[i] == "                Box(":
+        b = i
+        break
+assert b is not None, "❌ 未找到预览 Box"
+cmt = None
+for i in range(b, len(lines)):
+    if lines[i].strip() == "// 写真歌词播放器已暂时移除":
+        cmt = i
+        break
+assert cmt is not None, "❌ 未找到写真歌词注释锚点"
+e = cmt - 1
+while lines[e].strip() == "":
+    e -= 1
+assert lines[e] == "                }", f"❌ Box 收尾行不符: {lines[e]!r}"
+assert e - b + 1 == 56, f"❌ Box 跨度行数 {e - b + 1} != 56"
+seg = "\n".join(lines[b:e + 1])
+assert "KaraokeLine(" in seg and "clipToBounds" in seg, "❌ Box 内容校验失败"
+lines[b:e + 1] = CALL
+# 删段位 A（拼接后按内容重定位）
+va2 = [i for i, l in enumerate(lines) if "val lyricAreaHeight" in l]
+assert len(va2) == 1, "❌ 高度计算行重定位失败"
+del lines[va2[0]]
+out = "\n".join(lines)
+# 事后断言
+assert out.count("PlayerLyricPreview(") == 1, "❌ 调用点计数异常"
+assert out.count("lyricAreaHeight") == 0, "❌ Activity 残留 lyricAreaHeight"
+assert out.count("KaraokeLine(") == 1, "❌ KaraokeLine 应仅剩定义行（原 2 处：定义 + 预览调用）"
+assert out.count("fun KaraokeLine(") == 1, "❌ KaraokeLine 定义丢失"
+assert out.count("fun isFavorite(") == 1, "❌ isFavorite 丢失"
+assert out.count("fun toggleFavorite(") == 1, "❌ toggleFavorite 丢失"
+assert out.count("{") == out.count("}"), "❌ Activity 括号失衡"
+assert LYR_CONTENT.count("{") == LYR_CONTENT.count("}"), "❌ PlayerLyricPreview.kt 括号失衡"
+open(LYR, "w", encoding="utf-8").write(LYR_CONTENT)
+open(ACT, "w", encoding="utf-8").write(out)
+print(f"✓ 34v64 抽离完成：Box 56 行 → 调用 {len(CALL)} 行；另删高度计算行 1 行；PlayerLyricPreview.kt {len(LYR_CONTENT.splitlines())} 行")
+PYEOF64
+echo "=== 34 v64 完成 ==="
