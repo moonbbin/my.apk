@@ -2878,3 +2878,139 @@ open(ACT, "w", encoding="utf-8").write(out)
 print(f"✓ 34v60 抽离完成：删 {e + 1 - s} 行 → 调用 {len(CALL)} 行；PlayerControls.kt {len(CTRL_CONTENT.splitlines())} 行")
 PYEOF60
 echo "=== 34 v60 完成 ==="
+
+# === 34 v61: 抽离播放页顶部栏 → PlayerTopBar.kt（UI 解耦第二批，逻辑零改动） ===
+echo "=== 34 v61 ==="
+python3 << 'PYEOF61'
+import sys
+ACT = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+TOP = "app/src/main/java/com/github/tvbox/osc/ui/activity/PlayerTopBar.kt"
+TOP_CONTENT = r'''package com.github.tvbox.osc.ui.activity
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+
+// [34v61] 播放页顶部栏：自 LxPlayerActivity 原样抽离（返回/标题/歌手/更多），逻辑零改动
+@Composable
+fun PlayerTopBar(
+    displayTitle: String,
+    displayArtist: String,
+    secondaryTextColor: Color,
+    onBack: () -> Unit,
+    onArtistClick: () -> Unit,
+    onMoreClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
+            Text("‹", style = MaterialTheme.typography.headlineLarge, color = musicColors().textPrimary)
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = displayTitle,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = musicColors().textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = displayArtist,
+                style = MaterialTheme.typography.labelSmall,
+                color = secondaryTextColor, // [34v12] 智能反转
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.clickable(enabled = displayArtist != "未知歌手") { onArtistClick() }
+            )
+        }
+        IconButton(onClick = onMoreClick) {
+            Text("⋮", style = MaterialTheme.typography.headlineSmall, color = musicColors().textPrimary)
+        }
+    }
+}
+'''
+CALL = [
+    '            PlayerTopBar(',
+    '                displayTitle = displayTitle,',
+    '                displayArtist = displayArtist,',
+    '                secondaryTextColor = secondaryTextColor,',
+    '                onBack = onBack,',
+    '                onArtistClick = {',
+    '                    scope.launch {',
+    '                        try {',
+    '                            val artistInfo = LxMusicSearchApi.searchArtist(displayArtist)',
+    '                            val aid = artistInfo?.id ?: ""',
+    '                            val aplat = artistInfo?.platform ?: platform',
+    '                            val apic = artistInfo?.picUrl ?: ""',
+    '                            val intent = Intent(context, LxArtistDetailActivity::class.java).apply {',
+    '                                putExtra("platform", aplat)',
+    '                                putExtra("artistId", aid)',
+    '                                putExtra("artistName", displayArtist)',
+    '                                putExtra("picUrl", apic)',
+    '                            }',
+    '                            context.startActivity(intent)',
+    '                        } catch (e: Exception) {',
+    '                        }',
+    '                    }',
+    '                },',
+    '                onMoreClick = { showSongInfo = true }',
+    '            )'
+]
+src = open(ACT, encoding="utf-8").read()
+if "PlayerTopBar(" in src:
+    c = open(TOP, encoding="utf-8").read()
+    assert "// [34v61]" in c, "❌ 状态不一致：Activity 已接线但 PlayerTopBar.kt 标记缺失"
+    print("✓ 34v61 已应用，跳过")
+    sys.exit(0)
+lines = src.split("\n")
+sb = [i for i, l in enumerate(lines) if "statusBarsPadding()" in l]
+assert len(sb) == 1, f"❌ statusBarsPadding 锚点计数 {len(sb)}"
+s = None
+for i in range(sb[0], len(lines)):
+    if lines[i] == "            Row(":
+        s = i
+        break
+assert s is not None, "❌ 未找到顶部栏 Row"
+sp = None
+for i in range(s, len(lines)):
+    if lines[i] == "            Spacer(modifier = Modifier.height(16.dp))":
+        sp = i
+        break
+assert sp is not None, "❌ 未找到 16dp 间隔锚点"
+e = sp - 2
+assert lines[e] == "            }", f"❌ 跨度终点行不符: {lines[e]!r}"
+assert lines[e + 1] == "", "❌ 跨度后空行不符"
+assert e - s + 1 == 52, f"❌ 跨度行数 {e - s + 1} != 52"
+seg = "\n".join(lines[s:e + 1])
+assert seg.count('Text("⋮"') == 1 and seg.count('Text("‹"') == 1 and "onBack" in seg, "❌ 跨度内容校验失败"
+lines[s:e + 1] = CALL
+out = "\n".join(lines)
+assert out.count("PlayerTopBar(") == 1, "❌ 调用点计数异常"
+assert out.count('Text("⋮"') == 0, "❌ 跨度残留 ⋮"
+assert out.count('Text("‹"') == 1, "❌ ‹ 计数异常（原 2 处，抽走顶栏应余 1）"
+assert out.count("{") == out.count("}"), "❌ Activity 括号失衡"
+assert TOP_CONTENT.count("{") == TOP_CONTENT.count("}"), "❌ PlayerTopBar.kt 括号失衡"
+open(TOP, "w", encoding="utf-8").write(TOP_CONTENT)
+open(ACT, "w", encoding="utf-8").write(out)
+print(f"✓ 34v61 抽离完成：删 {e + 1 - s} 行 → 调用 {len(CALL)} 行；PlayerTopBar.kt {len(TOP_CONTENT.splitlines())} 行")
+PYEOF61
+echo "=== 34 v61 完成 ==="
