@@ -3498,3 +3498,411 @@ open(ACT, "w", encoding="utf-8").write(out)
 print(f"✓ 34v64 抽离完成：Box 56 行 → 调用 {len(CALL)} 行；另删高度计算行 1 行；PlayerLyricPreview.kt {len(LYR_CONTENT.splitlines())} 行")
 PYEOF64
 echo "=== 34 v64 完成 ==="
+
+# === 34 v65: 组件纯化（UI_DEV_GUIDE 第一条）——三组件去底层直调，机械改造 ===
+echo "=== 34 v65 ==="
+python3 << 'PYEOF65'
+import sys
+DIR = "app/src/main/java/com/github/tvbox/osc/ui/activity/"
+CTL = r'''package com.github.tvbox.osc.ui.activity
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import com.github.tvbox.osc.ui.music.component.*
+
+// [34v60] 播放控制栏：自 LxPlayerActivity 原样抽离（主控行 + 底部行），逻辑零改动
+// [34v65] 组件纯化：播放与模式控制改为回调、模式状态改为传参（UI_DEV_GUIDE 第一条）
+@Composable
+fun PlayerControlBar(
+    isPlaying: Boolean,
+    isLoading: Boolean,
+    sleepRemaining: Long,
+    primaryTextColor: Color,
+    secondaryTextColor: Color,
+    playMode: Int,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onPlayPauseClick: () -> Unit,
+    onModeClick: () -> Unit,
+    onSleepTimerClick: () -> Unit,
+    onQueueClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 睡眠定时按钮
+        IconButton(
+            onClick = { onSleepTimerClick() },
+            modifier = Modifier.size(40.dp)
+        ) {
+            val timerColor = if (sleepRemaining > 0) musicColors().accent else PlayerGray.copy(alpha = 0.6f)
+            Text("⏰", style = MaterialTheme.typography.titleMedium, color = timerColor)
+        }
+        IconButton(
+            onClick = { onPrevious() },
+            modifier = Modifier.size(44.dp)
+        ) {
+            PlayerSkipPrevIcon(tint = primaryTextColor, modifier = Modifier.size(28.dp)) // [34v45]
+        }
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(musicColors().accent) // [34v12]
+                .clickable { onPlayPauseClick() },
+            contentAlignment = Alignment.Center
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(color = musicColors().card, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+            } else {
+                if (isPlaying) PlayerPauseIcon(tint = Color.White, modifier = Modifier.size(30.dp)) // [34v55]
+                else PlayerPlayIcon(tint = Color.White, modifier = Modifier.size(30.dp)) // [34v55]
+            }
+        }
+        IconButton(
+            onClick = { onNext() },
+            modifier = Modifier.size(44.dp)
+        ) {
+            PlayerSkipNextIcon(tint = primaryTextColor, modifier = Modifier.size(28.dp)) // [34v45]
+        }
+        IconButton(
+            onClick = { onModeClick() },
+            modifier = Modifier.size(40.dp)
+        ) {
+            val modeIconVector = when (playMode) {
+                LxPlayerManager.MODE_SHUFFLE -> 0 // [34v39]
+                LxPlayerManager.MODE_LOOP_ONE -> 1 // [34v39]
+                else -> 2 // [34v39]
+            } // [34v26]
+            val modeColor = if (playMode == LxPlayerManager.MODE_SEQUENCE) secondaryTextColor.copy(alpha = 0.6f) else musicColors().accent
+            when (modeIconVector) { // [34v43]
+                0 -> PlayerShuffleIcon(tint = modeColor, modifier = Modifier.size(24.dp))
+                1 -> PlayerRepeatOneIcon(tint = modeColor, modifier = Modifier.size(24.dp))
+                else -> PlayerRepeatIcon(tint = modeColor, modifier = Modifier.size(24.dp))
+            }
+        }
+    }
+
+    Spacer(modifier = Modifier.weight(1f))
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 24.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("📱", style = MaterialTheme.typography.bodyMedium)
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = "此设备",
+            style = MaterialTheme.typography.bodySmall,
+            color = musicColors().accent
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        TextButton(onClick = onQueueClick) {
+            Text("队列", color = PlayerGray, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+    }
+}
+'''
+PROG = r'''package com.github.tvbox.osc.ui.activity
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+
+// [34v62] 播放进度条：自 LxPlayerActivity 原样抽离（拖拽进度条 + 时间行），逻辑零改动
+// [34v65] 组件纯化：进度跳转改为 onSeek 回调（UI_DEV_GUIDE 第一条）
+@Composable
+fun PlayerProgressBar(
+    position: Long,
+    duration: Long,
+    buffered: Long,
+    isLoading: Boolean,
+    onSeek: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isSeeking by remember { mutableStateOf(false) }
+    var seekPos by remember { mutableStateOf(0f) }
+    Column(modifier = modifier.fillMaxWidth()) {
+    // 进度条（细白/灰）
+    if (duration > 0) {
+        // 进度条
+        val durF: Float = duration.toFloat().coerceAtLeast(1f)
+        val curPos: Float = if (isSeeking) seekPos else position.toFloat().coerceIn(0f, durF)
+        val progFrac: Float = (curPos / durF).coerceIn(0f, 1f)
+        val bufFrac: Float = (buffered.toFloat() / durF).coerceIn(0f, 1f)
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(20.dp)
+                .pointerInput(durF) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { isSeeking = true },
+                        onDragEnd = { onSeek(seekPos.toLong()); isSeeking = false },
+                        onHorizontalDrag = { change, _ ->
+                            val frac: Float = (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
+                            seekPos = frac * durF
+                            change.consume()
+                        }
+                    )
+                }
+                .pointerInput(durF) {
+                    detectTapGestures { tapOffset ->
+                        val frac: Float = (tapOffset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                        onSeek((frac * durF).toLong())
+                    }
+                }
+        ) {
+            // 底
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .align(Alignment.Center)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color(0xFF535353))
+            )
+            // 缓冲
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(bufFrac)
+                    .height(3.dp)
+                    .align(Alignment.CenterStart)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(musicColors().textHint)
+            )
+            // 已播
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(progFrac)
+                    .height(3.dp)
+                    .align(Alignment.CenterStart)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(musicColors().accent)
+            )
+            // 点
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .align(Alignment.CenterStart)
+                    .offset(x = (maxWidth * progFrac - 5.dp).coerceIn(0.dp, (maxWidth - 10.dp).coerceAtLeast(0.dp)))
+                    .clip(CircleShape)
+                    .background(musicColors().accent)
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = formatTime(if (isSeeking) seekPos.toLong() else position),
+                style = MaterialTheme.typography.bodySmall,
+                color = PlayerGray
+            )
+            Text(
+                text = formatTime(duration),
+                style = MaterialTheme.typography.bodySmall,
+                color = PlayerGray
+            )
+        }
+    } else {
+        Spacer(modifier = Modifier.height(16.dp))
+        if (isLoading) {
+            Text(
+                "正在获取播放地址…",
+                style = MaterialTheme.typography.bodySmall,
+                color = PlayerGray,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+    }
+}
+
+private fun formatTime(ms: Long): String {
+    val totalSeconds = ms / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return String.format("%02d:%02d", minutes, seconds)
+}
+'''
+COV = r'''package com.github.tvbox.osc.ui.activity
+
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+
+// [34v63] 播放页大封面：自 LxPlayerActivity 原样抽离，逻辑零改动
+// [34v65] 组件纯化：删除封面组件内的主题死读（UI_DEV_GUIDE 第一条）
+@Composable
+fun PlayerCover(
+    coverUrl: String,
+    isLoading: Boolean,
+    duration: Long,
+    displayTitle: String,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+    // 大封面
+    Box(
+        modifier = Modifier
+            .size(280.dp)
+            .align(Alignment.CenterHorizontally)
+            .shadow(
+                elevation = 32.dp, // [34v12]
+                shape = RoundedCornerShape(20.dp),
+                ambientColor = Color.Black.copy(alpha = 0.4f),
+                spotColor = Color.Black
+            )
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = 0.5f), // [34v12]
+                shape = RoundedCornerShape(20.dp)
+            )
+            .clip(RoundedCornerShape(20.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        if (coverUrl.isNotEmpty()) {
+            AsyncImage(
+                model = coverUrl,
+                contentDescription = "封面",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else if (isLoading && duration <= 0) {
+            CircularProgressIndicator(color = musicColors().textPrimary)
+        } else {
+            Text(
+                text = displayTitle.take(1).ifEmpty { "♪" },
+                style = MaterialTheme.typography.displayLarge,
+                color = musicColors().textPrimary.copy(alpha = 0.9f)
+            )
+        }
+    }
+    }
+}
+'''
+PROG_OLD = r'''            PlayerProgressBar(
+                position = position,
+                duration = duration,
+                buffered = buffered,
+                isLoading = isLoading
+            )'''
+PROG_NEW = r'''            PlayerProgressBar(
+                position = position,
+                duration = duration,
+                buffered = buffered,
+                isLoading = isLoading,
+                onSeek = { pos -> LxPlayerManager.seekTo(pos) }
+            )'''
+CTL_OLD = r'''            PlayerControlBar(
+                isPlaying = isPlaying,
+                isLoading = isLoading,
+                error = error,
+                sleepRemaining = sleepRemaining,
+                primaryTextColor = primaryTextColor,
+                secondaryTextColor = secondaryTextColor,
+                onPrevious = onPrevious,
+                onNext = onNext,
+                onSleepTimerClick = { showSleepTimer = true },
+                onQueueClick = { showQueue = true },
+                modifier = Modifier.weight(1f)
+            )'''
+CTL_NEW = r'''            val playMode by LxPlayerManager.playMode.collectAsState()
+            PlayerControlBar(
+                isPlaying = isPlaying,
+                isLoading = isLoading,
+                sleepRemaining = sleepRemaining,
+                primaryTextColor = primaryTextColor,
+                secondaryTextColor = secondaryTextColor,
+                playMode = playMode,
+                onPrevious = onPrevious,
+                onNext = onNext,
+                onPlayPauseClick = { if (error == null) LxPlayerManager.togglePlayPause() },
+                onModeClick = {
+                    val name = LxPlayerManager.cycleMode()
+                    Toast.makeText(context, name, Toast.LENGTH_SHORT).show()
+                },
+                onSleepTimerClick = { showSleepTimer = true },
+                onQueueClick = { showQueue = true },
+                modifier = Modifier.weight(1f)
+            )'''
+def rd(p):
+    return open(DIR + p, encoding="utf-8").read()
+if all("// [34v65]" in rd(f) for f in ["PlayerControls.kt", "PlayerProgressBar.kt", "PlayerCover.kt"]):
+    print("✓ 34v65 已应用，跳过")
+    sys.exit(0)
+src = rd("LxPlayerActivity.kt")
+assert src.count(PROG_OLD) == 1, "❌ 进度条调用块锚点不唯一"
+src = src.replace(PROG_OLD, PROG_NEW)
+assert src.count(CTL_OLD) == 1, "❌ 控制栏调用块锚点不唯一"
+src = src.replace(CTL_OLD, CTL_NEW)
+# 纯净断言（逐组件，UI_DEV_GUIDE 第一条）
+for bad in ["togglePlayPause", "cycleMode", "Toast", "collectAsState", "LxPlayerManager.playMode", "LocalContext"]:
+    assert CTL.count(bad) == 0, f"❌ PlayerControls 残留直调: {bad}"
+assert PROG.count("seekTo") == 0 and PROG.count("LxPlayerManager") == 0, "❌ PlayerProgressBar 残留直调"
+assert COV.count("MusicThemeManager") == 0 and COV.count("_isDarkCover") == 0, "❌ PlayerCover 残留主题直读"
+assert src.count("_isDarkCover") == 0, "❌ Activity 残留 _isDarkCover"
+# 调用点断言
+assert src.count("PlayerControlBar(") == 1, "❌ 控制栏调用点异常"
+assert src.count("PlayerProgressBar(") == 1, "❌ 进度条调用点异常"
+assert src.count("val playMode by LxPlayerManager.playMode.collectAsState()") == 1, "❌ playMode 收集落点异常"
+assert src.count("onPlayPauseClick") == 1 and src.count("onModeClick") == 1 and src.count("onSeek = ") == 1, "❌ 新回调接线异常"
+for name, c in [("Activity", src), ("PlayerControls", CTL), ("PlayerProgressBar", PROG), ("PlayerCover", COV)]:
+    assert c.count("{") == c.count("}"), f"❌ {name} 括号失衡"
+for f, c in [("PlayerControls.kt", CTL), ("PlayerProgressBar.kt", PROG), ("PlayerCover.kt", COV)]:
+    open(DIR + f, "w", encoding="utf-8").write(c)
+open(DIR + "LxPlayerActivity.kt", "w", encoding="utf-8").write(src)
+print("✓ 34v65 纯化完成：三组件全量覆写（纯化稿）+ 两处调用点改造")
+PYEOF65
+echo "=== 34 v65 完成 ==="
