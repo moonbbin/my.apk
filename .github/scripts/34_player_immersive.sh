@@ -2694,3 +2694,186 @@ with open(PATH, 'w', encoding='utf-8') as f:
 assert 'probeAndSetQuality(url) }.start() // [34v57]' in c
 print("OK 34 v57 完成")
 PYEOF57
+
+# === 34 v60: 抽离播放控制栏 → PlayerControls.kt（UI 解耦第一批，逻辑零改动） ===
+echo "=== 34 v60 ==="
+python3 << 'PYEOF60'
+import sys
+ACT = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+CTRL = "app/src/main/java/com/github/tvbox/osc/ui/activity/PlayerControls.kt"
+CTRL_CONTENT = r'''package com.github.tvbox.osc.ui.activity
+
+import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.github.tvbox.osc.ui.music.component.*
+
+// [34v60] 播放控制栏：自 LxPlayerActivity 原样抽离（主控行 + 底部行），逻辑零改动
+@Composable
+fun PlayerControlBar(
+    isPlaying: Boolean,
+    isLoading: Boolean,
+    error: String?,
+    sleepRemaining: Long,
+    primaryTextColor: Color,
+    secondaryTextColor: Color,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onSleepTimerClick: () -> Unit,
+    onQueueClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    Column(modifier = modifier.fillMaxWidth()) {
+    val playMode by LxPlayerManager.playMode.collectAsState()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 睡眠定时按钮
+        IconButton(
+            onClick = { onSleepTimerClick() },
+            modifier = Modifier.size(40.dp)
+        ) {
+            val timerColor = if (sleepRemaining > 0) musicColors().accent else PlayerGray.copy(alpha = 0.6f)
+            Text("⏰", style = MaterialTheme.typography.titleMedium, color = timerColor)
+        }
+        IconButton(
+            onClick = { onPrevious() },
+            modifier = Modifier.size(44.dp)
+        ) {
+            PlayerSkipPrevIcon(tint = primaryTextColor, modifier = Modifier.size(28.dp)) // [34v45]
+        }
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(musicColors().accent) // [34v12]
+                .clickable { if (error == null) LxPlayerManager.togglePlayPause() },
+            contentAlignment = Alignment.Center
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(color = musicColors().card, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+            } else {
+                if (isPlaying) PlayerPauseIcon(tint = Color.White, modifier = Modifier.size(30.dp)) // [34v55]
+                else PlayerPlayIcon(tint = Color.White, modifier = Modifier.size(30.dp)) // [34v55]
+            }
+        }
+        IconButton(
+            onClick = { onNext() },
+            modifier = Modifier.size(44.dp)
+        ) {
+            PlayerSkipNextIcon(tint = primaryTextColor, modifier = Modifier.size(28.dp)) // [34v45]
+        }
+        IconButton(
+            onClick = {
+                val name = LxPlayerManager.cycleMode()
+                Toast.makeText(context, name, Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier.size(40.dp)
+        ) {
+            val modeIconVector = when (playMode) {
+                LxPlayerManager.MODE_SHUFFLE -> 0 // [34v39]
+                LxPlayerManager.MODE_LOOP_ONE -> 1 // [34v39]
+                else -> 2 // [34v39]
+            } // [34v26]
+            val modeColor = if (playMode == LxPlayerManager.MODE_SEQUENCE) secondaryTextColor.copy(alpha = 0.6f) else musicColors().accent
+            when (modeIconVector) { // [34v43]
+                0 -> PlayerShuffleIcon(tint = modeColor, modifier = Modifier.size(24.dp))
+                1 -> PlayerRepeatOneIcon(tint = modeColor, modifier = Modifier.size(24.dp))
+                else -> PlayerRepeatIcon(tint = modeColor, modifier = Modifier.size(24.dp))
+            }
+        }
+    }
+
+    Spacer(modifier = Modifier.weight(1f))
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 24.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("📱", style = MaterialTheme.typography.bodyMedium)
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = "此设备",
+            style = MaterialTheme.typography.bodySmall,
+            color = musicColors().accent
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        TextButton(onClick = onQueueClick) {
+            Text("队列", color = PlayerGray, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+    }
+}
+'''
+CALL = [
+    '            PlayerControlBar(',
+    '                isPlaying = isPlaying,',
+    '                isLoading = isLoading,',
+    '                error = error,',
+    '                sleepRemaining = sleepRemaining,',
+    '                primaryTextColor = primaryTextColor,',
+    '                secondaryTextColor = secondaryTextColor,',
+    '                onPrevious = onPrevious,',
+    '                onNext = onNext,',
+    '                onSleepTimerClick = { showSleepTimer = true },',
+    '                onQueueClick = { showQueue = true },',
+    '                modifier = Modifier.weight(1f)',
+    '            )'
+]
+src = open(ACT, encoding="utf-8").read()
+if "PlayerControlBar(" in src:
+    c = open(CTRL, encoding="utf-8").read()
+    assert "// [34v60]" in c, "❌ 状态不一致：Activity 已接线但 PlayerControls.kt 标记缺失"
+    print("✓ 34v60 已应用，跳过")
+    sys.exit(0)
+lines = src.split("\n")
+gray = [i for i, l in enumerate(lines) if l == "private val PlayerGray = Color(0xFFB3B3B3)"]
+assert len(gray) == 1, f"❌ PlayerGray 锚点计数 {len(gray)}"
+lines[gray[0]] = "internal val PlayerGray = Color(0xFFB3B3B3)"
+start = [i for i, l in enumerate(lines) if l == "            val playMode by LxPlayerManager.playMode.collectAsState()"]
+assert len(start) == 1, f"❌ 跨度起点计数 {len(start)}"
+s = start[0]
+cmt = None
+for i in range(s, len(lines)):
+    if lines[i].strip() == "// 歌曲信息弹窗":
+        cmt = i
+        break
+assert cmt is not None, "❌ 未找到歌曲信息弹窗注释锚点"
+e = cmt - 3
+assert lines[e] == "            }", f"❌ 跨度终点行不符: {lines[e]!r}"
+assert lines[e + 1] == "        }", "❌ Column 收尾行不符"
+assert lines[e + 2] == "", "❌ 空行锚点不符"
+lines[s:e + 1] = CALL
+out = "\n".join(lines)
+assert out.count("PlayerControlBar(") == 1, "❌ 调用点计数异常"
+assert out.count("PlayerPlayIcon") == 0, "❌ 跨度残留 PlayerPlayIcon"
+assert out.count("⏰") == 0, "❌ 跨度残留 ⏰"
+assert "internal val PlayerGray" in out
+assert out.count("{") == out.count("}"), "❌ Activity 括号失衡"
+assert CTRL_CONTENT.count("{") == CTRL_CONTENT.count("}"), "❌ PlayerControls.kt 括号失衡"
+open(CTRL, "w", encoding="utf-8").write(CTRL_CONTENT)
+open(ACT, "w", encoding="utf-8").write(out)
+print(f"✓ 34v60 抽离完成：删 {e + 1 - s} 行 → 调用 {len(CALL)} 行；PlayerControls.kt {len(CTRL_CONTENT.splitlines())} 行")
+PYEOF60
+echo "=== 34 v60 完成 ==="
