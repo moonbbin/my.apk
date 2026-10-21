@@ -2696,6 +2696,7 @@ print("OK 34 v57 完成")
 PYEOF57
 
 # === 34 v60: 抽离播放控制栏 → PlayerControls.kt（UI 解耦第一批，逻辑零改动） ===
+# 注：PlayerGray 定义行在构建链中已被 20 号脚本先行改为 TextSecondary 形式，锚点按该形式匹配
 echo "=== 34 v60 ==="
 python3 << 'PYEOF60'
 import sys
@@ -2848,9 +2849,9 @@ if "PlayerControlBar(" in src:
     print("✓ 34v60 已应用，跳过")
     sys.exit(0)
 lines = src.split("\n")
-gray = [i for i, l in enumerate(lines) if l == "private val PlayerGray = Color(0xFFB3B3B3)"]
+gray = [i for i, l in enumerate(lines) if l == "private val PlayerGray = TextSecondary"]
 assert len(gray) == 1, f"❌ PlayerGray 锚点计数 {len(gray)}"
-lines[gray[0]] = "internal val PlayerGray = Color(0xFFB3B3B3)"
+lines[gray[0]] = "internal val PlayerGray = TextSecondary"
 start = [i for i, l in enumerate(lines) if l == "            val playMode by LxPlayerManager.playMode.collectAsState()"]
 assert len(start) == 1, f"❌ 跨度起点计数 {len(start)}"
 s = start[0]
