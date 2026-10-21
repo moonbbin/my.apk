@@ -115,9 +115,9 @@ se_ui = """    // NAV_WIRE_V1: 搜索新版 UI（SearchScreen）；热词/关键
         keyword = keyword,
         onKeywordChange = { keyword = it },
         hotWords = hotWords,
-        onHotWordClick = { goSearch(it) },
-        onSearch = { goSearch(it) },
-        isSearching = false,
+        onHotWordClick = { kw -> if (!isSearching) { isSearching = true; goSearch(kw) } },
+        onSearch = { kw -> if (!isSearching) { isSearching = true; goSearch(kw) } },
+        isSearching = isSearching,
     )
 }"""
 src = replace_ui(src, 'fun SearchTabLanding(', r"\n    LazyColumn\(", se_ui)
@@ -160,6 +160,21 @@ src = src.replace('// 歌单：真实歌单 API，点击进详情',
                   '// 歌单：新版 PlaylistScreen（数据：PlaylistTab/PlaylistBrowser 的歌单逻辑）')
 src = src.replace('MusicSettingsList(onComingSoon = ::comingSoon)',
                   'MusicSettingsList(onComingSoon = ::comingSoon) // 新版 SettingsScreen')
+
+
+# ---- 4b. SearchTabLanding 搜索状态（[25v2]） ----
+if '[25v2]' not in src:
+    kw_anchor = '    var keyword by remember { mutableStateOf("") }'
+    if src.count(kw_anchor) != 1:
+        print("失败：25v2 keyword 锚点计数异常", src.count(kw_anchor), file=sys.stderr); sys.exit(1)
+    inject_txt = kw_anchor + '\n    var isSearching by remember { mutableStateOf(false) } // [25v2] 搜索提交反馈状态\n    LaunchedEffect(isSearching) {\n        if (isSearching) { delay(1200L); isSearching = false }\n    }'
+    src = src.replace(kw_anchor, inject_txt, 1)
+    if 'import kotlinx.coroutines.delay' not in src:
+        imp_anchor = 'import kotlinx.coroutines.async'
+        if src.count(imp_anchor) != 1:
+            print("失败：25v2 import 锚点计数异常", src.count(imp_anchor), file=sys.stderr); sys.exit(1)
+        src = src.replace(imp_anchor, imp_anchor + '\nimport kotlinx.coroutines.delay', 1)
+    print("4b: SearchTabLanding 已加 isSearching 状态（[25v2]）")
 
 open(path, 'w', encoding='utf-8').write(src)
 

@@ -4,10 +4,11 @@
 # 注意：25_music_pages_wire.sh 也会写 SearchScreen.kt，但本脚本编号更大（33 > 25），
 # 构建时后运行，覆盖生效。25 的写入仅作为兜底。
 # [33v4] 榜单序号三重组合（颜色+字重+透明度），火苗图标accent
+# [33v5] 搜索中中央三点动效 + 隐藏热搜列表
 set -e
 cd avbox
 
-echo "=== 33 v4: 搜索页视觉微调 ==="
+echo "=== 33 v5: 搜索页视觉微调 ==="
 
 TARGET="app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchScreen.kt"
 
@@ -20,11 +21,13 @@ cat << 'KOTLIN_EOF' > "$TARGET"
 package com.github.tvbox.osc.ui.music.search
 
 // 本脚本为 SearchScreen.kt 的唯一最终控制权，后续所有搜索页修改均在此进行。
-// [33v1]
+// [33v1] [33v5]
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -35,6 +38,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -43,7 +47,6 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Whatshot
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +57,12 @@ import androidx.compose.ui.graphics.Color
 import com.github.tvbox.osc.ui.activity.musicColors
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -105,12 +114,7 @@ fun SearchScreen(
             },
             trailingIcon = {
                 when {
-                    isSearching -> CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    keyword.isNotEmpty() -> IconButton(onClick = { onKeywordChange("") }) {
+                    keyword.isNotEmpty() && !isSearching -> IconButton(onClick = { onKeywordChange("") }) {
                         Icon(
                             imageVector = Icons.Filled.Clear,
                             contentDescription = "清空",
@@ -161,15 +165,55 @@ fun SearchScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // 细节4：热搜列表
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            itemsIndexed(hotWords) { index, word ->
-                HotSearchItem(
-                    rank = index + 1,
-                    word = word,
-                    onClick = { onHotWordClick(word) },
-                )
+        // 细节4：热搜列表（搜索中改显中央三点动效） // [33v5]
+        if (isSearching) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                SearchLoadingDots()
             }
+        } else {
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                itemsIndexed(hotWords) { index, word ->
+                    HotSearchItem(
+                        rank = index + 1,
+                        word = word,
+                        onClick = { onHotWordClick(word) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+
+// [33v5] 搜索加载动效：三点跳跃（LaunchedEffect 相位驱动，零新依赖）
+@Composable
+private fun SearchLoadingDots() {
+    var phase by remember { mutableStateOf(0f) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            phase = (phase + 0.016f) % 1f
+            delay(16L)
+        }
+    }
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        repeat(3) { i ->
+            val p = (phase + i / 3f) % 1f
+            val lift = kotlin.math.sin(p * 2f * kotlin.math.PI.toFloat())
+            Box(
+                modifier = Modifier
+                    .offset(y = (-lift * 7f).dp)
+                    .size(11.dp)
+                    .background(
+                        musicColors().accent.copy(alpha = 0.45f + 0.55f * (lift * 0.5f + 0.5f)),
+                        CircleShape
+                    )
+            )
         }
     }
 }
@@ -247,5 +291,5 @@ fun SearchScreenPreview() {
 }
 KOTLIN_EOF
 
-echo "✓ SearchScreen.kt 已全量覆盖（33v4）"
-echo "=== 33 v4 完成 ==="
+echo "✓ SearchScreen.kt 已全量覆盖（33v5）"
+echo "=== 33 v5 完成 ==="
