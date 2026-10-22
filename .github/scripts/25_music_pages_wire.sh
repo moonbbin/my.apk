@@ -104,7 +104,7 @@ pl_ui = """    // NAV_WIRE_V1: 歌单新版 UI（PlaylistScreen）；分类/歌�
         categories = categories,
         selectedCategory = selectedCat,
         onCategorySelected = { selectedCat = it },
-        platformSupported = platform == "wy",
+        platformSupported = platform in listOf("wy", "tx", "kg"),
         onPlaylistClick = { id, name -> onOpen(id, name) },
     )
 }"""

@@ -203,3 +203,256 @@ print("OK 14v5 injected")
 PYEOF
 
 echo "=== 14 v5 done ==="
+# === 14 v6: QQ/Kugou playlist categories + lists + details ===
+
+echo "=== 14 v6 ==="
+
+python3 << 'PYEOF'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicSearchApi.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [14v6]"
+if MARK in src:
+    print("skip: 14v6 already present")
+    sys.exit(0)
+
+brief = """    // [14v6] Playlist brief shared by QQ/Kugou playlist lists (mapped to PlaylistInfo by callers)
+    data class PlaylistBrief(
+        val id: String,
+        val name: String,
+        val coverUrl: String,
+        val playCount: Long
+    )
+
+"""
+anchor1 = "    data class SongInfo("
+assert src.count(anchor1) == 1, "SongInfo anchor count != 1"
+src = src.replace(anchor1, brief + anchor1, 1)
+
+methods = """    // [14v6] ---- QQ playlists (tx) ----
+    private var qqCategoryIds: Map<String, Int> = emptyMap()
+
+    fun getQQCategories(): List<String> {
+        return try {
+            val request = Request.Builder()
+                .url("https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_diss_tag_conf.fcg?format=json&inCharset=utf8&outCharset=utf-8&g_tk=5381")
+                .header("Referer", "https://y.qq.com/")
+                .header("User-Agent", "Mozilla/5.0")
+                .build()
+            client.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) return emptyList()
+                val json = JSONObject(resp.body?.string() ?: return emptyList())
+                if (json.optInt("code") != 0) return emptyList()
+                val groups = json.optJSONObject("data")?.optJSONArray("categories") ?: return emptyList()
+                val names = mutableListOf<String>()
+                val ids = mutableMapOf<String, Int>()
+                for (g in 0 until groups.length()) {
+                    val items = groups.getJSONObject(g).optJSONArray("items") ?: continue
+                    for (i in 0 until items.length()) {
+                        val item = items.getJSONObject(i)
+                        val n = item.optString("categoryName")
+                        if (n.isNotBlank() && n !in names) {
+                            names.add(n)
+                            ids[n] = item.optInt("categoryId")
+                        }
+                    }
+                }
+                if (names.isEmpty()) return emptyList()
+                qqCategoryIds = ids
+                names
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun getQQPlaylists(cat: String): List<PlaylistBrief> {
+        val results = mutableListOf<PlaylistBrief>()
+        try {
+            if (qqCategoryIds.isEmpty()) getQQCategories()
+            val catId = qqCategoryIds[cat] ?: if (cat == "\\u5168\\u90e8") 10000000 else return results
+            val url = "https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_diss_by_tag.fcg?format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0&categoryId=$catId&sortId=5&sin=0&ein=29"
+            val request = Request.Builder().url(url)
+                .header("Referer", "https://y.qq.com/")
+                .header("User-Agent", "Mozilla/5.0")
+                .build()
+            client.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) return results
+                val json = JSONObject(resp.body?.string() ?: return results)
+                if (json.optInt("code") != 0) return results
+                val list = json.optJSONObject("data")?.optJSONArray("list") ?: return results
+                for (i in 0 until list.length()) {
+                    val item = list.getJSONObject(i)
+                    val name = item.optString("dissname")
+                    val id = item.optString("dissid")
+                    if (name.isBlank() || id.isBlank()) continue
+                    results.add(
+                        PlaylistBrief(
+                            id = id,
+                            name = name,
+                            coverUrl = item.optString("imgurl").replace("http://", "https://"),
+                            playCount = item.optLong("listennum", 0L)
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+        }
+        return results
+    }
+
+    fun getQQPlaylist(playlistId: String): List<SongInfo> {
+        val results = mutableListOf<SongInfo>()
+        try {
+            val url = "https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg?type=1&json=1&utf8=1&onlysong=0&disstid=$playlistId&format=json&g_tk=5381&loginUin=0&hostUin=0&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0"
+            val request = Request.Builder().url(url)
+                .header("Referer", "https://y.qq.com/")
+                .header("User-Agent", "Mozilla/5.0")
+                .build()
+            client.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) return results
+                val json = JSONObject(resp.body?.string() ?: return results)
+                if (json.optInt("code") != 0) return results
+                val cd = json.optJSONArray("cdlist")?.optJSONObject(0) ?: return results
+                val list = cd.optJSONArray("songlist") ?: return results
+                for (i in 0 until list.length()) {
+                    if (results.size >= 200) break
+                    try {
+                        val item = list.getJSONObject(i)
+                        val songmid = item.optString("songmid")
+                        val name = item.optString("songname")
+                        if (name.isBlank() || songmid.isBlank()) continue
+                        val singers = item.optJSONArray("singer")
+                        val artist = if (singers != null && singers.length() > 0) {
+                            singers.getJSONObject(0).optString("name")
+                        } else ""
+                        val albummid = item.optString("albummid")
+                        results.add(
+                            SongInfo(
+                                id = songmid,
+                                title = name,
+                                artist = artist,
+                                album = item.optString("albumname"),
+                                duration = item.optLong("interval", 0L),
+                                platform = "tx",
+                                picUrl = if (albummid.isNotBlank()) {
+                                    "https://y.qq.com/music/photo_new/T002R300x300M000$albummid.jpg"
+                                } else "",
+                                songmid = songmid
+                            )
+                        )
+                    } catch (e: Exception) {
+                    }
+                }
+            }
+        } catch (e: Exception) {
+        }
+        return results
+    }
+
+    // [14v6] ---- Kugou playlists (kg): category names double as search keywords ----
+    fun getKugouCategories(): List<String> {
+        return listOf("\\u5168\\u90e8", "\\u534e\\u8bed", "\\u7ca4\\u8bed", "\\u6b27\\u7f8e", "\\u65e5\\u8bed", "\\u97e9\\u8bed", "\\u6d41\\u884c", "\\u6447\\u6eda", "\\u6c11\\u8c23", "\\u7535\\u5b50", "\\u8bf4\\u5531", "\\u8f7b\\u97f3\\u4e50", "\\u5f71\\u89c6\\u539f\\u58f0", "ACG")
+    }
+
+    fun getKugouPlaylists(cat: String): List<PlaylistBrief> {
+        val results = mutableListOf<PlaylistBrief>()
+        try {
+            val keyword = if (cat == "\\u5168\\u90e8") "\\u70ed\\u95e8" else cat
+            val url = "http://mobilecdn.kugou.com/api/v3/search/special?keyword=" +
+                URLEncoder.encode(keyword, "UTF-8") + "&page=1&pagesize=30&version=9100"
+            val request = Request.Builder().url(url)
+                .header("User-Agent", "Mozilla/5.0")
+                .build()
+            client.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) return results
+                val json = JSONObject(resp.body?.string() ?: return results)
+                if (json.optInt("status") != 1) return results
+                val info = json.optJSONObject("data")?.optJSONArray("info") ?: return results
+                for (i in 0 until info.length()) {
+                    val item = info.getJSONObject(i)
+                    val name = item.optString("specialname")
+                    val id = item.optLong("specialid", 0L)
+                    if (name.isBlank() || id == 0L) continue
+                    results.add(
+                        PlaylistBrief(
+                            id = id.toString(),
+                            name = name,
+                            coverUrl = item.optString("imgurl").replace("{size}", "400"),
+                            playCount = item.optLong("playcount", 0L)
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+        }
+        return results
+    }
+
+    suspend fun getKugouPlaylist(playlistId: String): List<SongInfo> {
+        val results = mutableListOf<SongInfo>()
+        try {
+            val url = "http://mobilecdn.kugou.com/api/v3/special/song?specialid=$playlistId&page=1&pagesize=100&version=9100"
+            val request = Request.Builder().url(url)
+                .header("User-Agent", "Mozilla/5.0")
+                .build()
+            client.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) return results
+                val json = JSONObject(resp.body?.string() ?: return results)
+                if (json.optInt("status") != 1) return results
+                val info = json.optJSONObject("data")?.optJSONArray("info") ?: return results
+                for (i in 0 until info.length()) {
+                    try {
+                        val item = info.getJSONObject(i)
+                        val hash = item.optString("hash")
+                        if (hash.isBlank()) continue
+                        val filename = item.optString("filename").replace(Regex("<[^>]*>"), "")
+                        val sep = filename.indexOf(" - ")
+                        val artist = if (sep > 0) filename.substring(0, sep).trim() else ""
+                        val title = if (sep > 0) filename.substring(sep + 3).trim() else filename.trim()
+                        if (title.isBlank()) continue
+                        val quality = when {
+                            item.optString("sqhash").isNotBlank() -> "SQ"
+                            item.optString("320hash").isNotBlank() -> "HQ"
+                            else -> ""
+                        }
+                        results.add(
+                            SongInfo(
+                                id = hash,
+                                title = title,
+                                artist = artist,
+                                duration = item.optLong("duration", 0L),
+                                platform = "kg",
+                                hash = hash,
+                                albumAudioId = item.optString("album_audio_id", ""),
+                                quality = quality
+                            )
+                        )
+                    } catch (e: Exception) {
+                    }
+                }
+            }
+        } catch (e: Exception) {
+        }
+        return if (results.isEmpty()) results else enrichKgCovers(results)
+    }
+
+"""
+
+anchor2 = "    fun getNeteasePlaylist(playlistId: String)"
+assert src.count(anchor2) == 1, "getNeteasePlaylist anchor count != 1"
+src = src.replace(anchor2, methods + anchor2, 1)
+for fn in ["fun getQQCategories(", "fun getQQPlaylists(", "fun getQQPlaylist(",
+           "fun getKugouCategories(", "fun getKugouPlaylists(", "fun getKugouPlaylist(",
+           "data class PlaylistBrief("]:
+    assert src.count(fn) == 1, f"inject check failed: {fn}"
+assert src.count("{") == src.count("}"), "brace imbalance"
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("OK 14v6 injected")
+PYEOF
+
+echo "=== 14 v6 done ==="
