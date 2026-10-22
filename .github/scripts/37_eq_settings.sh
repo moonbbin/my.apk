@@ -627,3 +627,47 @@ print("OK 37 v6 完成")
 PYEOF37F
 
 echo "=== 37 v6 完成 ==="
+
+# === 37 v7: Slider 去绿点（tick 刻度色全 Token 化 + 轨道改 cardSecondary） ===
+python3 << 'PYEOF37G'
+import sys
+
+P37 = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+with open(P37, encoding="utf-8") as f:
+    c = f.read()
+
+if "[37eq7]" in c:
+    print("37 v7: 已应用，跳过")
+    sys.exit(0)
+
+OLD = """                        colors = SliderDefaults.colors(
+                            thumbColor = musicColors().accent,
+                            activeTrackColor = musicColors().accent,
+                            inactiveTrackColor = musicColors().sliderTrack,
+                            disabledThumbColor = musicColors().textHint,
+                            disabledActiveTrackColor = musicColors().textHint,
+                            disabledInactiveTrackColor = musicColors().sliderTrack
+                        ),"""
+NEW = """                        colors = SliderDefaults.colors(
+                            thumbColor = musicColors().accent,
+                            activeTrackColor = musicColors().accent,
+                            inactiveTrackColor = musicColors().cardSecondary, // [37eq7] 去绿点：轨道与刻度全 Token 化
+                            activeTickColor = musicColors().accentText.copy(alpha = 0.4f),
+                            inactiveTickColor = musicColors().cardSecondary,
+                            disabledThumbColor = musicColors().textHint,
+                            disabledActiveTrackColor = musicColors().textHint,
+                            disabledInactiveTrackColor = musicColors().cardSecondary,
+                            disabledActiveTickColor = musicColors().textHint,
+                            disabledInactiveTickColor = musicColors().textHint
+                        ),"""
+if c.count(OLD) != 1:
+    print(f"X 37 v7 锚点计数异常: {c.count(OLD)}")
+    sys.exit(1)
+c = c.replace(OLD, NEW)
+assert "[37eq7]" in c
+with open(P37, "w", encoding="utf-8") as f:
+    f.write(c)
+print("OK 37 v7 完成")
+PYEOF37G
+
+echo "=== 37 v7 完成 ==="

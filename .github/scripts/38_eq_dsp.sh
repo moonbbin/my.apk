@@ -192,3 +192,169 @@ rm -f "$TMPB64"
 grep -q 'class EqDspProcessor' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 38 DSP 文件写入失败"; exit 1; }
 echo "OK EqDspProcessor.kt 已写入"
 echo "=== 38 完成 ==="
+
+# === 38 v2: DSP 自愈包（NaN 消毒 + 输出看门狗 + 声道门 + 超时熔断 + attack 平滑 + 去 duplicate + 值守卫） ===
+python3 << 'PYEOF38B'
+import sys
+
+P38 = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+with open(P38, encoding="utf-8") as f:
+    c = f.read()
+
+if "[38v2]" in c:
+    print("38 v2: 已应用，跳过")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global c
+    if c.count(old) != 1:
+        print(f"X 38 v2 锚点计数异常 [{tag}]: {c.count(old)}")
+        sys.exit(1)
+    c = c.replace(old, new)
+    print(f"  OK {tag}")
+
+rep("""    private var limiterGain: Float = 1f
+    private var releaseCoef: Float = 0.001f""",
+    """    private var limiterGain: Float = 1f
+    private var releaseCoef: Float = 0.001f
+    private var attackCoef: Float = 0.5f // [38v2]
+    private var silentStrikes: Int = 0 // [38v2]
+    private var slowStrikes: Int = 0 // [38v2]
+    private var inputPeak: Float = 0f // [38v2]
+    private var outputPeak: Float = 0f // [38v2]""",
+    "熔断/看门狗字段")
+
+rep("""    fun setGains(sub: Float, low: Float, mid: Float, clarity: Float, high: Float, amb: Float) {
+        gainsDb = floatArrayOf(sub, low, mid, clarity, high, amb)
+        configVersion++
+    }""",
+    """    fun setGains(sub: Float, low: Float, mid: Float, clarity: Float, high: Float, amb: Float) {
+        val ng = floatArrayOf(sub, low, mid, clarity, high, amb)
+        if (!ng.contentEquals(gainsDb)) { // [38v2] 值守卫：没变不重算系数
+            gainsDb = ng
+            configVersion++
+        }
+    }""",
+    "setGains 值守卫")
+
+rep("""        if (isFailed || !dspEnabled || !isActive()) {
+            outputBuffer = inputBuffer
+            return
+        }""",
+    """        if (isFailed || !dspEnabled || !isActive() || channels != 2) { // [38v2] 声道门：仅双声道走 DSP
+            outputBuffer = inputBuffer
+            return
+        }""",
+    "声道门")
+
+rep("""            val src = inputBuffer.duplicate().order(ByteOrder.nativeOrder())
+            val total = if (encoding == C.ENCODING_PCM_FLOAT) {
+                processFloat(src)
+            } else {
+                process16(src)
+            }
+            workBuffer.limit(total)""",
+    """            inputPeak = 0f
+            outputPeak = 0f
+            val t0 = System.nanoTime() // [38v2] 超时熔断计时（绝对索引直读，去掉多余 duplicate）
+            val total = if (encoding == C.ENCODING_PCM_FLOAT) {
+                processFloat(inputBuffer)
+            } else {
+                process16(inputBuffer)
+            }
+            // [38v2] 输出看门狗：输入有声而输出全零/空，连续 2 次闩锁透传——持续静音结构性不可能
+            if (total <= 0 || (inputPeak > 0.02f && outputPeak == 0f)) {
+                silentStrikes++
+                if (silentStrikes >= 2) {
+                    isFailed = true
+                    outputBuffer = inputBuffer
+                    return
+                }
+            } else {
+                silentStrikes = 0
+            }
+            // [38v2] 超时熔断：单次处理慢于该 buffer 自身时长，连续 2 次闩锁
+            val frames = total / (if (encoding == C.ENCODING_PCM_FLOAT) 4 else 2) / channels
+            val budgetNs = if (sampleRate > 0) frames * 1_000_000_000L / sampleRate else 20_000_000L
+            if (System.nanoTime() - t0 > budgetNs) {
+                slowStrikes++
+                if (slowStrikes >= 2) {
+                    isFailed = true
+                    outputBuffer = inputBuffer
+                    return
+                }
+            } else {
+                slowStrikes = 0
+            }
+            workBuffer.limit(total)""",
+    "看门狗+熔断+去 duplicate")
+
+rep("""    private fun runChain(ch: Int, x: Float): Float {
+        var y = x
+        for (f in filters) y = f.process(ch, y)
+        return y
+    }""",
+    """    private fun runChain(ch: Int, x: Float): Float {
+        var y = x
+        for (f in filters) {
+            y = f.process(ch, y)
+            if (!y.isFinite()) { // [38v2] NaN/Inf 消毒：清该级状态、用原样顶替，污染活不过一个采样
+                f.reset()
+                y = x
+            }
+        }
+        return y
+    }""",
+    "runChain NaN 消毒")
+
+rep("""        limiterGain = if (target < limiterGain) {
+            target
+        } else {""",
+    """        limiterGain = if (target < limiterGain) {
+            limiterGain + (target - limiterGain) * attackCoef // [38v2] attack 一阶平滑，消增益台阶哒声
+        } else {""",
+    "attack 平滑")
+
+rep("""                val s = src.getShort(frameStart + ch * 2).toFloat() / 32768f
+                frameBuf[ch] = runChain(ch, s)""",
+    """                val s = src.getShort(frameStart + ch * 2).toFloat() / 32768f
+                val aIn = abs(s) // [38v2] 看门狗输入峰值
+                if (aIn > inputPeak) inputPeak = aIn
+                frameBuf[ch] = runChain(ch, s)""",
+    "16 位输入峰值")
+
+rep("""                var y = frameBuf[ch] * gain
+                if (y > 0.999f) y = 0.999f else if (y < -0.999f) y = -0.999f
+                val v = (y * 32767f).toInt().coerceIn(-32768, 32767)""",
+    """                var y = frameBuf[ch] * gain
+                if (y > 0.999f) y = 0.999f else if (y < -0.999f) y = -0.999f
+                val aOut = abs(y) // [38v2] 看门狗输出峰值
+                if (aOut > outputPeak) outputPeak = aOut
+                val v = (y * 32767f).toInt().coerceIn(-32768, 32767)""",
+    "16 位输出峰值")
+
+rep("""                val s = src.getFloat(frameStart + ch * 4)
+                frameBuf[ch] = runChain(ch, s)""",
+    """                val s = src.getFloat(frameStart + ch * 4)
+                val aIn = abs(s) // [38v2] 看门狗输入峰值
+                if (aIn > inputPeak) inputPeak = aIn
+                frameBuf[ch] = runChain(ch, s)""",
+    "float 输入峰值")
+
+rep("""                var y = frameBuf[ch] * gain
+                if (y > 0.999f) y = 0.999f else if (y < -0.999f) y = -0.999f
+                workBuffer.putFloat((f * channels + ch) * 4, y)""",
+    """                var y = frameBuf[ch] * gain
+                if (y > 0.999f) y = 0.999f else if (y < -0.999f) y = -0.999f
+                val aOut = abs(y) // [38v2] 看门狗输出峰值
+                if (aOut > outputPeak) outputPeak = aOut
+                workBuffer.putFloat((f * channels + ch) * 4, y)""",
+    "float 输出峰值")
+
+assert "[38v2]" in c and "isFinite" in c
+with open(P38, "w", encoding="utf-8") as f:
+    f.write(c)
+print("OK 38 v2 完成")
+PYEOF38B
+
+echo "=== 38 v2 完成 ==="
