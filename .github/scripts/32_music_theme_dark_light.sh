@@ -5911,7 +5911,7 @@ PYEOF93
 
 echo "=== 32 v93 完成 ==="
 
-# 32 v94: 收藏页顶部安全区（标题栏与状态栏拉开 24dp）
+# 32 v94: 收藏页顶部安全区（标题栏与状态栏拉开 40dp）
 echo "=== 32 v94 ==="
 python3 << 'PYEOF94'
 import sys
@@ -5929,7 +5929,7 @@ else:
     if ".fillMaxSize()" not in src[max(0, j - 200):j]:
         print("X v94: anchor context mismatch")
         sys.exit(1)
-    src = src[:j] + ".padding(start = 12.dp, top = 24.dp, end = 12.dp, bottom = 12.dp) // [32v94] top safe area" + src[j + len(".padding(12.dp)"):]
+    src = src[:j] + ".padding(start = 12.dp, top = 40.dp, end = 12.dp, bottom = 12.dp) // [32v94] top safe area" + src[j + len(".padding(12.dp)"):]
     if src.count("[32v94]") != 1:
         print("X v94: post-write check failed")
         sys.exit(1)
