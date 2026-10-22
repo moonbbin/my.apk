@@ -2273,3 +2273,50 @@ print("OK 21 v35 完成")
 PYEOF35
 
 echo "=== 21 v35 完成 ==="
+
+# === 21 v36: 系统 EQ 遗留标记 @Deprecated（纯 DSP 版本预留移除） ===
+# 只加注解不动逻辑：eqEffect 字段、bindEqualizer、applyEqLevels 三处。
+# applyEqFromPrefs 是双引擎共用仲裁，不标记。
+echo "=== 21 v36 ==="
+
+python3 << 'PYEOF36'
+import sys
+
+PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+MARK = "// [21v36]"
+DEP = '    @Deprecated("系统 EQ 遗留：纯 DSP 版本将移除") // [21v36]'
+
+with open(PATH, encoding="utf-8") as f:
+    c = f.read()
+
+if MARK in c:
+    print("21 v36: 已应用，跳过")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global c
+    if c.count(old) != 1:
+        print(f"X 21 v36 锚点计数异常 [{tag}]: {c.count(old)}")
+        sys.exit(1)
+    c = c.replace(old, new)
+    print(f"  OK {tag}")
+
+rep("    private var eqEffect: Equalizer? = null // [21v32]",
+    DEP + "\n    private var eqEffect: Equalizer? = null // [21v32]",
+    "eqEffect 字段标记")
+
+rep("    private fun bindEqualizer(sid: Int) {",
+    DEP + "\n    private fun bindEqualizer(sid: Int) {",
+    "bindEqualizer 标记")
+
+rep("    private fun applyEqLevels(eq: Equalizer) {",
+    DEP + "\n    private fun applyEqLevels(eq: Equalizer) {",
+    "applyEqLevels 标记")
+
+assert c.count(MARK) == 3
+with open(PATH, "w", encoding="utf-8") as f:
+    f.write(c)
+print("OK 21 v36 完成")
+PYEOF36
+
+echo "=== 21 v36 完成 ==="

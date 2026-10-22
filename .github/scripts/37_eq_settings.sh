@@ -544,3 +544,86 @@ print("OK 37 v5 完成")
 PYEOF37E
 
 echo "=== 37 v5 完成 ==="
+
+# === 37 v6: 动态量程（DSP ±12 / 系统 ±8）+ 切换/加载降级 + 文案 ===
+python3 << 'PYEOF37F'
+import sys
+
+P37 = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+with open(P37, encoding="utf-8") as f:
+    c = f.read()
+
+if "[37eq6]" in c:
+    print("37 v6: 已应用，跳过")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global c
+    if c.count(old) != 1:
+        print(f"X 37 v6 锚点计数异常 [{tag}]: {c.count(old)}")
+        sys.exit(1)
+    c = c.replace(old, new)
+    print(f"  OK {tag}")
+
+OLD_LOAD = """private fun loadEqGains(context: Context): List<Float> {
+    val prefs = context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE)
+    return EQ_KEYS.map { k -> try { prefs.getFloat(k, 0f) } catch (_: Exception) { 0f } }
+}"""
+NEW_LOAD = OLD_LOAD + """
+
+// [37eq6] 动态量程：DSP ±12 / 系统 ±8；切换与加载时统一钳制
+private fun clampGains(gains: List<Float>, lim: Float): List<Float> = gains.map { it.coerceIn(-lim, lim) }
+
+private fun loadEqGainsClamped(context: Context): List<Float> {
+    val dspOn = try {
+        context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE).getBoolean("dsp", false)
+    } catch (_: Exception) {
+        false
+    }
+    return clampGains(loadEqGains(context), if (dspOn) 12f else 8f)
+}"""
+rep(OLD_LOAD, NEW_LOAD, "clampGains/loadEqGainsClamped")
+
+rep("    var gains by remember { mutableStateOf(loadEqGains(context)) }",
+    "    var gains by remember { mutableStateOf(loadEqGainsClamped(context)) } // [37eq6]",
+    "gains 初始化钳制")
+
+OLD_M = """                            } catch (_: Exception) {
+                            }
+                        }
+                        saveEq(context, enabled, gains)"""
+NEW_M = """                            } catch (_: Exception) {
+                            }
+                            gains = clampGains(gains, 8f) // [37eq6] 切回系统引擎：超 8 增益降级
+                        }
+                        saveEq(context, enabled, gains)"""
+rep(OLD_M, NEW_M, "开系统 EQ 时降级")
+
+OLD_D = """                        } catch (_: Exception) {
+                        }
+                        saveEq(context, enabled, gains)
+                    },"""
+NEW_D = """                        } catch (_: Exception) {
+                        }
+                        if (!it) gains = clampGains(gains, 8f) // [37eq6] 关 DSP：超 8 增益降级
+                        saveEq(context, enabled, gains)
+                    },"""
+rep(OLD_D, NEW_D, "关 DSP 时降级")
+
+rep("""                        valueRange = -8f..8f, // [37eq2]
+                        steps = 31,""",
+    """                        valueRange = if (dsp) -12f..12f else -8f..8f, // [37eq6]
+                        steps = if (dsp) 47 else 31,""",
+    "滑块动态量程")
+
+rep('"开启后系统 EQ 自动关闭；处理异常自动旁路",',
+    '"开启后系统 EQ 自动关闭。支持 ±12dB 深度调节，并由内置 Limiter 保护不破音，处理异常自动旁路",',
+    "DSP 文案")
+
+assert "[37eq6]" in c
+with open(P37, "w", encoding="utf-8") as f:
+    f.write(c)
+print("OK 37 v6 完成")
+PYEOF37F
+
+echo "=== 37 v6 完成 ==="
