@@ -259,3 +259,56 @@ print("OK 37 完成")
 PYEOF37
 
 echo "=== 37 完成 ==="
+
+# === 37 v2: EQ 防失真（滑块量程 ±12 -> ±8、预设曲线调平缓，全 <= ±3dB） ===
+python3 << 'PYEOF37B'
+import sys
+
+P37 = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+with open(P37, encoding="utf-8") as f:
+    c = f.read()
+
+if "[37eq2]" in c:
+    print("37 v2: 已应用，跳过")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global c
+    if c.count(old) != 1:
+        print(f"X 37 v2 锚点计数异常 [{tag}]: {c.count(old)}")
+        sys.exit(1)
+    c = c.replace(old, new)
+    print(f"  OK {tag}")
+
+rep("""                        valueRange = -12f..12f,
+                        steps = 47,""",
+    """                        valueRange = -8f..8f, // [37eq2]
+                        steps = 31,""",
+    "滑块量程 ±8")
+
+rep("""private val EQ_PRESETS: List<Pair<String, List<Float>>> = listOf(
+    "平直" to listOf(0f, 0f, 0f, 0f, 0f, 0f),
+    "低音增强" to listOf(6f, 4f, 0f, 0f, 0f, 1f),
+    "人声突出" to listOf(-2f, 0f, 3f, 5f, 2f, 0f),
+    "摇滚" to listOf(5f, 3f, -1f, 3f, 5f, 2f),
+    "古典" to listOf(3f, 2f, 0f, 2f, 4f, 3f),
+    "明亮" to listOf(0f, 0f, 1f, 4f, 7f, 3f)
+)""",
+    """// [37eq2] 预设按防糊曲线重调：全部 <= ±3dB（古典在界内未动）
+private val EQ_PRESETS: List<Pair<String, List<Float>>> = listOf(
+    "平直" to listOf(0f, 0f, 0f, 0f, 0f, 0f),
+    "低音增强" to listOf(3f, 2f, -1f, 0f, 0f, 0f),
+    "人声突出" to listOf(0f, 0f, 3f, 2f, 1f, 0f),
+    "摇滚" to listOf(0f, 3f, -1f, 0f, 2f, 0f),
+    "古典" to listOf(3f, 2f, 0f, 2f, 4f, 3f),
+    "明亮" to listOf(0f, 0f, 0f, 2f, 3f, 0f)
+)""",
+    "预设重调")
+
+assert "[37eq2]" in c
+with open(P37, "w", encoding="utf-8") as f:
+    f.write(c)
+print("OK 37 v2 完成")
+PYEOF37B
+
+echo "=== 37 v2 完成 ==="

@@ -2043,3 +2043,67 @@ print("OK 21 v32 完成")
 PYEOF32
 
 echo "=== 21 v32 完成 ==="
+
+# === 21 v33: EQ 防失真（量程硬顶 ±8dB + 自动前级增益） ===
+# applyEqLevels 的目标值先 cap 到 ±8（存量超限 prefs 也钳）；再取最高正增益 peak，
+# 全体减 peak*0.7 当前级回退防削波（曲线相对形状不变），最后仍走硬件范围钳制下发。
+echo "=== 21 v33 ==="
+
+python3 << 'PYEOF33'
+import sys
+
+PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+MARK = "// [21v33]"
+
+with open(PATH, encoding="utf-8") as f:
+    c = f.read()
+
+if MARK in c:
+    print("21 v33: 已应用，跳过")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global c
+    if c.count(old) != 1:
+        print(f"X 21 v33 锚点计数异常 [{tag}]: {c.count(old)}")
+        sys.exit(1)
+    c = c.replace(old, new)
+    print(f"  OK {tag}")
+
+old_targets = """        val amb=g("amb")
+        val targets=listOf(
+            60 to g("sub"),
+            230 to g("low"),
+            910 to g("mid"),
+            3000 to (g("clarity")+amb*0.5f),
+            14000 to (g("high")+amb*0.5f)
+        )
+        val range=eq.bandLevelRange"""
+
+new_targets = """        val amb=g("amb")
+        fun cap(v:Float)=v.coerceIn(-8f,8f) // [21v33] 量程硬顶 ±8dB（存量超限 prefs 一并钳）
+        val targets=listOf(
+            60 to cap(g("sub")),
+            230 to cap(g("low")),
+            910 to cap(g("mid")),
+            3000 to cap(g("clarity")+amb*0.5f),
+            14000 to cap(g("high")+amb*0.5f)
+        )
+        // [21v33] 自动前级：最高正增益的 70% 全局回退防削波（曲线形状不变）
+        val peak=targets.maxOf{it.second}
+        val pre=if(peak>0f) -peak*0.7f else 0f
+        val range=eq.bandLevelRange"""
+
+rep(old_targets, new_targets, "cap+preamp")
+
+rep("                    val lvl=(db*100).toInt().coerceIn(lo,hi)",
+    "                    val lvl=((db+pre)*100).toInt().coerceIn(lo,hi) // [21v33]",
+    "lvl 用 db+pre")
+
+assert MARK in c and "applyEqLevels" in c
+with open(PATH, "w", encoding="utf-8") as f:
+    f.write(c)
+print("OK 21 v33 完成")
+PYEOF33
+
+echo "=== 21 v33 完成 ==="
