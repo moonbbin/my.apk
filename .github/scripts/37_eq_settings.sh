@@ -467,3 +467,80 @@ print("OK 37 v4 完成")
 PYEOF37D
 
 echo "=== 37 v4 完成 ==="
+
+# === 37 v5: 双引擎互斥联动（开一灭一）+ 滑块门放开 + DSP 小字 ===
+python3 << 'PYEOF37E'
+import sys
+
+P37 = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+with open(P37, encoding="utf-8") as f:
+    c = f.read()
+
+if "[37eq5]" in c:
+    print("37 v5: 已应用，跳过")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global c
+    if c.count(old) != 1:
+        print(f"X 37 v5 锚点计数异常 [{tag}]: {c.count(old)}")
+        sys.exit(1)
+    c = c.replace(old, new)
+    print(f"  OK {tag}")
+
+OLD_MASTER = """                    onCheckedChange = {
+                        enabled = it
+                        saveEq(context, enabled, gains)
+                    },"""
+NEW_MASTER = """                    onCheckedChange = {
+                        enabled = it
+                        if (it) {
+                            // [37eq5] 互斥联动：开系统 EQ 必须灭 DSP（状态+落盘）
+                            dsp = false
+                            try {
+                                context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE)
+                                    .edit().putBoolean("dsp", false).apply()
+                            } catch (_: Exception) {
+                            }
+                        }
+                        saveEq(context, enabled, gains)
+                    },"""
+rep(OLD_MASTER, NEW_MASTER, "系统 EQ 开关联动")
+
+OLD_DSP = """                    onCheckedChange = {
+                        dsp = it
+                        try {
+                            context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE)
+                                .edit().putBoolean("dsp", it).apply()
+                        } catch (_: Exception) {
+                        }
+                        LxPlayerManager.applyEqFromPrefs()
+                    },"""
+NEW_DSP = """                    onCheckedChange = {
+                        dsp = it
+                        // [37eq5] 互斥联动：开 DSP 必须灭系统 EQ（状态），再统一 saveEq 落盘 on 并触发仲裁
+                        if (it) enabled = false
+                        try {
+                            context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE)
+                                .edit().putBoolean("dsp", it).apply()
+                        } catch (_: Exception) {
+                        }
+                        saveEq(context, enabled, gains)
+                    },"""
+rep(OLD_DSP, NEW_DSP, "DSP 开关联动")
+
+rep("                        enabled = enabled,",
+    "                        enabled = enabled || dsp, // [37eq5] 任一引擎开都能调",
+    "滑块门放开")
+
+rep('"内置 DSP 接管均衡，系统 EQ 停用；处理异常自动旁路",',
+    '"开启后系统 EQ 自动关闭；处理异常自动旁路",',
+    "DSP 小字")
+
+assert "[37eq5]" in c
+with open(P37, "w", encoding="utf-8") as f:
+    f.write(c)
+print("OK 37 v5 完成")
+PYEOF37E
+
+echo "=== 37 v5 完成 ==="

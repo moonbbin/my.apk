@@ -2193,3 +2193,83 @@ print("OK 21 v34 完成")
 PYEOF34
 
 echo "=== 21 v34 完成 ==="
+
+# === 21 v35: EQ 双引擎互斥仲裁（dsp 优先） ===
+# applyEqFromPrefs 头部重构：先判 dsp（开=处理器接管+释放系统 EQ），
+# 再判系统 EQ 开关；页面侧 37 v5 已做落盘互斥，这里是引擎侧兜底。
+echo "=== 21 v35 ==="
+
+python3 << 'PYEOF35'
+import sys
+
+PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+MARK = "// [21v35]"
+
+with open(PATH, encoding="utf-8") as f:
+    c = f.read()
+
+if MARK in c:
+    print("21 v35: 已应用，跳过")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global c
+    if c.count(old) != 1:
+        print(f"X 21 v35 锚点计数异常 [{tag}]: {c.count(old)}")
+        sys.exit(1)
+    c = c.replace(old, new)
+    print(f"  OK {tag}")
+
+OLD = """    fun applyEqFromPrefs() {
+        try{
+            if(!isEqOn()){
+                eqDspProcessor.dspEnabled=false // [21v34]
+                try{eqEffect?.release()}catch(_:Exception){}
+                eqEffect=null
+                return
+            }
+            // [21v34] DSP 仲裁：开则释放系统 EQ、增益直推处理器；关则处理器旁路走系统 EQ（dsp 默认 false）
+            val dspOn=try{appContext?.getSharedPreferences("eq_settings",android.content.Context.MODE_PRIVATE)?.getBoolean("dsp",false)?:false}catch(_:Exception){false}
+            eqDspProcessor.dspEnabled=dspOn
+            if(dspOn){
+                try{eqEffect?.release()}catch(_:Exception){}
+                eqEffect=null
+                val p=appContext?.getSharedPreferences("eq_settings",android.content.Context.MODE_PRIVATE)
+                if(p!=null){
+                    fun gg(k:String)=try{p.getFloat(k,0f)}catch(_:Exception){0f}
+                    eqDspProcessor.setGains(gg("sub"),gg("low"),gg("mid"),gg("clarity"),gg("high"),gg("amb"))
+                }
+                return
+            }"""
+
+NEW = """    fun applyEqFromPrefs() {
+        try{
+            // [21v35] 双引擎互斥：dsp 优先。开则处理器接管+释放系统 EQ；关则处理器旁路，再看系统 EQ 开关
+            val dspOn=try{appContext?.getSharedPreferences("eq_settings",android.content.Context.MODE_PRIVATE)?.getBoolean("dsp",false)?:false}catch(_:Exception){false}
+            if(dspOn){
+                eqDspProcessor.dspEnabled=true
+                try{eqEffect?.release()}catch(_:Exception){}
+                eqEffect=null
+                val p=appContext?.getSharedPreferences("eq_settings",android.content.Context.MODE_PRIVATE)
+                if(p!=null){
+                    fun gg(k:String)=try{p.getFloat(k,0f)}catch(_:Exception){0f}
+                    eqDspProcessor.setGains(gg("sub"),gg("low"),gg("mid"),gg("clarity"),gg("high"),gg("amb"))
+                }
+                return
+            }
+            eqDspProcessor.dspEnabled=false
+            if(!isEqOn()){
+                try{eqEffect?.release()}catch(_:Exception){}
+                eqEffect=null
+                return
+            }"""
+
+rep(OLD, NEW, "applyEqFromPrefs 互斥头")
+
+assert MARK in c
+with open(PATH, "w", encoding="utf-8") as f:
+    f.write(c)
+print("OK 21 v35 完成")
+PYEOF35
+
+echo "=== 21 v35 完成 ==="
