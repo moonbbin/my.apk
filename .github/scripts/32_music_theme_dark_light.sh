@@ -5937,3 +5937,51 @@ else:
     print("OK 32 v94 done")
 PYEOF94
 echo "=== 32 v94 完成 ==="
+
+# 32 v95: 收藏页播放改整表入队（与自建歌单统一；原实现只传单曲 extras、从不设队列）
+echo "=== 32 v95 ==="
+python3 << 'PYEOF95'
+import sys
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxFavoritesActivity.kt"
+try:
+    src = open(path, encoding="utf-8").read()
+except FileNotFoundError:
+    print("X v95: LxFavoritesActivity.kt not found")
+    sys.exit(1)
+if "[32v95]" in src:
+    print("v95: already applied, skip")
+else:
+    old = """                            IconButton(onClick = {
+                                // 播放收藏的歌曲
+                                val intent = android.content.Intent(context, LxPlayerActivity::class.java).apply {
+                                    putExtra("title", song.title)
+                                    putExtra("artist", song.artist)
+                                    putExtra("songId", song.songId)
+                                    putExtra("platform", song.platform)
+                                    putExtra("picUrl", song.picUrl)
+                                    putExtra("quality", song.quality)
+                                    putExtra("url", "")
+                                }
+                                context.startActivity(intent)
+                            }) {"""
+    new = """                            IconButton(onClick = {
+                                // [32v95] 与自建歌单统一：整表映射入队后播放（原实现只传单曲、从不设队列）
+                                val infos = favSongs.map { f ->
+                                    LxMusicSearchApi.SongInfo(
+                                        id = f.songId, title = f.title, artist = f.artist,
+                                        platform = f.platform, picUrl = f.picUrl, quality = f.quality
+                                    )
+                                }
+                                playSongs(context, infos, favSongs.indexOf(song))
+                            }) {"""
+    if src.count(old) != 1:
+        print("X v95: anchor count", src.count(old))
+        sys.exit(1)
+    src = src.replace(old, new)
+    if src.count("[32v95]") != 1 or "playSongs(context, infos, favSongs.indexOf(song))" not in src:
+        print("X v95: post-write check failed")
+        sys.exit(1)
+    open(path, "w", encoding="utf-8").write(src)
+    print("OK 32 v95 done")
+PYEOF95
+echo "=== 32 v95 完成 ==="
