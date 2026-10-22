@@ -109,6 +109,7 @@ pl_ui = """    // NAV_WIRE_V1: 歌单新版 UI（PlaylistScreen）；分类/歌�
         onRefresh = { refreshPlaylists() },
         isRefreshing = isRefreshing,
         isLoadingMore = isLoadingMore,
+        gridState = gridState,
         onPlaylistClick = { id, name -> onOpen(id, name) },
     )
 }"""
