@@ -145,3 +145,61 @@ echo "=== 14 v2 完成 ==="\n
 # v4 不做任何清理，只确保 v2 的核心注入逻辑无行内注释
 echo "=== 14 v4 ==="
 echo "✓ 14 v4 完成（v2 已去注释化）"
+
+
+# === 14 v5: getNeteaseCategories (playlist catalogue) ===
+
+echo "=== 14 v5 ==="
+
+python3 << 'PYEOF'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicSearchApi.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [14v5]"
+if MARK in src:
+    print("skip: 14v5 already present")
+    sys.exit(0)
+
+method = '''    // [14v5] Netease playlist categories via /api/playlist/catalogue (sub[].name, 70 cats);
+    // first entry is the "all" label; any failure returns emptyList() so callers keep fallback
+    fun getNeteaseCategories(): List<String> {
+        return try {
+            val request = Request.Builder()
+                .url("https://music.163.com/api/playlist/catalogue")
+                .header("Referer", "https://music.163.com/")
+                .header("User-Agent", "Mozilla/5.0")
+                .build()
+            client.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) return emptyList()
+                val body = resp.body?.string() ?: return emptyList()
+                val json = JSONObject(body)
+                if (json.optInt("code") != 200) return emptyList()
+                val sub = json.optJSONArray("sub") ?: return emptyList()
+                val names = mutableListOf("\u5168\u90e8")
+                for (i in 0 until sub.length()) {
+                    val n = sub.getJSONObject(i).optString("name")
+                    if (n.isNotBlank() && n !in names) names.add(n)
+                }
+                names
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+'''
+
+anchor = "    fun getNeteasePlaylist(playlistId: String)"
+assert src.count(anchor) == 1, "anchor count != 1"
+src = src.replace(anchor, method + anchor, 1)
+assert src.count("fun getNeteaseCategories") == 1
+assert src.count("{") == src.count("}")
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("OK 14v5 injected")
+PYEOF
+
+echo "=== 14 v5 done ==="
