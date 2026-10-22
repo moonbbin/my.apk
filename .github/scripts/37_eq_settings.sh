@@ -385,3 +385,85 @@ print("OK 37 v3 完成")
 PYEOF37C
 
 echo "=== 37 v3 完成 ==="
+
+# === 37 v4: 极致音质（DSP 引擎）开关卡（默认关） ===
+python3 << 'PYEOF37D'
+import sys
+
+P37 = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+with open(P37, encoding="utf-8") as f:
+    c = f.read()
+
+if "[37eq4]" in c:
+    print("37 v4: 已应用，跳过")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global c
+    if c.count(old) != 1:
+        print(f"X 37 v4 锚点计数异常 [{tag}]: {c.count(old)}")
+        sys.exit(1)
+    c = c.replace(old, new)
+    print(f"  OK {tag}")
+
+DSP_STATE = '    var presetName by remember { mutableStateOf("自定义") }\n    // [37eq4] DSP 开关默认 false：用户手动开启才由内置 DSP 接管\n    var dsp by remember {\n        mutableStateOf(\n            try {\n                context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE).getBoolean("dsp", false)\n            } catch (_: Exception) {\n                false\n            }\n        )\n    }'
+rep('    var presetName by remember { mutableStateOf("自定义") }', DSP_STATE, "dsp 状态（默认关）")
+
+CARD = """        Spacer(Modifier.height(12.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = musicColors().card)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "极致音质（DSP 引擎）",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = musicColors().textPrimary
+                    )
+                    Text(
+                        "内置 DSP 接管均衡，系统 EQ 停用；处理异常自动旁路",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = musicColors().textSecondary
+                    )
+                }
+                Switch(
+                    checked = dsp,
+                    onCheckedChange = {
+                        dsp = it
+                        try {
+                            context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE)
+                                .edit().putBoolean("dsp", it).apply()
+                        } catch (_: Exception) {
+                        }
+                        LxPlayerManager.applyEqFromPrefs()
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = musicColors().accentText,
+                        checkedTrackColor = musicColors().accent,
+                        uncheckedThumbColor = musicColors().textSecondary,
+                        uncheckedTrackColor = musicColors().cardSecondary
+                    )
+                )
+            }
+        }
+
+"""
+OLD_HEAD = """        Spacer(Modifier.height(16.dp))
+        Text(
+            "预设","""
+rep(OLD_HEAD, CARD + OLD_HEAD, "DSP 开关卡")
+
+assert "[37eq4]" in c
+with open(P37, "w", encoding="utf-8") as f:
+    f.write(c)
+print("OK 37 v4 完成")
+PYEOF37D
+
+echo "=== 37 v4 完成 ==="

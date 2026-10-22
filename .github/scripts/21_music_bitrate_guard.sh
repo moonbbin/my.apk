@@ -2107,3 +2107,89 @@ print("OK 21 v33 完成")
 PYEOF33
 
 echo "=== 21 v33 完成 ==="
+
+# === 21 v34: DSP 引擎仲裁（极致音质开关） ===
+# dsp 开：释放系统 Equalizer、bindEqualizer 不再挂载、增益直推 EqDspProcessor；
+# dsp 关：处理器旁路、系统 EQ 照旧（v32/v33 逻辑）。dsp 默认 false。
+# 处理器挂载：buildAudioSink 的处理器数组扩为 (eqDspProcessor, spectrumProcessor)。
+echo "=== 21 v34 ==="
+
+python3 << 'PYEOF34'
+import sys
+
+PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+MARK = "// [21v34]"
+
+with open(PATH, encoding="utf-8") as f:
+    c = f.read()
+
+if MARK in c:
+    print("21 v34: 已应用，跳过")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global c
+    if c.count(old) != 1:
+        print(f"X 21 v34 锚点计数异常 [{tag}]: {c.count(old)}")
+        sys.exit(1)
+    c = c.replace(old, new)
+    print(f"  OK {tag}")
+
+rep("    private var eqEffect: Equalizer? = null // [21v32]",
+    "    private var eqEffect: Equalizer? = null // [21v32]\n    private val eqDspProcessor = EqDspProcessor() // [21v34]",
+    "eqDspProcessor 字段")
+
+rep("                        .setAudioProcessors(arrayOf<AudioProcessor>(spectrumProcessor))",
+    "                        .setAudioProcessors(arrayOf<AudioProcessor>(eqDspProcessor, spectrumProcessor)) // [21v34]",
+    "sink 处理器数组")
+
+old_head = """    fun applyEqFromPrefs() {
+        try{
+            if(!isEqOn()){
+                try{eqEffect?.release()}catch(_:Exception){}
+                eqEffect=null
+                return
+            }"""
+new_head = """    fun applyEqFromPrefs() {
+        try{
+            if(!isEqOn()){
+                eqDspProcessor.dspEnabled=false // [21v34]
+                try{eqEffect?.release()}catch(_:Exception){}
+                eqEffect=null
+                return
+            }
+            // [21v34] DSP 仲裁：开则释放系统 EQ、增益直推处理器；关则处理器旁路走系统 EQ（dsp 默认 false）
+            val dspOn=try{appContext?.getSharedPreferences("eq_settings",android.content.Context.MODE_PRIVATE)?.getBoolean("dsp",false)?:false}catch(_:Exception){false}
+            eqDspProcessor.dspEnabled=dspOn
+            if(dspOn){
+                try{eqEffect?.release()}catch(_:Exception){}
+                eqEffect=null
+                val p=appContext?.getSharedPreferences("eq_settings",android.content.Context.MODE_PRIVATE)
+                if(p!=null){
+                    fun gg(k:String)=try{p.getFloat(k,0f)}catch(_:Exception){0f}
+                    eqDspProcessor.setGains(gg("sub"),gg("low"),gg("mid"),gg("clarity"),gg("high"),gg("amb"))
+                }
+                return
+            }"""
+rep(old_head, new_head, "applyEqFromPrefs 仲裁")
+
+old_bind = """        if(!isEqOn()) return
+        try{
+            val eq=Equalizer(0,sid)"""
+new_bind = """        if(!isEqOn()) return
+        if(try{appContext?.getSharedPreferences("eq_settings",android.content.Context.MODE_PRIVATE)?.getBoolean("dsp",false)?:false}catch(_:Exception){false}) return // [21v34] DSP 模式不挂系统 EQ
+        try{
+            val eq=Equalizer(0,sid)"""
+rep(old_bind, new_bind, "bindEqualizer DSP 守卫")
+
+rep('            Log.i(TAG,"ExoOK")',
+    '            try{applyEqFromPrefs()}catch(_:Exception){} // [21v34] 建播后按 prefs 自启（含 DSP）\n            Log.i(TAG,"ExoOK")',
+    "建播自启 applyEqFromPrefs")
+
+assert MARK in c and "eqDspProcessor" in c
+with open(PATH, "w", encoding="utf-8") as f:
+    f.write(c)
+print("OK 21 v34 完成")
+PYEOF34
+
+echo "=== 21 v34 完成 ==="
