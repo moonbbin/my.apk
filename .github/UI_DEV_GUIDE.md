@@ -45,4 +45,11 @@
 
 - 第一条存量纯化列为第六批（34v65）：PlayerControlBar 的 togglePlayPause/cycleMode/Toast/playMode 直读、PlayerProgressBar 的两处 seekTo、PlayerCover 的 _isDarkCover 死读，全部机械改为传参/回调；单独提交、单独验证，不与基线固化混提。
 - 第二条分步走：先执行 B（开发基线固化——以 1717 行 + 5 组件为唯一锚点来源，CI 构建链一字不动）；C（新脚本全量拥有播放页文件 + 20/22/34 相关补丁逐个退役）明确择日单独排期，每退役一步验一次构建，严禁顺手实施。
-- 第四条待议清单：PlayerProgressBar 轨道底色 `Color(0xFF535353)` 映射 `musicColors().sliderTrack` 会改变色值，先不动，等色值对比确认后再定。
+- 第四条待议清单：PlayerProgressBar 轨道底色 `Color(0xFF535353)` 映射 `musicColors().sliderTrack` 会改变色值——2026-10-22 经色值对比审计后已裁定：维持写死，见文末《色彩豁免与特例》。
+
+---
+
+## 附则：色彩豁免与特例
+
+- 进度条底轨（PlayerProgressBar.kt）：维持写死色 `Color(0xFF535353)`。因播放页属于强沉浸场景，全局动态轨道色在浅色主题下对比度不足。此处作为特例保留，确保进度条在深浅模式下均有可靠的视觉锚点。
+- 播放键 / 封面描边：相关 `Color.White` 属于播放器专属设计常量，不纳入全局换肤逻辑。
