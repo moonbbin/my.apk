@@ -76,8 +76,6 @@ jobs:
         run: bash .github/scripts/32_music_theme_dark_light.sh
       - name: 33_search_page_polish
         run: bash .github/scripts/33_search_page_polish.sh    
-      - name: 34_player_immersive
-        run: bash .github/scripts/34_player_immersive.sh
       - name: 35_player_baseline
         run: bash .github/scripts/35_player_baseline.sh
       - name: 设置 JDK
