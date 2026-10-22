@@ -78,6 +78,8 @@ jobs:
         run: bash .github/scripts/33_search_page_polish.sh    
       - name: 35_player_baseline
         run: bash .github/scripts/35_player_baseline.sh
+      - name: 36_user_playlist
+        run: bash .github/scripts/36_user_playlist.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
