@@ -1929,3 +1929,117 @@ print("OK 21 v31 完成")
 PYEOF31
 
 echo "=== 21 v31 完成 ==="
+
+# === 21 v32: 原生 Equalizer 挂载（与响度均衡同款生命周期） ===
+# 参数存 SharedPreferences("eq_settings")，页面只写 prefs 后调 applyEqFromPrefs()；
+# 频段一律 getBand() 按设备实测映射（找不到跳过），增益按 getBandLevelRange() 钳制；
+# 氛围感增益各半叠加到 3k/14k 两段。会话变更时与 bindLoudness 并排重绑。
+echo "=== 21 v32 ==="
+
+python3 << 'PYEOF32'
+import sys
+
+PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+MARK = "// [21v32]"
+
+with open(PATH, encoding="utf-8") as f:
+    c = f.read()
+
+if MARK in c:
+    print("21 v32: 已应用，跳过")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global c
+    if c.count(old) != 1:
+        print(f"X 21 v32 锚点计数异常 [{tag}]: {c.count(old)}")
+        sys.exit(1)
+    c = c.replace(old, new)
+    print(f"  OK {tag}")
+
+rep("import android.media.audiofx.LoudnessEnhancer",
+    "import android.media.audiofx.LoudnessEnhancer\nimport android.media.audiofx.Equalizer",
+    "import Equalizer")
+
+rep("    private var loudEnh: LoudnessEnhancer? = null",
+    "    private var loudEnh: LoudnessEnhancer? = null\n    private var eqEffect: Equalizer? = null // [21v32]",
+    "eqEffect 字段")
+
+rep("                        try{bindLoudness(sid)}catch(_:Exception){}",
+    "                        try{bindLoudness(sid)}catch(_:Exception){}\n                        try{bindEqualizer(sid)}catch(_:Exception){} // [21v32]",
+    "会话钩子")
+
+eq_fns = """    // [21v32] 均衡器：与响度均衡同款挂载（会话变更重绑、关则释放）
+    private fun bindEqualizer(sid: Int) {
+        try{eqEffect?.release()}catch(_:Exception){}
+        eqEffect=null
+        if(sid==0) return
+        if(!isEqOn()) return
+        try{
+            val eq=Equalizer(0,sid)
+            applyEqLevels(eq)
+            eq.enabled=true
+            eqEffect=eq
+        }catch(_:Exception){}
+    }
+
+    fun isEqOn(): Boolean {
+        return try{appContext?.getSharedPreferences("eq_settings",android.content.Context.MODE_PRIVATE)?.getBoolean("on",false)?:false}catch(_:Exception){false}
+    }
+
+    // [21v32] 页面改完 prefs 后调用：开则按当前会话重应用，关则释放
+    fun applyEqFromPrefs() {
+        try{
+            if(!isEqOn()){
+                try{eqEffect?.release()}catch(_:Exception){}
+                eqEffect=null
+                return
+            }
+            val sid=player?.audioSessionId?:0
+            val eq=eqEffect
+            if(eq==null){
+                if(sid!=0) bindEqualizer(sid)
+            }else{
+                try{applyEqLevels(eq);eq.enabled=true}catch(_:Exception){}
+            }
+        }catch(_:Exception){}
+    }
+
+    // [21v32] 6 维增益(dB) -> 设备实测频段：getBand 找最近段（缺失跳过），氛围感各半叠加 3k/14k，范围钳制
+    private fun applyEqLevels(eq: Equalizer) {
+        val prefs=appContext?.getSharedPreferences("eq_settings",android.content.Context.MODE_PRIVATE)?:return
+        fun g(k:String)=try{prefs.getFloat(k,0f)}catch(_:Exception){0f}
+        val amb=g("amb")
+        val targets=listOf(
+            60 to g("sub"),
+            230 to g("low"),
+            910 to g("mid"),
+            3000 to (g("clarity")+amb*0.5f),
+            14000 to (g("high")+amb*0.5f)
+        )
+        val range=eq.bandLevelRange
+        val lo=range[0].toInt()
+        val hi=range[1].toInt()
+        for((freq,db) in targets){
+            try{
+                val band=eq.getBand(freq*1000)
+                if(band>=0){
+                    val lvl=(db*100).toInt().coerceIn(lo,hi)
+                    eq.setBandLevel(band,lvl.toShort())
+                }
+            }catch(_:Exception){}
+        }
+    }
+
+"""
+rep("    fun isLoudnessOn(): Boolean {",
+    eq_fns + "    fun isLoudnessOn(): Boolean {",
+    "EQ 函数组")
+
+assert MARK in c and "bindEqualizer" in c and "applyEqFromPrefs" in c
+with open(PATH, "w", encoding="utf-8") as f:
+    f.write(c)
+print("OK 21 v32 完成")
+PYEOF32
+
+echo "=== 21 v32 完成 ==="
