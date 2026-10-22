@@ -312,3 +312,76 @@ print("OK 37 v2 完成")
 PYEOF37B
 
 echo "=== 37 v2 完成 ==="
+
+# === 37 v3: 动感低音预设（减法低音曲线 + 预设说明小字） ===
+python3 << 'PYEOF37C'
+import sys
+
+P37 = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+with open(P37, encoding="utf-8") as f:
+    c = f.read()
+
+if "[37eq3]" in c:
+    print("37 v3: 已应用，跳过")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global c
+    if c.count(old) != 1:
+        print(f"X 37 v3 锚点计数异常 [{tag}]: {c.count(old)}")
+        sys.exit(1)
+    c = c.replace(old, new)
+    print(f"  OK {tag}")
+
+rep('"低音增强" to listOf(3f, 2f, -1f, 0f, 0f, 0f),',
+    '"动感低音" to listOf(4f, -1f, 0f, 1f, 2f, 0f), // [37eq3]',
+    "动感低音数值")
+
+rep("""    "明亮" to listOf(0f, 0f, 0f, 2f, 3f, 0f)
+)
+
+private fun loadEqGains""",
+    """    "明亮" to listOf(0f, 0f, 0f, 2f, 3f, 0f)
+)
+
+// [37eq3] 预设说明小字（仅配文案的预设显示）
+private val EQ_PRESET_HINTS: Map<String, String> = mapOf(
+    "动感低音" to "切除了浑浊低频，提升了高频空气感，获得干净弹性的低音下潜。"
+)
+
+private fun loadEqGains""",
+    "EQ_PRESET_HINTS 映射")
+
+rep("""        Spacer(Modifier.height(16.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = musicColors().card)
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {""",
+    """        val presetHint = EQ_PRESET_HINTS[presetName] // [37eq3]
+        if (presetHint != null) {
+            Text(
+                presetHint,
+                style = MaterialTheme.typography.bodySmall,
+                color = musicColors().textHint,
+                modifier = Modifier.padding(start = 4.dp, top = 8.dp)
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = musicColors().card)
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {""",
+    "说明小字渲染")
+
+assert "[37eq3]" in c and "动感低音" in c
+with open(P37, "w", encoding="utf-8") as f:
+    f.write(c)
+print("OK 37 v3 完成")
+PYEOF37C
+
+echo "=== 37 v3 完成 ==="
