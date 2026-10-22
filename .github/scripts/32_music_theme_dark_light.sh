@@ -5910,3 +5910,30 @@ print("✓ 32 v93 完成")
 PYEOF93
 
 echo "=== 32 v93 完成 ==="
+
+# 32 v94: 收藏页顶部安全区（标题栏与状态栏拉开 24dp）
+echo "=== 32 v94 ==="
+python3 << 'PYEOF94'
+import sys
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxFavoritesActivity.kt"
+try:
+    src = open(path, encoding="utf-8").read()
+except FileNotFoundError:
+    print("X v94: LxFavoritesActivity.kt not found")
+    sys.exit(1)
+if "[32v94]" in src:
+    print("v94: already applied, skip")
+else:
+    i = src.index("fun FavoritesScreen")
+    j = src.index(".padding(12.dp)", i)
+    if ".fillMaxSize()" not in src[max(0, j - 200):j]:
+        print("X v94: anchor context mismatch")
+        sys.exit(1)
+    src = src[:j] + ".padding(start = 12.dp, top = 24.dp, end = 12.dp, bottom = 12.dp) // [32v94] top safe area" + src[j + len(".padding(12.dp)"):]
+    if src.count("[32v94]") != 1:
+        print("X v94: post-write check failed")
+        sys.exit(1)
+    open(path, "w", encoding="utf-8").write(src)
+    print("OK 32 v94 done")
+PYEOF94
+echo "=== 32 v94 完成 ==="
