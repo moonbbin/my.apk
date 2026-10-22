@@ -20,15 +20,6 @@ ACT = "app/src/main/java/com/github/tvbox/osc/ui/activity"
 
 # 文件 -> ([(旧, 新)], [需导入的主题符号])
 PATCHES = {
-    f"{ACT}/LxPlayerActivity.kt": (
-        [
-            ("// Spotify 主题色", "// 音乐主题色（引用 ui.music.theme 定稿常量）"),
-            ("private val PlayerGray = Color(0xFFB3B3B3)", "private val PlayerGray = TextSecondary"),
-            ("private val PlayerGreen = Color(0xFF1DB954)", "private val PlayerGreen = AppleGreen"),
-            ("private val CoverTintFallback = Color(0xFF1A1A1A)", "private val CoverTintFallback = BgCard"),
-        ],
-        ["AppleGreen", "BgCard", "TextSecondary", "QingfengMusicTheme"],
-    ),
     f"{ACT}/LxMusicSearchActivity.kt": (
         [
             ("private val SearchBg = Color(0xFF000000)", "private val SearchBg = BgBase"),
