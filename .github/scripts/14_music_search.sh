@@ -456,3 +456,40 @@ print("OK 14v6 injected")
 PYEOF
 
 echo "=== 14 v6 done ==="
+# === 14 v7: playlist pagination (offset) for QQ/Kugou lists ===
+
+echo "=== 14 v7 ==="
+
+python3 << 'PYEOF'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicSearchApi.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [14v7]"
+if MARK in src:
+    print("skip: 14v7 already present")
+    sys.exit(0)
+
+def rep(old, new, cnt=1):
+    global src
+    assert src.count(old) == cnt, f"anchor count {src.count(old)}: {old[:60]!r}"
+    src = src.replace(old, new, cnt)
+
+rep("    fun getQQPlaylists(cat: String): List<PlaylistBrief> {",
+    "    fun getQQPlaylists(cat: String, offset: Int = 0): List<PlaylistBrief> {  // [14v7]")
+rep("&sortId=5&sin=0&ein=29", "&sortId=5&sin=$offset&ein=${offset + 29}")
+rep("    fun getKugouPlaylists(cat: String): List<PlaylistBrief> {",
+    "    fun getKugouPlaylists(cat: String, offset: Int = 0): List<PlaylistBrief> {  // [14v7]")
+rep("&page=1&pagesize=30&version=9100", "&page=${offset / 30 + 1}&pagesize=30&version=9100")
+
+assert "fun getQQPlaylists(cat: String, offset: Int = 0)" in src
+assert "fun getKugouPlaylists(cat: String, offset: Int = 0)" in src
+assert src.count("{") == src.count("}")
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("OK 14v7 pagination signatures")
+PYEOF
+
+echo "=== 14 v7 done ==="

@@ -105,6 +105,10 @@ pl_ui = """    // NAV_WIRE_V1: 歌单新版 UI（PlaylistScreen）；分类/歌�
         selectedCategory = selectedCat,
         onCategorySelected = { selectedCat = it },
         platformSupported = platform in listOf("wy", "tx", "kg"),
+        onLoadMore = { loadMorePlaylists() },
+        onRefresh = { refreshPlaylists() },
+        isRefreshing = isRefreshing,
+        isLoadingMore = isLoadingMore,
         onPlaylistClick = { id, name -> onOpen(id, name) },
     )
 }"""
