@@ -6030,3 +6030,238 @@ for fname in ["LxThemeSettingsActivity.kt", "LxSourceSettings.kt", "LxArtistDeta
     print("OK 32 v96 " + fname + " 默认深色")
 PYEOF96
 echo "=== 32 v96 完成 ==="
+
+
+# === 32 v97: 悬浮胶囊导航(废 Scaffold bottomBar) + 各页底部避让 104dp ===
+python3 << 'PYEOF97'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+def save(p, s):
+    open(p, "w", encoding="utf-8").write(s)
+
+ACT = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/"
+MH = ACT + "MusicHomeActivity.kt"
+s = load(MH)
+if "[32v97]" in s:
+    print("跳过（32 v97 MH 已应用）")
+else:
+    # 1) imports: Canvas + graphicsLayer(缺才加)
+    imp_anchor = "import androidx.compose.foundation.background"
+    assert s.count(imp_anchor) == 1, "v97 import 锚点"
+    add = ""
+    if "import androidx.compose.foundation.Canvas" not in s:
+        add += "\nimport androidx.compose.foundation.Canvas // [32v97]"
+    if "import androidx.compose.ui.graphics.graphicsLayer" not in s:
+        add += "\nimport androidx.compose.ui.graphics.graphicsLayer // [32v97]"
+    if add:
+        s = s.replace(imp_anchor, imp_anchor + add, 1)
+    # 2) 抽出迷你播放器状态段(16sp -> 12sp)
+    seg_start = "                // 迷你播放器：接 LxPlayerManager 状态\n"
+    seg_end = "                if (playerTitle.isNotEmpty() && !miniPlayerDismissed) {"
+    assert s.count(seg_start) == 1 and s.count(seg_end) == 1, "v97 状态段锚点"
+    i1 = s.index(seg_start); i2 = s.index(seg_end)
+    seg = s[i1:i2]
+    seg12 = "\n".join((ln[4:] if ln.startswith("    ") else ln) for ln in seg.split("\n"))
+    # 3) 整段删除 bottomBar
+    b1 = s.index("        bottomBar = {\n")
+    b2 = s.index("    ) { padding ->", b1)
+    span = s[b1:b2]
+    assert seg_start.strip() in span and "纯文字极简底栏" in span, "v97 bottomBar 跨度校验"
+    s = s[:b1] + s[b2:]
+    assert "        bottomBar = {" not in s, "v97 bottomBar 未删净"
+    # 4) 状态段插入内容 Box 开头
+    anchor = "        Box(modifier = Modifier.padding(padding)) {\n            when (selectedTab) {"
+    assert s.count(anchor) == 1, "v97 内容Box锚点"
+    s = s.replace(anchor, "        Box(modifier = Modifier.padding(padding)) {\n" + seg12 + "            when (selectedTab) {", 1)
+    # 5) 内容 Box 末尾插入悬浮 Column(迷你播放器 + 胶囊)
+    old_tail = ("                        Text(\"返回首页…\", color = TextGray)\n"
+                "                    }\n"
+                "                }\n"
+                "            }\n"
+                "        }\n"
+                "    }\n"
+                "}")
+    assert s.count(old_tail) == 1, "v97 内容尾锚点"
+    pill = ("                        Text(\"返回首页…\", color = TextGray)\n"
+            "                    }\n"
+            "                }\n"
+            "            }\n"
+            "            // [32v97] 悬浮层: 迷你播放器 + 胶囊导航(原 bottomBar 已废)\n"
+            "            Column(\n"
+            "                modifier = Modifier\n"
+            "                    .align(Alignment.BottomCenter)\n"
+            "                    .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),\n"
+            "                horizontalAlignment = Alignment.CenterHorizontally,\n"
+            "            ) {\n"
+            "                if (playerTitle.isNotEmpty() && !miniPlayerDismissed) {\n"
+            "                    MiniPlayerBar(\n"
+            "                        title = playerTitle,\n"
+            "                        artist = playerArtist,\n"
+            "                        picUrl = playerPic,\n"
+            "                        isPlaying = playerIsPlaying,\n"
+            "                        progress = if (playerDur > 0) (playerPos.toFloat() / playerDur.toFloat()).coerceIn(0f, 1f) else 0f,\n"
+            "                        onTogglePlay = { LxPlayerManager.togglePlayPause() },\n"
+            "                        onClose = {\n"
+            "                            LxPlayerManager.stop()\n"
+            "                            miniPlayerDismissed = true\n"
+            "                        },\n"
+            "                        onExpand = {\n"
+            "                            val intent = Intent(context, LxPlayerActivity::class.java).apply {\n"
+            "                                putExtra(\"title\", playerTitle)\n"
+            "                                putExtra(\"artist\", playerArtist)\n"
+            "                                putExtra(\"picUrl\", playerPic)\n"
+            "                            }\n"
+            "                            context.startActivity(intent)\n"
+            "                        }\n"
+            "                    )\n"
+            "                    Spacer(modifier = Modifier.height(10.dp))\n"
+            "                }\n"
+            "                Surface(\n"
+            "                    shape = MaterialTheme.shapes.extraLarge,\n"
+            "                    color = musicColors().card.copy(alpha = 0.85f), // [32v97] 毛玻璃胶囊\n"
+            "                    shadowElevation = 8.dp,\n"
+            "                ) {\n"
+            "                    Row(\n"
+            "                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),\n"
+            "                        horizontalArrangement = Arrangement.SpaceEvenly,\n"
+            "                        verticalAlignment = Alignment.CenterVertically,\n"
+            "                    ) {\n"
+            "                        val tabDefs97 = listOf(\n"
+            "                            MusicTab.SEARCH to \"搜索\",\n"
+            "                            MusicTab.RANKING to \"排行\",\n"
+            "                            MusicTab.PLAYLIST to \"歌单\",\n"
+            "                            MusicTab.SETTINGS to \"设置\",\n"
+            "                            MusicTab.HOME to \"首页\",\n"
+            "                        )\n"
+            "                        tabDefs97.forEach { (tab, label) ->\n"
+            "                            PillTabItem97(\n"
+            "                                tab = tab,\n"
+            "                                label = label,\n"
+            "                                selected = selectedTab == tab,\n"
+            "                                onClick = {\n"
+            "                                    if (tab == MusicTab.HOME) onBackToAppHome() else selectedTab = tab\n"
+            "                                }\n"
+            "                            )\n"
+            "                        }\n"
+            "                    }\n"
+            "                }\n"
+            "            }\n"
+            "        }\n"
+            "    }\n"
+            "}")
+    s = s.replace(old_tail, pill, 1)
+    # 6) 新组件(PillTabItem97 + TabLineIcon97)插入 MiniPlayerBar KDoc 之前
+    kdoc = "/**\n * 迷你播放器（spotufi 风格：深色圆角条 + 封面 + 进度线）\n */"
+    assert s.count(kdoc) == 1, "v97 KDoc 锚点"
+    newcomp = ("// [32v97] 悬浮胶囊单个 Tab: 线条图标 + 小标签; 选中 accent + 图标放大, 无色块无指示线\n"
+        "@Composable\n"
+        "private fun PillTabItem97(tab: MusicTab, label: String, selected: Boolean, onClick: () -> Unit) {\n"
+        "    val tint = if (selected) musicColors().accent else musicColors().textSecondary\n"
+        "    Column(\n"
+        "        modifier = Modifier\n"
+        "            .width(56.dp)\n"
+        "            .clickable(onClick = onClick)\n"
+        "            .padding(vertical = 6.dp),\n"
+        "        horizontalAlignment = Alignment.CenterHorizontally,\n"
+        "    ) {\n"
+        "        TabLineIcon97(\n"
+        "            tab = tab,\n"
+        "            tint = tint,\n"
+        "            modifier = Modifier.graphicsLayer {\n"
+        "                val sc = if (selected) 1.15f else 1f\n"
+        "                scaleX = sc\n"
+        "                scaleY = sc\n"
+        "            }\n"
+        "        )\n"
+        "        Spacer(modifier = Modifier.height(2.dp))\n"
+        "        Text(\n"
+        "            text = label,\n"
+        "            fontSize = 10.sp,\n"
+        "            color = tint,\n"
+        "            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,\n"
+        "        )\n"
+        "    }\n"
+        "}\n"
+        "\n"
+        "// [32v97] 五个 Tab 的线条图标: Canvas 手搓, 2dp 描边圆头(齿轮降级为圆+辐条)\n"
+        "@Composable\n"
+        "private fun TabLineIcon97(tab: MusicTab, tint: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {\n"
+        "    Canvas(modifier = modifier.size(24.dp)) {\n"
+        "        val sw = 2.dp.toPx()\n"
+        "        val cap = androidx.compose.ui.graphics.StrokeCap.Round\n"
+        "        fun off(x: Float, y: Float) = androidx.compose.ui.geometry.Offset(x.dp.toPx(), y.dp.toPx())\n"
+        "        when (tab) {\n"
+        "            MusicTab.SEARCH -> {\n"
+        "                drawCircle(color = tint, radius = 6.5.dp.toPx(), center = off(10.5f, 10.5f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw))\n"
+        "                drawLine(color = tint, start = off(15.3f, 15.3f), end = off(20.5f, 20.5f), strokeWidth = sw, cap = cap)\n"
+        "            }\n"
+        "            MusicTab.RANKING -> {\n"
+        "                drawLine(color = tint, start = off(6f, 13f), end = off(6f, 19.5f), strokeWidth = sw, cap = cap)\n"
+        "                drawLine(color = tint, start = off(12f, 8f), end = off(12f, 19.5f), strokeWidth = sw, cap = cap)\n"
+        "                drawLine(color = tint, start = off(18f, 4.5f), end = off(18f, 19.5f), strokeWidth = sw, cap = cap)\n"
+        "            }\n"
+        "            MusicTab.PLAYLIST -> {\n"
+        "                drawLine(color = tint, start = off(4f, 6.5f), end = off(14f, 6.5f), strokeWidth = sw, cap = cap)\n"
+        "                drawLine(color = tint, start = off(4f, 11.5f), end = off(14f, 11.5f), strokeWidth = sw, cap = cap)\n"
+        "                drawLine(color = tint, start = off(4f, 16.5f), end = off(10f, 16.5f), strokeWidth = sw, cap = cap)\n"
+        "                drawCircle(color = tint, radius = 2.4.dp.toPx(), center = off(16.8f, 16.8f))\n"
+        "                drawLine(color = tint, start = off(19.2f, 16.8f), end = off(19.2f, 7.5f), strokeWidth = sw, cap = cap)\n"
+        "            }\n"
+        "            MusicTab.SETTINGS -> {\n"
+        "                drawCircle(color = tint, radius = 3.4.dp.toPx(), center = center, style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw))\n"
+        "                for (i in 0 until 6) {\n"
+        "                    val ang = (i * 60f - 90f) * (kotlin.math.PI / 180f).toFloat()\n"
+        "                    val sx = center.x + kotlin.math.cos(ang) * 5.6.dp.toPx()\n"
+        "                    val sy = center.y + kotlin.math.sin(ang) * 5.6.dp.toPx()\n"
+        "                    val ex = center.x + kotlin.math.cos(ang) * 8.2.dp.toPx()\n"
+        "                    val ey = center.y + kotlin.math.sin(ang) * 8.2.dp.toPx()\n"
+        "                    drawLine(color = tint, start = androidx.compose.ui.geometry.Offset(sx, sy), end = androidx.compose.ui.geometry.Offset(ex, ey), strokeWidth = sw, cap = cap)\n"
+        "                }\n"
+        "            }\n"
+        "            MusicTab.HOME -> {\n"
+        "                drawLine(color = tint, start = off(4f, 11.5f), end = off(12f, 4.5f), strokeWidth = sw, cap = cap)\n"
+        "                drawLine(color = tint, start = off(20f, 11.5f), end = off(12f, 4.5f), strokeWidth = sw, cap = cap)\n"
+        "                drawLine(color = tint, start = off(6.6f, 9.8f), end = off(6.6f, 19.5f), strokeWidth = sw, cap = cap)\n"
+        "                drawLine(color = tint, start = off(17.4f, 9.8f), end = off(17.4f, 19.5f), strokeWidth = sw, cap = cap)\n"
+        "                drawLine(color = tint, start = off(6.6f, 19.5f), end = off(17.4f, 19.5f), strokeWidth = sw, cap = cap)\n"
+        "            }\n"
+        "        }\n"
+        "    }\n"
+        "}\n"
+        "\n")
+    s = s.replace(kdoc, newcomp + kdoc, 1)
+    # 7) MiniPlayerBar 横向 padding 与胶囊对齐(去 8dp)
+    old = ".padding(horizontal = 8.dp, vertical = 4.dp)"
+    assert s.count(old) == 1, "v97 MiniPlayer padding 锚点"
+    s = s.replace(old, ".padding(vertical = 4.dp) // [32v97] 与胶囊同宽对齐", 1)
+    assert s.count("[32v97]") >= 5, "v97 post-check"
+    save(MH, s)
+    print("OK 32 v97 MH 悬浮胶囊完成")
+
+# --- 各页底部避让(产物均在 32 之前生成) ---
+def bump(path, old, new, tag):
+    t = load(path)
+    if "[32v97]" in t and "避让悬浮胶囊" in t:
+        print("跳过（32 v97 " + tag + " 已应用）"); return
+    assert t.count(old) == 1, "v97 " + tag + " 锚点数 " + str(t.count(old))
+    t = t.replace(old, new, 1)
+    save(path, t)
+    print("OK 32 v97 " + tag + " 底部避让")
+
+bump("avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt",
+     "        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 24.dp), // 细节1：左右16dp 上下24dp",
+     "        contentPadding = PaddingValues(start = 16.dp, top = 24.dp, end = 16.dp, bottom = 104.dp), // [32v97] 底部避让悬浮胶囊",
+     "SettingsScreen")
+bump("avbox/app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt",
+     "        LazyColumn(\n            modifier = Modifier\n                .fillMaxSize()\n                .background(musicColors().background),\n        ) {",
+     "        LazyColumn(\n            modifier = Modifier\n                .fillMaxSize()\n                .background(musicColors().background),\n            contentPadding = PaddingValues(bottom = 104.dp), // [32v97] 底部避让悬浮胶囊\n        ) {",
+     "RankScreen")
+bump("avbox/app/src/main/java/com/github/tvbox/osc/ui/music/playlist/PlaylistScreen.kt",
+     "            contentPadding = PaddingValues(16.dp),",
+     "            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 104.dp), // [32v97] 底部避让悬浮胶囊",
+     "PlaylistScreen")
+PYEOF97
+echo "=== 32 v97 完成 ==="

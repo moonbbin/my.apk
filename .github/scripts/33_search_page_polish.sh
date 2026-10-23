@@ -293,3 +293,31 @@ KOTLIN_EOF
 
 echo "✓ SearchScreen.kt 已全量覆盖（33v5）"
 echo "=== 33 v5 完成 ==="
+
+# === 33 pill: 搜索落地页列表底部避让悬浮胶囊 ===
+python3 << 'PYEOF33PILL'
+import os
+cand = ["avbox/app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchScreen.kt",
+        "app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchScreen.kt"]
+p = None
+for c in cand:
+    q = c
+    while not os.path.exists(q) and os.getcwd() != "/":
+        os.chdir("..")
+    if os.path.exists(q):
+        p = q; break
+assert p, "33pill 找不到 SearchScreen.kt"
+s = open(p, encoding="utf-8").read()
+if "[33pill]" in s:
+    print("跳过（33 pill 已应用）")
+else:
+    old = "import androidx.compose.foundation.layout.fillMaxSize"
+    assert s.count(old) == 1, "33pill import 锚点"
+    s = s.replace(old, old + "\nimport androidx.compose.foundation.layout.PaddingValues // [33pill]", 1)
+    old = "            LazyColumn(modifier = Modifier.fillMaxSize()) {"
+    assert s.count(old) == 1, "33pill LazyColumn 锚点数 " + str(s.count(old))
+    s = s.replace(old, "            LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 104.dp)) { // [33pill] 底部避让悬浮胶囊", 1)
+    open(p, "w", encoding="utf-8").write(s)
+    print("OK 33 pill 搜索页底部避让完成")
+PYEOF33PILL
+echo "=== 33 pill 完成 ==="

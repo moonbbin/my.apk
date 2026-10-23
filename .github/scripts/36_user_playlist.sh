@@ -502,3 +502,28 @@ else:
     print('设置页: 我的歌单临时入口已添加')
 PYEOF
 echo "=== 36 完成 ==="
+
+# === 36 pill: 自建歌单页底部避让悬浮胶囊 ===
+python3 << 'PYEOF36PILL'
+import os
+cand = ["avbox/app/src/main/java/com/github/tvbox/osc/ui/music/playlist/UserPlaylistScreen.kt",
+        "app/src/main/java/com/github/tvbox/osc/ui/music/playlist/UserPlaylistScreen.kt"]
+p = None
+for c in cand:
+    q = c
+    while not os.path.exists(q) and os.getcwd() != "/":
+        os.chdir("..")
+    if os.path.exists(q):
+        p = q; break
+assert p, "36pill 找不到 UserPlaylistScreen.kt"
+s = open(p, encoding="utf-8").read()
+if "[36pill]" in s:
+    print("跳过（36 pill 已应用）")
+else:
+    old = "                    contentPadding = PaddingValues(16.dp),"
+    assert s.count(old) == 1, "36pill 锚点数 " + str(s.count(old))
+    s = s.replace(old, "                    contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 104.dp), // [36pill] 底部避让悬浮胶囊", 1)
+    open(p, "w", encoding="utf-8").write(s)
+    print("OK 36 pill 自建歌单底部避让完成")
+PYEOF36PILL
+echo "=== 36 pill 完成 ==="
