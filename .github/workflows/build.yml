@@ -84,6 +84,8 @@ jobs:
         run: bash .github/scripts/37_eq_settings.sh
       - name: 38_eq_dsp
         run: bash .github/scripts/38_eq_dsp.sh
+      - name: 39_wallpaper
+        run: bash .github/scripts/39_wallpaper.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
