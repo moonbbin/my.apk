@@ -246,3 +246,77 @@ else:
     print("OK 25 glass1 底栏已玻璃化")
 PYEOF25GLASS
 echo "=== 25 glass1 完成 ==="
+
+# === 25 glass2: 底栏极简化（纯文字、无图标、54dp 矮版） ===
+python3 << 'PYEOF25GLASS2'
+import sys, os
+AP = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+while not os.path.exists(AP) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(AP, encoding="utf-8").read()
+if "[25glass2]" in s:
+    print("跳过（25 glass2 已应用）"); sys.exit(0)
+start_anchor = "                NavigationBar(containerColor = musicColors().background.copy(alpha = 0.85f)) { // [25glass1] 玻璃底栏"
+idx = s.find(start_anchor)
+assert idx >= 0, "glass2 起点锚点未命中（glass1 未应用？）"
+# 从起点按大括号配平找块尾（先见 depth>0 再认 depth==0）
+i = idx + len(start_anchor)
+depth = 1
+seen = False
+while i < len(s):
+    ch = s[i]
+    if ch == '{':
+        depth += 1; seen = True
+    elif ch == '}':
+        depth -= 1
+        if seen and depth == 0:
+            break
+    i += 1
+assert seen and depth == 0, "glass2 块尾配平失败"
+end = i + 1
+new_block = """                Row( // [25glass2] 纯文字极简底栏：无图标、54dp 矮版
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .background(musicColors().background.copy(alpha = 0.85f)),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val tabDefs = listOf(
+                        MusicTab.SEARCH to "搜索",
+                        MusicTab.RANKING to "排行",
+                        MusicTab.PLAYLIST to "歌单",
+                        MusicTab.SETTINGS to "设置",
+                        MusicTab.HOME to "首页",
+                    )
+                    tabDefs.forEach { (tab, label) ->
+                        val isSel = selectedTab == tab
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(54.dp)
+                                .clickable {
+                                    if (tab == MusicTab.HOME) {
+                                        onBackToAppHome()
+                                    } else {
+                                        selectedTab = tab
+                                    }
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = label,
+                                color = if (isSel) MaterialTheme.colorScheme.primary else TextGray,
+                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(if (isSel) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent)
+                                    .padding(horizontal = 18.dp, vertical = 7.dp),
+                            )
+                        }
+                    }
+                }"""
+s = s[:idx] + new_block + s[end:]
+open(AP, "w", encoding="utf-8").write(s)
+print("OK 25 glass2 底栏极简化完成")
+PYEOF25GLASS2
+echo "=== 25 glass2 完成 ==="
