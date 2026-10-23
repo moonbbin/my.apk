@@ -2451,3 +2451,21 @@ open(P, "w", encoding="utf-8").write(s)
 print("OK 21 v40 trans 下发已加")
 PYEOF21V40
 echo "=== 21 v40 完成 ==="
+
+# === 21 v41: Sub 合成 + Crossfeed 开关下发 ===
+python3 << 'PYEOF21V41'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+old = 'eqDspProcessor.transEnabled = try { p?.getBoolean("trans", false) ?: false } catch (_: Exception) { false } // [21v40] 瞬态增强开关下发'
+assert s.count(old) == 1
+new = old + """
+            eqDspProcessor.subEnabled = try { p?.getBoolean("sub", false) ?: false } catch (_: Exception) { false } // [21v41] Sub 谐波合成开关下发
+            eqDspProcessor.cfEnabled = try { p?.getBoolean("cross", false) ?: false } catch (_: Exception) { false } // [21v41] Crossfeed 开关下发"""
+s = s.replace(old, new, 1)
+open(P, "w", encoding="utf-8").write(s)
+print("OK 21 v41 sub/cross 下发已加")
+PYEOF21V41
+echo "=== 21 v41 完成 ==="
