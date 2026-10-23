@@ -320,3 +320,66 @@ open(AP, "w", encoding="utf-8").write(s)
 print("OK 25 glass2 底栏极简化完成")
 PYEOF25GLASS2
 echo "=== 25 glass2 完成 ==="
+
+# === 25 itemcards: 设置页去分组标题 + 每项独立玻璃卡(项间统一 12dp) ===
+python3 << 'PYEOF25ITEMCARDS'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+def save(p, s):
+    open(p, "w", encoding="utf-8").write(s)
+
+SP = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+s = load(SP)
+if "[25itemcards]" in s:
+    print("跳过（25 itemcards 已应用）")
+else:
+    # 1) 组间距 32 -> 12(与项间统一)
+    old = "        verticalArrangement = Arrangement.spacedBy(32.dp), // 细节1：组间 32dp 大呼吸"
+    assert s.count(old) == 1, "itemcards 间距锚点"
+    s = s.replace(old, "        verticalArrangement = Arrangement.spacedBy(12.dp), // [25itemcards] 项间统一 12dp", 1)
+    # 2) 去标题: items 块只剩卡片
+    old = ("        items(groups, key = { it.header }) { group ->\n"
+           "            Column {\n"
+           "                SettingGroupHeader(title = group.header)\n"
+           "                SettingGroupCard(group = group)\n"
+           "            }\n"
+           "        }")
+    assert s.count(old) == 1, "itemcards items 块锚点"
+    s = s.replace(old, ("        items(groups, key = { it.header }) { group ->\n"
+           "            SettingGroupCard(group = group) // [25itemcards] 无分组标题, 每项独立卡\n"
+           "        }"), 1)
+    # 3) 删除 SettingGroupHeader 函数(细节2 整段)
+    a = "// ---------- 细节2：分组标题 ----------"
+    b = "// ---------- 细节3：分组卡片 ----------"
+    assert s.count(a) == 1 and s.count(b) == 1, "itemcards 标题段锚点"
+    s = s[:s.index(a)] + s[s.index(b):]
+    # 4) SettingGroupCard 改为每项独立卡
+    fa = "private fun SettingGroupCard(group: SettingGroup) {"
+    fb = "// ---------- 细节4：设置项 ----------"
+    assert s.count(fa) == 1 and s.count(fb) == 1, "itemcards 卡片函数锚点"
+    newfun = ("private fun SettingGroupCard(group: SettingGroup) {\n"
+        "    // [25itemcards] 每项独立成卡(沿用 glass1 半透明+高光边), 项间 12dp, 无分割线\n"
+        "    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {\n"
+        "        group.items.forEach { item ->\n"
+        "            Surface(\n"
+        "                color = musicColors().card.copy(alpha = 0.75f),\n"
+        "                shape = MaterialTheme.shapes.large,\n"
+        "                border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)),\n"
+        "            ) {\n"
+        "                SettingItemRow(item = item)\n"
+        "            }\n"
+        "        }\n"
+        "    }\n"
+        "}\n\n")
+    s = s[:s.index(fa)] + newfun + s[s.index(fb):]
+    # 5) HorizontalDivider 已无用, 删 import
+    old = "import androidx.compose.material3.HorizontalDivider\n"
+    assert s.count(old) == 1, "itemcards import 锚点"
+    s = s.replace(old, "", 1)
+    save(SP, s)
+    print("OK 25 itemcards 设置页独立卡完成")
+PYEOF25ITEMCARDS
+echo "=== 25 itemcards 完成 ==="
