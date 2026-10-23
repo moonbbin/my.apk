@@ -269,129 +269,121 @@ TMPB64=$(mktemp)
 base64 -d "$TMPB64" > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxWallpaperSettingsActivity.kt
 rm -f "$TMPB64"
 grep -q 'class LxWallpaperSettingsActivity' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxWallpaperSettingsActivity.kt || { echo "X 39 class LxWallpaperSettingsActivity 写入失败"; exit 1; }
+echo "[39] MusicHome 外壳接壁纸层 + 六页根背景透出 + 设置入口"
 python3 << 'PYEOF39'
-import sys, os
-while not os.path.exists("avbox/app/src/main/AndroidManifest.xml") and os.getcwd() != "/":
-    os.chdir("..")
+import io, sys, os
+while not os.path.exists('avbox/app/src/main/AndroidManifest.xml') and os.getcwd() != '/':
+    os.chdir('..')
+
+BASE = 'avbox/app/src/main/java/com/github/tvbox/osc/'
+FQ_COLOR = 'androidx.compose.ui.graphics.Color.Transparent'
+WP_CHECK = 'com.github.tvbox.osc.ui.activity.WallpaperManager.isActive()'
 
 def load(p):
-    return open(p, encoding="utf-8").read()
+    with io.open(p, encoding='utf-8') as f:
+        return f.read()
+
 def save(p, s):
-    open(p, "w", encoding="utf-8").write(s)
-def rep(s, old, new, tag):
-    assert s.count(old) == 1, tag + " 锚点数量异常: %d" % s.count(old)
-    return s.replace(old, new, 1)
+    with io.open(p, 'w', encoding='utf-8', newline='\n') as f:
+        f.write(s)
 
-# ---- manifest 注册 ----
-MP = "avbox/app/src/main/AndroidManifest.xml"
-m = load(MP)
-if "LxWallpaperSettingsActivity" not in m:
-    assert "</application>" in m, "manifest 无 </application>"
-    act = '<activity android:name=".ui.activity.LxWallpaperSettingsActivity" android:exported="false" />'
-    m = m.replace("</application>", "        " + act + "\n    </application>", 1)
-    save(MP, m)
-    print("  OK manifest 壁纸页已注册")
+def rep(s, old, new, tag, cnt=1):
+    n = s.count(old)
+    assert n == cnt, '❌ [39] %s 锚点数量异常: %d' % (tag, n)
+    return s.replace(old, new, cnt)
 
-# ---- MusicHomeActivity：根注入 + 入口 ----
-MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+# ============ 1) MusicHomeActivity ============
+MH = BASE + 'ui/activity/MusicHomeActivity.kt'
 h = load(MH)
-if "[39wp1]" not in h:
+if '[39wp1]' not in h:
     h = rep(h,
-        "fun MusicHomeScreen(initialTab: MusicTab = MusicTab.SEARCH, onBackToAppHome: () -> Unit) { // [15tab1]\n    val context = LocalContext.current\n",
-        "fun MusicHomeScreen(initialTab: MusicTab = MusicTab.SEARCH, onBackToAppHome: () -> Unit) { // [15tab1]\n    val context = LocalContext.current\n    val wpState by WallpaperManager.state.collectAsState() // [39wp1] 壁纸状态\n    LaunchedEffect(Unit) { WallpaperManager.init(context) } // [39wp1]\n",
-        "MH-init")
+        'fun MusicHomeScreen(initialTab: MusicTab = MusicTab.SEARCH, onBackToAppHome: () -> Unit) { // [15tab1]\n    val context = LocalContext.current\n',
+        'fun MusicHomeScreen(initialTab: MusicTab = MusicTab.SEARCH, onBackToAppHome: () -> Unit) { // [15tab1]\n    val context = LocalContext.current\n'
+        '    val wpState by WallpaperManager.state.collectAsState() // [39wp1] 壁纸状态\n'
+        '    val wpActive = wpState.enabled && wpState.url.isNotBlank() // [39wp1]\n'
+        '    val wpDark by MusicThemeManager.isDarkTheme.collectAsState() // [39wp1]\n'
+        '    val wpReq = remember(wpState.url) { // [39wp1] 背景请求: 尺寸上限+稳定缓存键\n'
+        '        if (wpState.url.isBlank()) null else coil.request.ImageRequest.Builder(context).data(wpState.url).size(1080, 2400).memoryCacheKey("wp_" + wpState.url.hashCode()).build()\n'
+        '    }\n'
+        '    LaunchedEffect(Unit) { WallpaperManager.init(context) } // [39wp1]\n',
+        'MH-init')
     h = rep(h,
-        "        containerColor = BgDeepBlue,",
-        "        containerColor = if (wpState.enabled && wpState.url.isNotBlank()) Color.Transparent else BgDeepBlue, // [39wp1]",
-        "MH-scaffold")
-    h = rep(h,
-        "colors = TopAppBarDefaults.topAppBarColors(containerColor = CardBlue),",
-        "colors = TopAppBarDefaults.topAppBarColors(containerColor = if (wpState.enabled && wpState.url.isNotBlank()) Color.Transparent else CardBlue), // [39wp1]",
-        "MH-topbar")
-    h = rep(h,
-        "    ) { padding ->\n        Box(modifier = Modifier.padding(padding)) {",
-        """    ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
-            // [39wp1] 壁纸层 + 可读性遮罩（内容 Box 最底层）
-            if (wpState.enabled && wpState.url.isNotBlank()) {
-                val wpReq = remember(wpState.url) {
-                    ImageRequest.Builder(context).data(wpState.url).size(1080, 2400)
-                        .memoryCacheKey("wp_" + wpState.url.hashCode()).build()
-                }
-                AsyncImage(model = wpReq, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                Box(modifier = Modifier.fillMaxSize().background(if (MusicThemeManager.isDarkTheme.value) Color.Black.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.7f)))
-            }""",
-        "MH-layer")
-    h = rep(h,
-        """                  SettingItem("播放历史", "最近播放的歌曲") {
-                      context.startActivity(android.content.Intent(context, com.github.tvbox.osc.ui.activity.LxHistoryActivity::class.java))
-                  },""",
-        """                  SettingItem("播放历史", "最近播放的歌曲") {
-                      context.startActivity(android.content.Intent(context, com.github.tvbox.osc.ui.activity.LxHistoryActivity::class.java))
-                  },
-                  SettingItem("壁纸设置", "自定义背景图") { // [39wp1]
-                      context.startActivity(android.content.Intent(context, com.github.tvbox.osc.ui.activity.LxWallpaperSettingsActivity::class.java))
-                  },""",
-        "MH-entry")
+        '        containerColor = musicColors().background,',
+        '        containerColor = if (wpActive) Color.Transparent else musicColors().background, // [39wp1]',
+        'MH-scaffold')
+    # 整框包裹 Scaffold: 壁纸+遮罩垫底(顶栏已经32改透明, 底栏半透, 均可透出)
+    assert h.count('    Scaffold(') == 1, '❌ [39] MH-wrap Scaffold 数量异常'
+    base = h.index('fun MusicHomeScreen')
+    si = h.index('    Scaffold(', base)
+    layer = ('    Box(modifier = Modifier.fillMaxSize()) { // [39wp1] 壁纸底层(图+遮罩)\n'
+             '        if (wpActive && wpReq != null) {\n'
+             '            coil.compose.AsyncImage(model = wpReq, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())\n'
+             '            Box(modifier = Modifier.fillMaxSize().background(if (wpDark) Color.Black.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.7f)))\n'
+             '        }\n')
+    h = h[:si] + layer + h[si:]
+    i = si + len(layer)
+    dp = 0; db = 0; seen_close = False; end = -1; j = i
+    while j < len(h):
+        c = h[j]
+        if c == '(':
+            dp += 1
+        elif c == ')':
+            dp -= 1
+            if dp == 0:
+                seen_close = True
+        elif c == '{':
+            db += 1
+        elif c == '}':
+            db -= 1
+            if seen_close and db == 0:
+                end = j; break
+        j += 1
+    assert end > 0, '❌ [39] MH-wrap 找不到 Scaffold 结尾'
+    h = h[:end + 1] + '\n    } // [39wp1] 壁纸底层 Box 结束' + h[end + 1:]
+    print('OK MH 壁纸层整框包裹完成')
+    # 设置入口: 播放历史之前插入(沿用该行缩进)
+    lines = h.split('\n')
+    idx = [k for k, ln in enumerate(lines) if 'SettingItem("播放历史", "最近播放的歌曲")' in ln]
+    assert len(idx) == 1, '❌ [39] MH-entry 锚点数量异常: %d' % len(idx)
+    k = idx[0]
+    ind = lines[k][:len(lines[k]) - len(lines[k].lstrip())]
+    block = [
+        ind + 'SettingItem("壁纸设置", "自定义背景图") { // [39wp1]',
+        ind + '    context.startActivity(android.content.Intent(context, com.github.tvbox.osc.ui.activity.LxWallpaperSettingsActivity::class.java))',
+        ind + '},',
+    ]
+    lines[k:k] = block
+    h = '\n'.join(lines)
     save(MH, h)
-    print("  OK MusicHomeActivity 壁纸注入完成")
+    print('OK MusicHomeActivity 壁纸接线完成')
+else:
+    print('SKIP MusicHomeActivity 已有 [39wp1]')
 
-# ---- 五个 Tab 页根底色：壁纸开启时透明 ----
-def page_patch(path, import_anchor, bg_old, bg_new, tag, bounded_fun=None):
-    s = load(path)
-    if "[39wp1]" in s:
-        print("  跳过（%s 已处理）" % tag)
-        return
-    if "import com.github.tvbox.osc.ui.activity.WallpaperManager" not in s:
-        assert s.count(import_anchor) == 1, tag + " import 锚点异常"
-        s = s.replace(import_anchor, import_anchor + "\nimport com.github.tvbox.osc.ui.activity.WallpaperManager // [39wp1]", 1)
-    if bounded_fun:
-        start = s.find(bounded_fun)
-        assert start >= 0, tag + " 函数锚点未找到"
-        nxt = s.find("\n@Composable", start + len(bounded_fun))
-        end = nxt if nxt >= 0 else len(s)
-        seg = s[start:end]
-        assert seg.count(bg_old) >= 1, tag + " 段内底色锚点未找到"
-        seg = seg.replace(bg_old, bg_new)
-        s = s[:start] + seg + s[end:]
-    else:
-        assert s.count(bg_old) == 1, tag + " 底色锚点数量异常: %d" % s.count(bg_old)
-        s = s.replace(bg_old, bg_new, 1)
-    save(path, s)
-    print("  OK %s 根底色已条件透明" % tag)
+# ============ 2) 六页根背景: 壁纸开启时透明 ============
+def page_bg(rel, tag, after_fun=None):
+    p = BASE + rel
+    s = load(p)
+    if '[39wp1]' in s:
+        print('SKIP', tag, '已有标记'); return
+    start = s.index(after_fun) if after_fun else 0
+    old = '.background(musicColors().background)'
+    pos = s.find(old, start)
+    assert pos > 0, '❌ [39] %s 根背景锚点缺失' % tag
+    new = '.background(if (' + WP_CHECK + ') ' + FQ_COLOR + ' else musicColors().background)'
+    s = s[:pos] + new + s[pos + len(old):]
+    # 文件级标记: package 行后加注释(幂等判据)
+    pl = s.index('\n', s.index('package '))
+    s = s[:pl + 1] + '// [39wp1] 本页根背景已接壁纸透出\n' + s[pl + 1:]
+    save(p, s)
+    print('OK', tag, '根背景已接壁纸透出')
 
-BASE = "avbox/app/src/main/java/com/github/tvbox/osc/"
-page_patch(BASE + "ui/music/settings/SettingsScreen.kt",
-    "import androidx.compose.foundation.BorderStroke",
-    ".background(MaterialTheme.colorScheme.background), // 细节1：背景 background",
-    ".background(if (WallpaperManager.isActive()) Color.Transparent else MaterialTheme.colorScheme.background), // [39wp1] 壁纸开启透出底层",
-    "SettingsScreen")
-page_patch(BASE + "ui/music/search/SearchResultScreen.kt",
-    "import com.github.tvbox.osc.ui.activity.musicColors",
-    ".background(MaterialTheme.colorScheme.background)\n            .statusBarsPadding(),",
-    ".background(if (WallpaperManager.isActive()) Color.Transparent else MaterialTheme.colorScheme.background) // [39wp1]\n            .statusBarsPadding(),",
-    "SearchResultScreen")
-page_patch(BASE + "ui/music/rank/RankScreen.kt",
-    "import androidx.compose.ui.graphics.Color",
-    ".background(MaterialTheme.colorScheme.background),",
-    ".background(if (WallpaperManager.isActive()) Color.Transparent else MaterialTheme.colorScheme.background), // [39wp1]",
-    "RankScreen")
-page_patch(BASE + "ui/music/playlist/PlaylistScreen.kt",
-    "import androidx.compose.ui.graphics.Color",
-    ".background(MaterialTheme.colorScheme.background),",
-    ".background(if (WallpaperManager.isActive()) Color.Transparent else MaterialTheme.colorScheme.background), // [39wp1]",
-    "PlaylistScreen")
-page_patch(BASE + "ui/music/search/SearchScreen.kt",
-    "import com.github.tvbox.osc.ui.activity.musicColors",
-    ".background(musicColors().background)",
-    ".background(if (WallpaperManager.isActive()) Color.Transparent else musicColors().background) // [39wp1]",
-    "SearchScreen", bounded_fun="fun SearchScreen(")
-page_patch(BASE + "ui/music/playlist/UserPlaylistScreen.kt",
-    "import com.github.tvbox.osc.ui.activity.musicColors",
-    ".background(musicColors().background)",
-    ".background(if (WallpaperManager.isActive()) Color.Transparent else musicColors().background) // [39wp1]",
-    "UserPlaylistScreen", bounded_fun="fun UserPlaylistScreen(")
-print("OK 39 全部补丁完成")
+page_bg('ui/music/settings/SettingsScreen.kt', 'SettingsScreen')
+page_bg('ui/music/search/SearchResultScreen.kt', 'SearchResultScreen')
+page_bg('ui/music/rank/RankScreen.kt', 'RankScreen')
+page_bg('ui/music/playlist/PlaylistScreen.kt', 'PlaylistScreen')
+page_bg('ui/music/playlist/UserPlaylistScreen.kt', 'UserPlaylistScreen')
+page_bg('ui/music/search/SearchScreen.kt', 'SearchScreen', after_fun='fun SearchScreen(')
+print('[39] 全部补丁完成')
 PYEOF39
 
 echo "=== 39 wp1 完成 ==="
