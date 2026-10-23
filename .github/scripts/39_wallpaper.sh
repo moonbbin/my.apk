@@ -270,6 +270,7 @@ base64 -d "$TMPB64" > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/L
 rm -f "$TMPB64"
 grep -q 'class LxWallpaperSettingsActivity' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxWallpaperSettingsActivity.kt || { echo "X 39 class LxWallpaperSettingsActivity 写入失败"; exit 1; }
 echo "[39] MusicHome 外壳接壁纸层 + 六页根背景透出 + 设置入口"
+echo "[39] MusicHome 外壳接壁纸层 + 六页根背景透出 + 设置入口"
 python3 << 'PYEOF39'
 import io, sys, os
 while not os.path.exists('avbox/app/src/main/AndroidManifest.xml') and os.getcwd() != '/':
@@ -301,7 +302,7 @@ if '[39wp1]' not in h:
         'fun MusicHomeScreen(initialTab: MusicTab = MusicTab.SEARCH, onBackToAppHome: () -> Unit) { // [15tab1]\n    val context = LocalContext.current\n'
         '    val wpState by WallpaperManager.state.collectAsState() // [39wp1] 壁纸状态\n'
         '    val wpActive = wpState.enabled && wpState.url.isNotBlank() // [39wp1]\n'
-        '    val wpDark by MusicThemeManager.isDarkTheme.collectAsState() // [39wp1]\n'
+        '    val wpDark by MusicThemeManager.isDarkTheme // [39wp1]\n'
         '    val wpReq = remember(wpState.url) { // [39wp1] 背景请求: 尺寸上限+稳定缓存键\n'
         '        if (wpState.url.isBlank()) null else coil.request.ImageRequest.Builder(context).data(wpState.url).size(1080, 2400).memoryCacheKey("wp_" + wpState.url.hashCode()).build()\n'
         '    }\n'
