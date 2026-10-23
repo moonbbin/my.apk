@@ -87,7 +87,7 @@
 | # | 脚本 | 干嘛的 |
 |---|------|--------|
 | 24 | `24_music_rank_screen.sh` | 排行榜页 RankScreen.kt 写入 |
-| 25 | `25_music_pages_wire.sh` | 四页面导航接线（排行/歌单/搜索/设置 → MusicHomeActivity） |
+| 25 | `25_music_pages_wire.sh` | 四页面导航接线（排行/歌单/搜索/设置 → MusicHomeActivity）<br>glass1/glass2：设置卡+底栏玻璃化、底栏极简化。<br>itemcards（2026-10-24）：设置页去分组标题（音乐源/播放/显示），每项独立玻璃卡、删分割线、项间统一 12dp。 |
 | 26 | `26_music_rank_polish.sh` | 排行榜精修（已并入 28，保留文件） |
 | 27 | `27_music_playlist_cover.sh` | 歌单封面 |
 | 28 | `28_music_rank_capsule.sh` | **排行榜胶囊精修**（当前迭代脚本）<br>榜单名胶囊、音质标签（橙色 QualityOrange，平台透传） |
