@@ -282,27 +282,25 @@ with open(MP, "w", encoding="utf-8") as f:
 MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
 with open(MH, encoding="utf-8") as f:
     h = f.read()
-if "[37eq1]" in h:
-    print("37 入口已接线，跳过")
-else:
-    old = """                SettingItem("均衡器", "跳转外部均衡器") {
+# [37eq9] 设置页入口移除：均衡器入口只保留播放页图标，设置页不再有此行
+old = """                SettingItem("均衡器", "跳转外部均衡器") {
                     onComingSoon("均衡器")
                 },"""
-    new = """                SettingItem("均衡器", "6 维自定义均衡") { // [37eq1]
-                    context.startActivity(android.content.Intent(context, com.github.tvbox.osc.ui.activity.LxEqSettingsActivity::class.java))
-                },"""
-    if h.count(old) != 1:
-        print(f"X 37 入口锚点计数异常: {h.count(old)}")
-        sys.exit(1)
-    h = h.replace(old, new)
+if h.count(old) == 1:
+    h = h.replace(old + "\n", "", 1)
     with open(MH, "w", encoding="utf-8") as f:
         f.write(h)
-    print("  OK 均衡器入口已接线")
+    print("  OK 设置页均衡器入口已移除")
+elif 'SettingItem("均衡器"' not in h:
+    print("37 设置页入口已移除，跳过")
+else:
+    print("X 37 入口锚点形态异常")
+    sys.exit(1)
 print("OK 37 完成")
 PYEOF37
 
 echo "=== 37 完成 ==="
 
-# === 37 v8: 纯 DSP 版（系统 EQ 已移除） ===
+# === 37 v9: 纯 DSP 版（系统 EQ 已移除）+ 设置页入口移除 ===
 # 页面只剩 DSP 一个引擎开关；persistEq 唯一落盘（原子写 + commit）；onCreate 一次性清档 eq_v8_clean。
-echo "=== 37 v8 完成 ==="
+echo "=== 37 v9 完成 ==="
