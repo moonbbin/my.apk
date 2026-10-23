@@ -2469,3 +2469,98 @@ open(P, "w", encoding="utf-8").write(s)
 print("OK 21 v41 sub/cross 下发已加")
 PYEOF21V41
 echo "=== 21 v41 完成 ==="
+
+# === 21 v42: 评论（只读）StateFlow + 网易云热评拉取 ===
+python3 << 'PYEOF21V42'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[21v42]" in s:
+    print("跳过（21 v42 已应用）"); sys.exit(0)
+old = "import kotlinx.coroutines.launch"
+assert s.count(old) == 1, "import launch 锚点"
+s = s.replace(old, old + "\nimport kotlinx.coroutines.CoroutineScope\nimport kotlinx.coroutines.Dispatchers", 1)
+old = "import org.json.JSONArray"
+assert s.count(old) == 1, "import json 锚点"
+s = s.replace(old, "import java.net.HttpURLConnection\nimport java.net.URL\n" + old, 1)
+old = "object LxPlayerManager {"
+assert s.count(old) == 1, "object 锚点"
+s = s.replace(old, """// [21v42] 评论条目（只读展示）
+data class LxComment(
+    val userName: String,
+    val avatarUrl: String,
+    val content: String,
+    val likedCount: Int,
+    val timeMs: Long,
+)
+
+""" + old, 1)
+old = "        fun applyEqFromPrefs() {"
+assert s.count(old) == 1, "applyEq 锚点"
+new = """        // [21v42] 评论（只读）：网易云公开热评，IO 拉取、4 秒超时、失败静默空列表、令牌防串歌
+        private val _comments = MutableStateFlow<List<LxComment>>(emptyList())
+        val comments: StateFlow<List<LxComment>> = _comments
+        @Volatile private var commentToken = 0
+        @Volatile private var commentKey = ""
+
+        fun fetchCommentsAsync(platform: String, songId: String, title: String, artist: String) {
+            val key = platform + "|" + songId + "|" + title
+            if (key == commentKey && _comments.value.isNotEmpty()) return
+            commentKey = key
+            val myToken = ++commentToken
+            _comments.value = emptyList()
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val wyId = if (platform == "wy") songId else findNeteaseSongId(title, artist)
+                    if (wyId.isNullOrBlank()) return@launch
+                    val list = fetchNeteaseComments(wyId)
+                    if (myToken == commentToken) _comments.value = list
+                } catch (e: Exception) {
+                    android.util.Log.w("LxComment", "评论拉取失败: " + e.message)
+                }
+            }
+        }
+
+        private suspend fun findNeteaseSongId(title: String, artist: String): String? {
+            return try {
+                val both = LxMusicSearchApi.searchBoth(title + " " + artist)
+                val all = both.full + both.display
+                val exact = all.firstOrNull { it.platform == "wy" && it.title.contains(title.take(6)) && (artist.isBlank() || it.artist.contains(artist.take(2))) }
+                (exact ?: all.firstOrNull { it.platform == "wy" && it.title.contains(title.take(6)) })?.id
+            } catch (e: Exception) { null }
+        }
+
+        private fun fetchNeteaseComments(wyId: String): List<LxComment> {
+            val conn = URL("https://music.163.com/api/v1/resource/comments/R_SO_4_" + wyId + "?limit=20").openConnection() as HttpURLConnection
+            conn.connectTimeout = 4000
+            conn.readTimeout = 4000
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36")
+            conn.setRequestProperty("Referer", "https://music.163.com/")
+            val text = conn.inputStream.bufferedReader().use { it.readText() }
+            val root = JSONObject(text)
+            val hot = root.optJSONArray("hotComments")
+            val src = if (hot != null && hot.length() > 0) hot else root.optJSONArray("comments") ?: return emptyList()
+            val out = ArrayList<LxComment>()
+            val n = if (src.length() < 20) src.length() else 20
+            for (i in 0 until n) {
+                val c = src.optJSONObject(i) ?: continue
+                val u = c.optJSONObject("user")
+                out.add(LxComment(
+                    userName = u?.optString("nickname").orEmpty(),
+                    avatarUrl = u?.optString("avatarUrl").orEmpty(),
+                    content = c.optString("content"),
+                    likedCount = c.optInt("likedCount"),
+                    timeMs = c.optLong("time"),
+                ))
+            }
+            return out
+        }
+
+""" + old
+s = s.replace(old, new, 1)
+open(P, "w", encoding="utf-8").write(s)
+print("OK 21 v42 评论链已加")
+PYEOF21V42
+echo "=== 21 v42 完成 ==="
