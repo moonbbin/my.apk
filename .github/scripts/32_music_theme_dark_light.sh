@@ -5985,3 +5985,48 @@ else:
     print("OK 32 v95 done")
 PYEOF95
 echo "=== 32 v95 完成 ==="
+
+# === 32 v96: 默认深色(theme_mode 未设置时默认 1) + 主题外观入口改开发中 ===
+python3 << 'PYEOF96'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+def save(p, s):
+    open(p, "w", encoding="utf-8").write(s)
+
+BASE = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/"
+p = BASE + "MusicHomeActivity.kt"
+s = load(p)
+if "[32v96]" in s:
+    print("跳过（32 v96 MH 已应用）")
+else:
+    old = 'getInt("theme_mode", 0)'
+    assert s.count(old) == 2, "v96 MH theme_mode 锚点数 " + str(s.count(old))
+    s = s.replace(old, 'getInt("theme_mode", 1) /* [32v96] 默认深色 */')
+    old_item = ('SettingItem("主题外观", "深色模式、动态取色") {\n'
+                '                    context.startActivity(android.content.Intent(context, com.github.tvbox.osc.ui.activity.LxThemeSettingsActivity::class.java))\n'
+                '                },')
+    assert s.count(old_item) == 1, "v96 主题外观项锚点"
+    new_item = ('SettingItem("主题外观", "深色模式、动态取色") {\n'
+                '                    android.widget.Toast.makeText(context, "主题外观 开发中", android.widget.Toast.LENGTH_SHORT).show() // [32v96] 入口暂时关闭\n'
+                '                },')
+    s = s.replace(old_item, new_item)
+    assert s.count("[32v96]") == 3, "v96 MH post-check"
+    save(p, s)
+    print("OK 32 v96 MH 默认深色+主题外观开发中")
+
+for fname in ["LxThemeSettingsActivity.kt", "LxSourceSettings.kt", "LxArtistDetailActivity.kt"]:
+    p = BASE + fname
+    s = load(p)
+    old = 'getInt("theme_mode", 0)'
+    if s.count(old) == 0:
+        print("跳过（32 v96 " + fname + " 已应用或无锚点）")
+        continue
+    assert s.count(old) == 1, "v96 " + fname + " 锚点数 " + str(s.count(old))
+    s = s.replace(old, 'getInt("theme_mode", 1) /* [32v96] 默认深色 */')
+    save(p, s)
+    print("OK 32 v96 " + fname + " 默认深色")
+PYEOF96
+echo "=== 32 v96 完成 ==="
