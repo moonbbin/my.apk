@@ -105,7 +105,7 @@
 | 36 | `36_user_playlist.sh` | **自建歌单**<br>UserPlaylistManager（SharedPreferences 落盘）+ 歌单页；含 QQ/酷狗歌单导入支持。 |
 | 37 | `37_eq_settings.sh` | **均衡器设置页**<br>两页 Pager（PEQ 六段 + 六级 DSP 开关），播放页以 Dialog 悬浮呈现。 |
 | 38 | `38_eq_dsp.sh` | **自研 DSP 引擎**<br>六级独立开关：PEQ/联动拓宽/四段 MBC/Sub 合成/瞬态/Crossfeed；现行参数 = v14 回滚的稳妥档（v12 参数)。 |
-| 39 | `39_wallpaper.sh` | **自定义壁纸**<br>wp1：WallpaperManager（图片模式）+ 设置页 + MusicHome 根注入（壁纸层+Scrim）+ 六页根透出（alpha04 装机验证通过）。<br>wp2：渐变模式（Manager mode/gradient 双字段 + 三预设）+ 在线壁纸库（当时 picsum Mock 占位）。<br>wp3：壁纸库换真实源——搜图神器聚合图池（签名协议已逆向：time 扰动 + 全参排序 MD5，8 分类：精选/高清/全面屏/2K/4K/AI绘画/平板/聊天背景，实测 code=200）；加载更多分页 + 按 id 去重。 |
+| 39 | `39_wallpaper.sh` | **自定义壁纸**<br>wp1：WallpaperManager（图片模式）+ 设置页 + MusicHome 根注入（壁纸层+Scrim）+ 六页根透出（alpha04 装机验证通过）。<br>wp2：渐变模式（Manager mode/gradient 双字段 + 三预设）+ 在线壁纸库（当时 picsum Mock 占位）。<br>wp3：壁纸库换真实源——搜图神器聚合图池（签名协议已逆向：time 扰动 + 全参排序 MD5，8 分类：精选/高清/全面屏/2K/4K/AI绘画/平板/聊天背景，实测 code=200）；加载更多分页 + 按 id 去重。<br>wp4：效果调整（参考 Peek 壁纸设置）——文字颜色模式（跟随主题/浅色文字/深色文字，经 MH 的 effDark41 接入 32 同步点，状态栏图标同步）+ 遮罩浓度滑杆（0–90%，未动时自动沿用深 60/浅 70）；不透明度/模糊暂缓。 |
 
 ## 约束速查
 
