@@ -271,6 +271,7 @@ rm -f "$TMPB64"
 grep -q 'class LxWallpaperSettingsActivity' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxWallpaperSettingsActivity.kt || { echo "X 39 class LxWallpaperSettingsActivity 写入失败"; exit 1; }
 echo "[39] MusicHome 外壳接壁纸层 + 六页根背景透出 + 设置入口"
 echo "[39] MusicHome 外壳接壁纸层 + 六页根背景透出 + 设置入口"
+echo "[39] MusicHome 外壳接壁纸层 + 六页根背景透出 + 设置入口"
 python3 << 'PYEOF39'
 import io, sys, os
 while not os.path.exists('avbox/app/src/main/AndroidManifest.xml') and os.getcwd() != '/':
@@ -292,6 +293,18 @@ def rep(s, old, new, tag, cnt=1):
     n = s.count(old)
     assert n == cnt, '❌ [39] %s 锚点数量异常: %d' % (tag, n)
     return s.replace(old, new, cnt)
+
+# ============ 0) manifest 注册壁纸页 ============
+MP = 'avbox/app/src/main/AndroidManifest.xml'
+m = load(MP)
+if 'LxWallpaperSettingsActivity' not in m:
+    assert '</application>' in m, '❌ [39] manifest 无 </application>'
+    act = '<activity android:name=".ui.activity.LxWallpaperSettingsActivity" android:exported="false" />'
+    m = m.replace('</application>', '        ' + act + '\n    </application>', 1)
+    save(MP, m)
+    print('OK manifest 壁纸页已注册')
+else:
+    print('SKIP manifest 已注册')
 
 # ============ 1) MusicHomeActivity ============
 MH = BASE + 'ui/activity/MusicHomeActivity.kt'
