@@ -2400,3 +2400,20 @@ open(P, "w", encoding="utf-8").write(s)
 print("OK 21 v37 纯 DSP：系统 EQ 已移除")
 PYEOF21V37
 echo "=== 21 v37 完成 ==="
+
+# === 21 v38: 立体声拓宽开关下发 ===
+python3 << 'PYEOF21V38'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+old = "            eqDspProcessor.dspEnabled = dspOn"
+assert s.count(old) == 1
+new = """            eqDspProcessor.dspEnabled = dspOn
+            eqDspProcessor.stereoWide = try { p?.getBoolean("wide", false) ?: false } catch (_: Exception) { false } // [21v38] 立体声拓宽开关下发"""
+s = s.replace(old, new, 1)
+open(P, "w", encoding="utf-8").write(s)
+print("OK 21 v38 wide 下发已加")
+PYEOF21V38
+echo "=== 21 v38 完成 ==="
