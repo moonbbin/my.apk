@@ -98,6 +98,15 @@
 | 34 | `34_player_immersive.sh` | 播放页沉浸式迭代（已退役）<br>v1–v65 全部成果（含五组件抽离与纯化）已固化进 35 号基线；2026-10-22 build.yml 调用步已删除，文件保留备查。 |
 | 35 | `35_player_baseline.sh` | **播放页基线原稿（现行唯一所有者）**<br>base64 全量写入播放页 7 文件：LxPlayerActivity.kt（1724 行）+ PlayerControls/PlayerTopBar/PlayerProgressBar/PlayerCover/PlayerLyricPreview + LxIcons.kt；内容与开发基线同步；build.yml 末位运行。今后改播放页先改基线再重生本脚本载荷。 |
 
+## 歌单 / 均衡器 / 壁纸（36-39）
+
+| # | 脚本 | 干嘛的 |
+|---|------|--------|
+| 36 | `36_user_playlist.sh` | **自建歌单**<br>UserPlaylistManager（SharedPreferences 落盘）+ 歌单页；含 QQ/酷狗歌单导入支持。 |
+| 37 | `37_eq_settings.sh` | **均衡器设置页**<br>两页 Pager（PEQ 六段 + 六级 DSP 开关），播放页以 Dialog 悬浮呈现。 |
+| 38 | `38_eq_dsp.sh` | **自研 DSP 引擎**<br>六级独立开关：PEQ/联动拓宽/四段 MBC/Sub 合成/瞬态/Crossfeed；现行参数 = v14 回滚的稳妥档（v12 参数)。 |
+| 39 | `39_wallpaper.sh` | **自定义壁纸**<br>wp1：WallpaperManager（图片模式）+ 设置页 + MusicHome 根注入（壁纸层+Scrim）+ 六页根透出（alpha04 装机验证通过）。<br>wp2：渐变模式（Manager mode/gradient 双字段 + 三预设）+ 在线壁纸库（当时 picsum Mock 占位）。<br>wp3：壁纸库换真实源——搜图神器聚合图池（签名协议已逆向：time 扰动 + 全参排序 MD5，8 分类：精选/高清/全面屏/2K/4K/AI绘画/平板/聊天背景，实测 code=200）；加载更多分页 + 按 id 去重。 |
+
 ## 约束速查
 
 - **不动主体**：只改 `.github/scripts`，不改 AVBox 源码；`.github/workflows/build.yml` 由用户在网页端手动改（App 无 workflows 权限）。
