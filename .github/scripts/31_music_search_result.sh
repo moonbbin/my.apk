@@ -220,3 +220,25 @@ open(TARGET, 'w', encoding='utf-8').write(src)
 print("SEARCH_HIST_V1 接线完成")
 PYEOF
 echo "=== 31 v6 完成 ==="
+
+# === 31 v7: 清空连带清结果回落地页（SEARCH_HIST_V2），否则历史区被旧结果永久挡住 ===
+python3 << 'PYEOF'
+import sys, os
+TARGET = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicSearchActivity.kt"
+while not os.path.exists(TARGET) and os.getcwd() != "/":
+    os.chdir("..")
+src = open(TARGET, encoding='utf-8').read()
+MARK = "// SEARCH_HIST_V2"
+if MARK in src:
+    print("跳过（SEARCH_HIST_V2 已存在）")
+    sys.exit(0)
+old = '            onClearQuery = { keyword = "" },\n'
+new = '            onClearQuery = { keyword = ""; results = emptyList(); fullResults = emptyList(); albumResults = emptyList(); artistResult = null; errorMsg = null; hasSearched = false }, // SEARCH_HIST_V2 清空即回落地页（历史区才有机会显示）\n'
+if src.count(old) != 1:
+    print("错误：onClearQuery 锚点数量异常 %d" % src.count(old))
+    sys.exit(1)
+src = src.replace(old, new, 1)
+open(TARGET, 'w', encoding='utf-8').write(src)
+print("SEARCH_HIST_V2 清空回落地已接线")
+PYEOF
+echo "=== 31 v7 完成 ==="
