@@ -2320,3 +2320,83 @@ print("OK 21 v36 完成")
 PYEOF36
 
 echo "=== 21 v36 完成 ==="
+
+
+# === 21 v37: 纯 DSP（移除系统 EQ 全部遗留代码） ===
+python3 << 'PYEOF21V37'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+
+def scan_fn(text, sig):
+    i = text.index(sig)
+    # 回吞紧贴上方的 @Deprecated 行与注释行
+    start = i
+    lines = text[:i].splitlines(keepends=True)
+    j = len(lines)
+    while j > 0 and (lines[j-1].lstrip().startswith('@Deprecated') or lines[j-1].lstrip().startswith('// [21v')):
+        j -= 1
+    start = sum(len(x) for x in lines[:j])
+    depth = 0
+    k = text.index('{', i)
+    m = k
+    while True:
+        c = text[m]
+        if c == '{': depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0: break
+        m += 1
+    end = m + 1
+    if end < len(text) and text[end] == '\n': end += 1
+    return start, end
+
+def remove_fn(text, sig):
+    a, b = scan_fn(text, sig)
+    seg = text[a:b]
+    assert sig.split('(')[0] in seg, seg[:80]
+    return text[:a] + text[b:]
+
+# 1) import 与字段
+old = 'import android.media.audiofx.Equalizer\n'
+assert s.count(old) == 1; s = s.replace(old, '', 1)
+old = '''    @Deprecated("系统 EQ 遗留：纯 DSP 版本将移除") // [21v36]
+    private var eqEffect: Equalizer? = null // [21v32]
+'''
+assert s.count(old) == 1; s = s.replace(old, '', 1)
+
+# 2) 会话钩子里的 bindEqualizer 调用行（响度钩子保留）
+old = '                        try{bindEqualizer(sid)}catch(_:Exception){} // [21v32]\n'
+assert s.count(old) == 1; s = s.replace(old, '', 1)
+
+# 3) 删除三个系统 EQ 函数
+s = remove_fn(s, 'private fun bindEqualizer(sid: Int)')
+s = remove_fn(s, 'fun isEqOn(): Boolean')
+s = remove_fn(s, 'private fun applyEqLevels(eq: Equalizer)')
+
+# 4) applyEqFromPrefs 整替为纯 DSP 版
+a, b = scan_fn(s, 'fun applyEqFromPrefs()')
+new_fn = '''    fun applyEqFromPrefs() { // [21v37] 纯 DSP：系统 EQ 已移除，只剩处理器一条链
+        try {
+            val p = appContext?.getSharedPreferences("eq_settings", android.content.Context.MODE_PRIVATE)
+            val dspOn = try { p?.getBoolean("dsp", false) ?: false } catch (_: Exception) { false }
+            eqDspProcessor.dspEnabled = dspOn
+            if (dspOn && p != null) {
+                fun gg(k: String) = try { p.getFloat(k, 0f) } catch (_: Exception) { 0f }
+                eqDspProcessor.setGains(gg("sub"), gg("low"), gg("mid"), gg("clarity"), gg("high"), gg("amb"))
+            }
+        } catch (_: Exception) {
+        }
+    }
+'''
+s = s[:a] + new_fn + s[b:]
+
+for dead in ('Equalizer', 'eqEffect', 'bindEqualizer', 'applyEqLevels', 'isEqOn'):
+    if dead in s:
+        print(f"X 21v37 残留 {dead}"); sys.exit(1)
+open(P, "w", encoding="utf-8").write(s)
+print("OK 21 v37 纯 DSP：系统 EQ 已移除")
+PYEOF21V37
+echo "=== 21 v37 完成 ==="

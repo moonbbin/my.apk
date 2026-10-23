@@ -35,176 +35,219 @@ TMPB64=$(mktemp)
     printf '%s' 'IENvbXBvbmVudEFjdGl2aXR5KCkgewogICAgb3ZlcnJpZGUgZnVuIG9uQ3JlYXRlKHNhdmVkSW5z' >> "$TMPB64"
     printf '%s' 'dGFuY2VTdGF0ZTogQnVuZGxlPykgewogICAgICAgIHN1cGVyLm9uQ3JlYXRlKHNhdmVkSW5zdGFu' >> "$TMPB64"
     printf '%s' 'Y2VTdGF0ZSkKICAgICAgICB2YWwgYXBwQ3R4ID0gYXBwbGljYXRpb25Db250ZXh0CiAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'TXVzaWNUaGVtZU1hbmFnZXIuaW5pdChhcHBDdHgpCiAgICAgICAgc2V0Q29udGVudCB7CiAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgIHZhbCBpc0RhcmsgYnkgTXVzaWNUaGVtZU1hbmFnZXIuaXNEYXJrVGhlbWUKICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgdmFsIHdpbmRvdyA9IHRoaXNATHhFcVNldHRpbmdzQWN0aXZpdHkud2luZG93CiAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgIFNpZGVFZmZlY3QgewogICAgICAgICAgICAgICAgV2luZG93Q29tcGF0LmdldEluc2V0' >> "$TMPB64"
-    printf '%s' 'c0NvbnRyb2xsZXIod2luZG93LCB3aW5kb3cuZGVjb3JWaWV3KQogICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'IC5pc0FwcGVhcmFuY2VMaWdodFN0YXR1c0JhcnMgPSAhaXNEYXJrCiAgICAgICAgICAgIH0KICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgTHhNdXNpY1RoZW1lKGlzRGFya1RoZW1lID0gaXNEYXJrKSB7CiAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICBFcVNldHRpbmdzU2NyZWVuKG9uQmFjayA9IHsgZmluaXNoKCkgfSkKICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'fQogICAgICAgIH0KICAgIH0KfQoKcHJpdmF0ZSB2YWwgRVFfS0VZUyA9IGxpc3RPZigic3ViIiwg' >> "$TMPB64"
-    printf '%s' 'ImxvdyIsICJtaWQiLCAiY2xhcml0eSIsICJoaWdoIiwgImFtYiIpCnByaXZhdGUgdmFsIEVRX0xB' >> "$TMPB64"
-    printf '%s' 'QkVMUyA9IGxpc3RPZigKICAgICLotoXkvY7popEiIHRvICI2MEh6IMK3IOS4i+a9nCIsCiAgICAi' >> "$TMPB64"
-    printf '%s' '5L2O6aKRIiB0byAiMjMwSHogwrcg5Yqb6YePIiwKICAgICLkuK3popEiIHRvICI5MTBIeiDCtyDk' >> "$TMPB64"
-    printf '%s' 'urrlo7AiLAogICAgIua4heaZsOW6piIgdG8gIjNrSHogwrcg5ZCQ5a2XIiwKICAgICLpq5jpopEi' >> "$TMPB64"
-    printf '%s' 'IHRvICIxNGtIeiDCtyDmmI7kuq4iLAogICAgIuawm+WbtOaEnyIgdG8gIjNrKzE0ayDCtyDnjrDl' >> "$TMPB64"
-    printf '%s' 'nLoiCikKCi8vIOmihOiuvumhuuW6j+S4jiBFUV9LRVlTIOWvuem9kO+8mnN1YiwgbG93LCBtaWQs' >> "$TMPB64"
-    printf '%s' 'IGNsYXJpdHksIGhpZ2gsIGFtYu+8iOWNleS9jSBkQu+8iQpwcml2YXRlIHZhbCBFUV9QUkVTRVRT' >> "$TMPB64"
-    printf '%s' 'OiBMaXN0PFBhaXI8U3RyaW5nLCBMaXN0PEZsb2F0Pj4+ID0gbGlzdE9mKAogICAgIuW5s+ebtCIg' >> "$TMPB64"
-    printf '%s' 'dG8gbGlzdE9mKDBmLCAwZiwgMGYsIDBmLCAwZiwgMGYpLAogICAgIuS9jumfs+WinuW8uiIgdG8g' >> "$TMPB64"
-    printf '%s' 'bGlzdE9mKDZmLCA0ZiwgMGYsIDBmLCAwZiwgMWYpLAogICAgIuS6uuWjsOeqgeWHuiIgdG8gbGlz' >> "$TMPB64"
-    printf '%s' 'dE9mKC0yZiwgMGYsIDNmLCA1ZiwgMmYsIDBmKSwKICAgICLmkYfmu5oiIHRvIGxpc3RPZig1Ziwg' >> "$TMPB64"
-    printf '%s' 'M2YsIC0xZiwgM2YsIDVmLCAyZiksCiAgICAi5Y+k5YW4IiB0byBsaXN0T2YoM2YsIDJmLCAwZiwg' >> "$TMPB64"
-    printf '%s' 'MmYsIDRmLCAzZiksCiAgICAi5piO5LquIiB0byBsaXN0T2YoMGYsIDBmLCAxZiwgNGYsIDdmLCAz' >> "$TMPB64"
-    printf '%s' 'ZikKKQoKcHJpdmF0ZSBmdW4gbG9hZEVxR2FpbnMoY29udGV4dDogQ29udGV4dCk6IExpc3Q8Rmxv' >> "$TMPB64"
-    printf '%s' 'YXQ+IHsKICAgIHZhbCBwcmVmcyA9IGNvbnRleHQuZ2V0U2hhcmVkUHJlZmVyZW5jZXMoImVxX3Nl' >> "$TMPB64"
-    printf '%s' 'dHRpbmdzIiwgQ29udGV4dC5NT0RFX1BSSVZBVEUpCiAgICByZXR1cm4gRVFfS0VZUy5tYXAgeyBr' >> "$TMPB64"
-    printf '%s' 'IC0+IHRyeSB7IHByZWZzLmdldEZsb2F0KGssIDBmKSB9IGNhdGNoIChfOiBFeGNlcHRpb24pIHsg' >> "$TMPB64"
-    printf '%s' 'MGYgfSB9Cn0KCnByaXZhdGUgZnVuIHNhdmVFcShjb250ZXh0OiBDb250ZXh0LCBlbmFibGVkOiBC' >> "$TMPB64"
-    printf '%s' 'b29sZWFuLCBnYWluczogTGlzdDxGbG9hdD4pIHsKICAgIHRyeSB7CiAgICAgICAgdmFsIGUgPSBj' >> "$TMPB64"
-    printf '%s' 'b250ZXh0LmdldFNoYXJlZFByZWZlcmVuY2VzKCJlcV9zZXR0aW5ncyIsIENvbnRleHQuTU9ERV9Q' >> "$TMPB64"
-    printf '%s' 'UklWQVRFKS5lZGl0KCkKICAgICAgICBlLnB1dEJvb2xlYW4oIm9uIiwgZW5hYmxlZCkKICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICBFUV9LRVlTLmZvckVhY2hJbmRleGVkIHsgaSwgayAtPiBlLnB1dEZsb2F0KGssIGdhaW5zLmdl' >> "$TMPB64"
-    printf '%s' 'dE9yRWxzZShpKSB7IDBmIH0pIH0KICAgICAgICBlLmFwcGx5KCkKICAgIH0gY2F0Y2ggKF86IEV4' >> "$TMPB64"
-    printf '%s' 'Y2VwdGlvbikgewogICAgfQogICAgTHhQbGF5ZXJNYW5hZ2VyLmFwcGx5RXFGcm9tUHJlZnMoKQp9' >> "$TMPB64"
-    printf '%s' 'CgpAQ29tcG9zYWJsZQpmdW4gRXFTZXR0aW5nc1NjcmVlbihvbkJhY2s6ICgpIC0+IFVuaXQpIHsK' >> "$TMPB64"
-    printf '%s' 'ICAgIHZhbCBjb250ZXh0ID0gTG9jYWxDb250ZXh0LmN1cnJlbnQKICAgIHZhciBlbmFibGVkIGJ5' >> "$TMPB64"
-    printf '%s' 'IHJlbWVtYmVyIHsKICAgICAgICBtdXRhYmxlU3RhdGVPZigKICAgICAgICAgICAgdHJ5IHsKICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgIGNvbnRleHQuZ2V0U2hhcmVkUHJlZmVyZW5jZXMoImVxX3NldHRpbmdzIiwg' >> "$TMPB64"
-    printf '%s' 'Q29udGV4dC5NT0RFX1BSSVZBVEUpLmdldEJvb2xlYW4oIm9uIiwgZmFsc2UpCiAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'IH0gY2F0Y2ggKF86IEV4Y2VwdGlvbikgewogICAgICAgICAgICAgICAgZmFsc2UKICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgfQogICAgICAgICkKICAgIH0KICAgIHZhciBnYWlucyBieSByZW1lbWJlciB7IG11dGFibGVT' >> "$TMPB64"
-    printf '%s' 'dGF0ZU9mKGxvYWRFcUdhaW5zKGNvbnRleHQpKSB9CiAgICB2YXIgcHJlc2V0TmFtZSBieSByZW1l' >> "$TMPB64"
-    printf '%s' 'bWJlciB7IG11dGFibGVTdGF0ZU9mKCLoh6rlrprkuYkiKSB9CgogICAgQ29sdW1uKAogICAgICAg' >> "$TMPB64"
-    printf '%s' 'IG1vZGlmaWVyID0gTW9kaWZpZXIKICAgICAgICAgICAgLmZpbGxNYXhTaXplKCkKICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgLmJhY2tncm91bmQobXVzaWNDb2xvcnMoKS5iYWNrZ3JvdW5kKQogICAgICAgICAgICAudmVy' >> "$TMPB64"
-    printf '%s' 'dGljYWxTY3JvbGwocmVtZW1iZXJTY3JvbGxTdGF0ZSgpKQogICAgICAgICAgICAucGFkZGluZyho' >> "$TMPB64"
-    printf '%s' 'b3Jpem9udGFsID0gMTYuZHApCiAgICApIHsKICAgICAgICBSb3coCiAgICAgICAgICAgIG1vZGlm' >> "$TMPB64"
-    printf '%s' 'aWVyID0gTW9kaWZpZXIKICAgICAgICAgICAgICAgIC5maWxsTWF4V2lkdGgoKQogICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgLnBhZGRpbmcodG9wID0gMjQuZHAsIGJvdHRvbSA9IDguZHApLAogICAgICAgICAgICB2' >> "$TMPB64"
-    printf '%s' 'ZXJ0aWNhbEFsaWdubWVudCA9IEFsaWdubWVudC5DZW50ZXJWZXJ0aWNhbGx5CiAgICAgICAgKSB7' >> "$TMPB64"
-    printf '%s' 'CiAgICAgICAgICAgIFRleHQoCiAgICAgICAgICAgICAgICAi4oC5IiwKICAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'IHN0eWxlID0gTWF0ZXJpYWxUaGVtZS50eXBvZ3JhcGh5LmhlYWRsaW5lTGFyZ2UsCiAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICBjb2xvciA9IG11c2ljQ29sb3JzKCkudGV4dFByaW1hcnksCiAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICBtb2RpZmllciA9IE1vZGlmaWVyCiAgICAgICAgICAgICAgICAgICAgLnBhZGRpbmcoZW5kID0g' >> "$TMPB64"
-    printf '%s' 'OC5kcCkKICAgICAgICAgICAgICAgICAgICAuY2xpY2thYmxlIHsgb25CYWNrKCkgfQogICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICApCiAgICAgICAgICAgIFRleHQoCiAgICAgICAgICAgICAgICAi5Z2H6KGh5ZmoIiwKICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgIHN0eWxlID0gTWF0ZXJpYWxUaGVtZS50eXBvZ3JhcGh5LnRpdGxlTGFyZ2Us' >> "$TMPB64"
-    printf '%s' 'CiAgICAgICAgICAgICAgICBmb250V2VpZ2h0ID0gRm9udFdlaWdodC5Cb2xkLAogICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgY29sb3IgPSBtdXNpY0NvbG9ycygpLnRleHRQcmltYXJ5CiAgICAgICAgICAgICkKICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgU3BhY2VyKE1vZGlmaWVyLndlaWdodCgxZikpCiAgICAgICAgICAgIFRleHRCdXR0' >> "$TMPB64"
-    printf '%s' 'b24ob25DbGljayA9IHsKICAgICAgICAgICAgICAgIGdhaW5zID0gTGlzdCg2KSB7IDBmIH0KICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgIHByZXNldE5hbWUgPSAi5bmz55u0IgogICAgICAgICAgICAgICAgc2F2ZUVx' >> "$TMPB64"
-    printf '%s' 'KGNvbnRleHQsIGVuYWJsZWQsIGdhaW5zKQogICAgICAgICAgICB9KSB7CiAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICBUZXh0KCLph43nva4iLCBjb2xvciA9IG11c2ljQ29sb3JzKCkuYWNjZW50KQogICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICB9CiAgICAgICAgfQoKICAgICAgICBDYXJkKAogICAgICAgICAgICBtb2RpZmllciA9IE1vZGlm' >> "$TMPB64"
-    printf '%s' 'aWVyLmZpbGxNYXhXaWR0aCgpLAogICAgICAgICAgICBzaGFwZSA9IE1hdGVyaWFsVGhlbWUuc2hh' >> "$TMPB64"
-    printf '%s' 'cGVzLmxhcmdlLAogICAgICAgICAgICBjb2xvcnMgPSBDYXJkRGVmYXVsdHMuY2FyZENvbG9ycyhj' >> "$TMPB64"
-    printf '%s' 'b250YWluZXJDb2xvciA9IG11c2ljQ29sb3JzKCkuY2FyZCkKICAgICAgICApIHsKICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgUm93KAogICAgICAgICAgICAgICAgbW9kaWZpZXIgPSBNb2RpZmllcgogICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgIC5maWxsTWF4V2lkdGgoKQogICAgICAgICAgICAgICAgICAgIC5wYWRkaW5nKGhvcml6' >> "$TMPB64"
-    printf '%s' 'b250YWwgPSAxNi5kcCwgdmVydGljYWwgPSAxNC5kcCksCiAgICAgICAgICAgICAgICB2ZXJ0aWNh' >> "$TMPB64"
-    printf '%s' 'bEFsaWdubWVudCA9IEFsaWdubWVudC5DZW50ZXJWZXJ0aWNhbGx5CiAgICAgICAgICAgICkgewog' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgQ29sdW1uKE1vZGlmaWVyLndlaWdodCgxZikpIHsKICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICBUZXh0KAogICAgICAgICAgICAgICAgICAgICAgICAi5ZCv55So5Z2H6KGh5ZmoIiwK' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgICAgICAgICAgc3R5bGUgPSBNYXRlcmlhbFRoZW1lLnR5cG9ncmFwaHku' >> "$TMPB64"
-    printf '%s' 'Ym9keUxhcmdlLAogICAgICAgICAgICAgICAgICAgICAgICBjb2xvciA9IG11c2ljQ29sb3JzKCku' >> "$TMPB64"
-    printf '%s' 'dGV4dFByaW1hcnkKICAgICAgICAgICAgICAgICAgICApCiAgICAgICAgICAgICAgICAgICAgVGV4' >> "$TMPB64"
-    printf '%s' 'dCgKICAgICAgICAgICAgICAgICAgICAgICAgIuWFs+mXreWQjueri+WNs+aBouWkjeWOn+WjsCIs' >> "$TMPB64"
-    printf '%s' 'CiAgICAgICAgICAgICAgICAgICAgICAgIHN0eWxlID0gTWF0ZXJpYWxUaGVtZS50eXBvZ3JhcGh5' >> "$TMPB64"
-    printf '%s' 'LmJvZHlTbWFsbCwKICAgICAgICAgICAgICAgICAgICAgICAgY29sb3IgPSBtdXNpY0NvbG9ycygp' >> "$TMPB64"
-    printf '%s' 'LnRleHRTZWNvbmRhcnkKICAgICAgICAgICAgICAgICAgICApCiAgICAgICAgICAgICAgICB9CiAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICBTd2l0Y2goCiAgICAgICAgICAgICAgICAgICAgY2hlY2tlZCA9IGVuYWJs' >> "$TMPB64"
-    printf '%s' 'ZWQsCiAgICAgICAgICAgICAgICAgICAgb25DaGVja2VkQ2hhbmdlID0gewogICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICBlbmFibGVkID0gaXQKICAgICAgICAgICAgICAgICAgICAgICAgc2F2ZUVxKGNv' >> "$TMPB64"
-    printf '%s' 'bnRleHQsIGVuYWJsZWQsIGdhaW5zKQogICAgICAgICAgICAgICAgICAgIH0sCiAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgY29sb3JzID0gU3dpdGNoRGVmYXVsdHMuY29sb3JzKAogICAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICBjaGVja2VkVGh1bWJDb2xvciA9IG11c2ljQ29sb3JzKCkuYWNjZW50VGV4dCwKICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgICAgICAgY2hlY2tlZFRyYWNrQ29sb3IgPSBtdXNpY0NvbG9ycygpLmFj' >> "$TMPB64"
-    printf '%s' 'Y2VudCwKICAgICAgICAgICAgICAgICAgICAgICAgdW5jaGVja2VkVGh1bWJDb2xvciA9IG11c2lj' >> "$TMPB64"
-    printf '%s' 'Q29sb3JzKCkudGV4dFNlY29uZGFyeSwKICAgICAgICAgICAgICAgICAgICAgICAgdW5jaGVja2Vk' >> "$TMPB64"
-    printf '%s' 'VHJhY2tDb2xvciA9IG11c2ljQ29sb3JzKCkuY2FyZFNlY29uZGFyeQogICAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICkKICAgICAgICAgICAgICAgICkKICAgICAgICAgICAgfQogICAgICAgIH0KCiAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'U3BhY2VyKE1vZGlmaWVyLmhlaWdodCgxNi5kcCkpCiAgICAgICAgVGV4dCgKICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'IumihOiuviIsCiAgICAgICAgICAgIHN0eWxlID0gTWF0ZXJpYWxUaGVtZS50eXBvZ3JhcGh5LnRp' >> "$TMPB64"
-    printf '%s' 'dGxlU21hbGwsCiAgICAgICAgICAgIGNvbG9yID0gbXVzaWNDb2xvcnMoKS50ZXh0U2Vjb25kYXJ5' >> "$TMPB64"
-    printf '%s' 'LAogICAgICAgICAgICBtb2RpZmllciA9IE1vZGlmaWVyLnBhZGRpbmcoc3RhcnQgPSA0LmRwLCBi' >> "$TMPB64"
-    printf '%s' 'b3R0b20gPSA4LmRwKQogICAgICAgICkKICAgICAgICBSb3coCiAgICAgICAgICAgIG1vZGlmaWVy' >> "$TMPB64"
-    printf '%s' 'ID0gTW9kaWZpZXIKICAgICAgICAgICAgICAgIC5maWxsTWF4V2lkdGgoKQogICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgLmhvcml6b250YWxTY3JvbGwocmVtZW1iZXJTY3JvbGxTdGF0ZSgpKSwKICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'aG9yaXpvbnRhbEFycmFuZ2VtZW50ID0gQXJyYW5nZW1lbnQuc3BhY2VkQnkoOC5kcCkKICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICApIHsKICAgICAgICAgICAgRVFfUFJFU0VUUy5mb3JFYWNoIHsgKG5hbWUsIHZhbHVlcykgLT4K' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgIEZpbHRlckNoaXAoCiAgICAgICAgICAgICAgICAgICAgc2VsZWN0ZWQg' >> "$TMPB64"
-    printf '%s' 'PSBwcmVzZXROYW1lID09IG5hbWUsCiAgICAgICAgICAgICAgICAgICAgb25DbGljayA9IHsKICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgICAgICAgZ2FpbnMgPSB2YWx1ZXMKICAgICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgcHJlc2V0TmFtZSA9IG5hbWUKICAgICAgICAgICAgICAgICAgICAgICAgc2F2ZUVxKGNvbnRl' >> "$TMPB64"
-    printf '%s' 'eHQsIGVuYWJsZWQsIGdhaW5zKQogICAgICAgICAgICAgICAgICAgIH0sCiAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgbGFiZWwgPSB7IFRleHQobmFtZSkgfSwKICAgICAgICAgICAgICAgICAgICBjb2xvcnMg' >> "$TMPB64"
-    printf '%s' 'PSBGaWx0ZXJDaGlwRGVmYXVsdHMuZmlsdGVyQ2hpcENvbG9ycygKICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgY29udGFpbmVyQ29sb3IgPSBtdXNpY0NvbG9ycygpLmNhcmQsCiAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgIGxhYmVsQ29sb3IgPSBtdXNpY0NvbG9ycygpLnRleHRTZWNvbmRhcnksCiAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgICAgIHNlbGVjdGVkQ29udGFpbmVyQ29sb3IgPSBtdXNpY0NvbG9ycygp' >> "$TMPB64"
-    printf '%s' 'LmFjY2VudCwKICAgICAgICAgICAgICAgICAgICAgICAgc2VsZWN0ZWRMYWJlbENvbG9yID0gbXVz' >> "$TMPB64"
-    printf '%s' 'aWNDb2xvcnMoKS5hY2NlbnRUZXh0CiAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICBib3JkZXIgPSBudWxsCiAgICAgICAgICAgICAgICApCiAgICAgICAgICAgIH0KICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICB9CgogICAgICAgIFNwYWNlcihNb2RpZmllci5oZWlnaHQoMTYuZHApKQogICAgICAgIENh' >> "$TMPB64"
-    printf '%s' 'cmQoCiAgICAgICAgICAgIG1vZGlmaWVyID0gTW9kaWZpZXIuZmlsbE1heFdpZHRoKCksCiAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgIHNoYXBlID0gTWF0ZXJpYWxUaGVtZS5zaGFwZXMubGFyZ2UsCiAgICAgICAgICAgIGNv' >> "$TMPB64"
-    printf '%s' 'bG9ycyA9IENhcmREZWZhdWx0cy5jYXJkQ29sb3JzKGNvbnRhaW5lckNvbG9yID0gbXVzaWNDb2xv' >> "$TMPB64"
-    printf '%s' 'cnMoKS5jYXJkKQogICAgICAgICkgewogICAgICAgICAgICBDb2x1bW4oTW9kaWZpZXIucGFkZGlu' >> "$TMPB64"
-    printf '%s' 'Zyhob3Jpem9udGFsID0gMTYuZHAsIHZlcnRpY2FsID0gOC5kcCkpIHsKICAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'IEVRX0xBQkVMUy5mb3JFYWNoSW5kZXhlZCB7IGluZGV4LCAobGFiZWwsIGhpbnQpIC0+CiAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgdmFsIHZhbHVlID0gZ2FpbnMuZ2V0T3JFbHNlKGluZGV4KSB7IDBmIH0K' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgICAgICBSb3coCiAgICAgICAgICAgICAgICAgICAgICAgIG1vZGlmaWVy' >> "$TMPB64"
-    printf '%s' 'ID0gTW9kaWZpZXIKICAgICAgICAgICAgICAgICAgICAgICAgICAgIC5maWxsTWF4V2lkdGgoKQog' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgICAgICAgICAgICAgLnBhZGRpbmcodG9wID0gMTAuZHApLAogICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgICB2ZXJ0aWNhbEFsaWdubWVudCA9IEFsaWdubWVudC5DZW50ZXJWZXJ0' >> "$TMPB64"
-    printf '%s' 'aWNhbGx5CiAgICAgICAgICAgICAgICAgICAgKSB7CiAgICAgICAgICAgICAgICAgICAgICAgIFRl' >> "$TMPB64"
-    printf '%s' 'eHQoCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBsYWJlbCwKICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgIHN0eWxlID0gTWF0ZXJpYWxUaGVtZS50eXBvZ3JhcGh5LmJvZHlMYXJnZSwKICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgICAgICAgICAgIGNvbG9yID0gbXVzaWNDb2xvcnMoKS50ZXh0UHJpbWFy' >> "$TMPB64"
-    printf '%s' 'eSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgIG1vZGlmaWVyID0gTW9kaWZpZXIud2lkdGgo' >> "$TMPB64"
-    printf '%s' 'NTYuZHApCiAgICAgICAgICAgICAgICAgICAgICAgICkKICAgICAgICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'VGV4dCgKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGhpbnQsCiAgICAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICBzdHlsZSA9IE1hdGVyaWFsVGhlbWUudHlwb2dyYXBoeS5ib2R5U21hbGwsCiAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgICAgICAgICAgICBjb2xvciA9IG11c2ljQ29sb3JzKCkudGV4dEhpbnQs' >> "$TMPB64"
-    printf '%s' 'CiAgICAgICAgICAgICAgICAgICAgICAgICAgICBtb2RpZmllciA9IE1vZGlmaWVyLndlaWdodCgx' >> "$TMPB64"
-    printf '%s' 'ZikKICAgICAgICAgICAgICAgICAgICAgICAgKQogICAgICAgICAgICAgICAgICAgICAgICBUZXh0' >> "$TMPB64"
-    printf '%s' 'KAogICAgICAgICAgICAgICAgICAgICAgICAgICAgKGlmICh2YWx1ZSA+IDBmKSAiKyIgZWxzZSAi' >> "$TMPB64"
-    printf '%s' 'IikgKyBTdHJpbmcuZm9ybWF0KCIlLjFmIiwgdmFsdWUpICsgIiBkQiIsCiAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICBzdHlsZSA9IE1hdGVyaWFsVGhlbWUudHlwb2dyYXBoeS5ib2R5TWVkaXVt' >> "$TMPB64"
-    printf '%s' 'LAogICAgICAgICAgICAgICAgICAgICAgICAgICAgY29sb3IgPSBpZiAodmFsdWUgIT0gMGYpIG11' >> "$TMPB64"
-    printf '%s' 'c2ljQ29sb3JzKCkuYWNjZW50IGVsc2UgbXVzaWNDb2xvcnMoKS50ZXh0U2Vjb25kYXJ5CiAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgICAgICkKICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgU2xpZGVyKAogICAgICAgICAgICAgICAgICAgICAgICB2YWx1ZSA9IHZhbHVlLAogICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgICAgICBvblZhbHVlQ2hhbmdlID0geyB2IC0+CiAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICB2YWwgbmcgPSBnYWlucy50b011dGFibGVMaXN0KCkKICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgIG5nW2luZGV4XSA9IHYKICAgICAgICAgICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'IGdhaW5zID0gbmcKICAgICAgICAgICAgICAgICAgICAgICAgICAgIHByZXNldE5hbWUgPSAi6Ieq' >> "$TMPB64"
-    printf '%s' '5a6a5LmJIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgc2F2ZUVxKGNvbnRleHQsIGVuYWJs' >> "$TMPB64"
-    printf '%s' 'ZWQsIGdhaW5zKQogICAgICAgICAgICAgICAgICAgICAgICB9LAogICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICB2YWx1ZVJhbmdlID0gLTEyZi4uMTJmLAogICAgICAgICAgICAgICAgICAgICAgICBzdGVw' >> "$TMPB64"
-    printf '%s' 'cyA9IDQ3LAogICAgICAgICAgICAgICAgICAgICAgICBlbmFibGVkID0gZW5hYmxlZCwKICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgICAgY29sb3JzID0gU2xpZGVyRGVmYXVsdHMuY29sb3JzKAogICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgICAgICAgdGh1bWJDb2xvciA9IG11c2ljQ29sb3JzKCkuYWNjZW50LAog' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgICAgICAgICAgICAgYWN0aXZlVHJhY2tDb2xvciA9IG11c2ljQ29sb3Jz' >> "$TMPB64"
-    printf '%s' 'KCkuYWNjZW50LAogICAgICAgICAgICAgICAgICAgICAgICAgICAgaW5hY3RpdmVUcmFja0NvbG9y' >> "$TMPB64"
-    printf '%s' 'ID0gbXVzaWNDb2xvcnMoKS5zbGlkZXJUcmFjaywKICAgICAgICAgICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'IGRpc2FibGVkVGh1bWJDb2xvciA9IG11c2ljQ29sb3JzKCkudGV4dEhpbnQsCiAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgICAgICAgICAgICBkaXNhYmxlZEFjdGl2ZVRyYWNrQ29sb3IgPSBtdXNpY0NvbG9ycygp' >> "$TMPB64"
-    printf '%s' 'LnRleHRIaW50LAogICAgICAgICAgICAgICAgICAgICAgICAgICAgZGlzYWJsZWRJbmFjdGl2ZVRy' >> "$TMPB64"
-    printf '%s' 'YWNrQ29sb3IgPSBtdXNpY0NvbG9ycygpLnNsaWRlclRyYWNrCiAgICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICksCiAgICAgICAgICAgICAgICAgICAgICAgIG1vZGlmaWVyID0gTW9kaWZpZXIuZmlsbE1h' >> "$TMPB64"
-    printf '%s' 'eFdpZHRoKCkKICAgICAgICAgICAgICAgICAgICApCiAgICAgICAgICAgICAgICB9CiAgICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgIH0KICAgICAgICB9CgogICAgICAgIFNwYWNlcihNb2RpZmllci5oZWlnaHQoMTIuZHApKQog' >> "$TMPB64"
-    printf '%s' 'ICAgICAgIFRleHQoCiAgICAgICAgICAgICLmi5bliqjmu5HlnZflrp7ml7bnlJ/mlYjjgILpopHm' >> "$TMPB64"
-    printf '%s' 'rrXmjInkvaDnmoTorr7lpIflrp7mtYvoh6rliqjpgILphY3vvIznvLrlpLHnmoTpopHmrrXkvJro' >> "$TMPB64"
-    printf '%s' 't7Pov4fvvJvkuI7ns7vnu5/lnYfooaHlmajlkIzml7blvIDlkK/ml7blj6/og73kupLnm7jopobn' >> "$TMPB64"
-    printf '%s' 'm5bjgIIiLAogICAgICAgICAgICBzdHlsZSA9IE1hdGVyaWFsVGhlbWUudHlwb2dyYXBoeS5ib2R5' >> "$TMPB64"
-    printf '%s' 'U21hbGwsCiAgICAgICAgICAgIGNvbG9yID0gbXVzaWNDb2xvcnMoKS50ZXh0SGludCwKICAgICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICAgbW9kaWZpZXIgPSBNb2RpZmllci5wYWRkaW5nKGhvcml6b250YWwgPSA0LmRwKQogICAg' >> "$TMPB64"
-    printf '%s' 'ICAgICkKICAgICAgICBTcGFjZXIoTW9kaWZpZXIuaGVpZ2h0KDI0LmRwKSkKICAgIH0KfQo=' >> "$TMPB64"
+    printf '%s' 'Ly8gWzM3ZXE4XSDkuIDmrKHmgKfmuIXmoaPvvJrml6fniYjkuInlpITliIbmlaPokL3nm5jlj6/o' >> "$TMPB64"
+    printf '%s' 'g73lt7LmioogZXFfc2V0dGluZ3Mg5YaZ5Z2P77yM5riF5LiA5qyh6YeN5p2l77yI5qCH6K6w6Ziy' >> "$TMPB64"
+    printf '%s' '6YeN5aSN5riF77yJCiAgICAgICAgdHJ5IHsKICAgICAgICAgICAgdmFsIGVwID0gYXBwQ3R4Lmdl' >> "$TMPB64"
+    printf '%s' 'dFNoYXJlZFByZWZlcmVuY2VzKCJlcV9zZXR0aW5ncyIsIENvbnRleHQuTU9ERV9QUklWQVRFKQog' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICBpZiAoIWVwLmdldEJvb2xlYW4oImVxX3Y4X2NsZWFuIiwgZmFsc2UpKSB7CiAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICAgICBlcC5lZGl0KCkuY2xlYXIoKS5wdXRCb29sZWFuKCJlcV92OF9jbGVhbiIs' >> "$TMPB64"
+    printf '%s' 'IHRydWUpLmNvbW1pdCgpCiAgICAgICAgICAgIH0KICAgICAgICB9IGNhdGNoIChfOiBFeGNlcHRp' >> "$TMPB64"
+    printf '%s' 'b24pIHsKICAgICAgICB9CiAgICAgICAgTXVzaWNUaGVtZU1hbmFnZXIuaW5pdChhcHBDdHgpCiAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgc2V0Q29udGVudCB7CiAgICAgICAgICAgIHZhbCBpc0RhcmsgYnkgTXVzaWNUaGVtZU1h' >> "$TMPB64"
+    printf '%s' 'bmFnZXIuaXNEYXJrVGhlbWUKICAgICAgICAgICAgdmFsIHdpbmRvdyA9IHRoaXNATHhFcVNldHRp' >> "$TMPB64"
+    printf '%s' 'bmdzQWN0aXZpdHkud2luZG93CiAgICAgICAgICAgIFNpZGVFZmZlY3QgewogICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgV2luZG93Q29tcGF0LmdldEluc2V0c0NvbnRyb2xsZXIod2luZG93LCB3aW5kb3cuZGVjb3JW' >> "$TMPB64"
+    printf '%s' 'aWV3KQogICAgICAgICAgICAgICAgICAgIC5pc0FwcGVhcmFuY2VMaWdodFN0YXR1c0JhcnMgPSAh' >> "$TMPB64"
+    printf '%s' 'aXNEYXJrCiAgICAgICAgICAgIH0KICAgICAgICAgICAgTHhNdXNpY1RoZW1lKGlzRGFya1RoZW1l' >> "$TMPB64"
+    printf '%s' 'ID0gaXNEYXJrKSB7CiAgICAgICAgICAgICAgICBFcVNldHRpbmdzU2NyZWVuKG9uQmFjayA9IHsg' >> "$TMPB64"
+    printf '%s' 'ZmluaXNoKCkgfSkKICAgICAgICAgICAgfQogICAgICAgIH0KICAgIH0KfQoKcHJpdmF0ZSB2YWwg' >> "$TMPB64"
+    printf '%s' 'RVFfS0VZUyA9IGxpc3RPZigic3ViIiwgImxvdyIsICJtaWQiLCAiY2xhcml0eSIsICJoaWdoIiwg' >> "$TMPB64"
+    printf '%s' 'ImFtYiIpCnByaXZhdGUgdmFsIEVRX0xBQkVMUyA9IGxpc3RPZigKICAgICLotoXkvY7popEiIHRv' >> "$TMPB64"
+    printf '%s' 'ICI2MEh6IMK3IOS4i+a9nCIsCiAgICAi5L2O6aKRIiB0byAiMjMwSHogwrcg5Yqb6YePIiwKICAg' >> "$TMPB64"
+    printf '%s' 'ICLkuK3popEiIHRvICI5MTBIeiDCtyDkurrlo7AiLAogICAgIua4heaZsOW6piIgdG8gIjNrSHog' >> "$TMPB64"
+    printf '%s' 'wrcg5ZCQ5a2XIiwKICAgICLpq5jpopEiIHRvICIxNGtIeiDCtyDmmI7kuq4iLAogICAgIuawm+Wb' >> "$TMPB64"
+    printf '%s' 'tOaEnyIgdG8gIjNrKzE0ayDCtyDnjrDlnLoiCikKCi8vIOmihOiuvumhuuW6j+S4jiBFUV9LRVlT' >> "$TMPB64"
+    printf '%s' 'IOWvuem9kO+8mnN1YiwgbG93LCBtaWQsIGNsYXJpdHksIGhpZ2gsIGFtYu+8iOWNleS9jSBkQu+8' >> "$TMPB64"
+    printf '%s' 'iQovLyBbMzdlcTJdIOmihOiuvuaMiemYsueziuabsue6v+mHjeiwg++8muWFqOmDqCA8PSDCsTNk' >> "$TMPB64"
+    printf '%s' 'Qu+8iOWPpOWFuOWcqOeVjOWGheacquWKqO+8iQpwcml2YXRlIHZhbCBFUV9QUkVTRVRTOiBMaXN0' >> "$TMPB64"
+    printf '%s' 'PFBhaXI8U3RyaW5nLCBMaXN0PEZsb2F0Pj4+ID0gbGlzdE9mKAogICAgIuW5s+ebtCIgdG8gbGlz' >> "$TMPB64"
+    printf '%s' 'dE9mKDBmLCAwZiwgMGYsIDBmLCAwZiwgMGYpLAogICAgIuWKqOaEn+S9jumfsyIgdG8gbGlzdE9m' >> "$TMPB64"
+    printf '%s' 'KDRmLCAtMWYsIDBmLCAxZiwgMmYsIDBmKSwgLy8gWzM3ZXEzXQogICAgIuS6uuWjsOeqgeWHuiIg' >> "$TMPB64"
+    printf '%s' 'dG8gbGlzdE9mKDBmLCAwZiwgM2YsIDJmLCAxZiwgMGYpLAogICAgIuaRh+a7miIgdG8gbGlzdE9m' >> "$TMPB64"
+    printf '%s' 'KDBmLCAzZiwgLTFmLCAwZiwgMmYsIDBmKSwKICAgICLlj6TlhbgiIHRvIGxpc3RPZigzZiwgMmYs' >> "$TMPB64"
+    printf '%s' 'IDBmLCAyZiwgNGYsIDNmKSwKICAgICLmmI7kuq4iIHRvIGxpc3RPZigwZiwgMGYsIDBmLCAyZiwg' >> "$TMPB64"
+    printf '%s' 'M2YsIDBmKQopCgovLyBbMzdlcTNdIOmihOiuvuivtOaYjuWwj+Wtl++8iOS7hemFjeaWh+ahiOea' >> "$TMPB64"
+    printf '%s' 'hOmihOiuvuaYvuekuu+8iQpwcml2YXRlIHZhbCBFUV9QUkVTRVRfSElOVFM6IE1hcDxTdHJpbmcs' >> "$TMPB64"
+    printf '%s' 'IFN0cmluZz4gPSBtYXBPZigKICAgICLliqjmhJ/kvY7pn7MiIHRvICLliIfpmaTkuobmtZHmtYrk' >> "$TMPB64"
+    printf '%s' 'vY7popHvvIzmj5DljYfkuobpq5jpopHnqbrmsJTmhJ/vvIzojrflvpflubLlh4DlvLnmgKfnmoTk' >> "$TMPB64"
+    printf '%s' 'vY7pn7PkuIvmvZzjgIIiCikKCnByaXZhdGUgZnVuIGxvYWRFcUdhaW5zKGNvbnRleHQ6IENvbnRl' >> "$TMPB64"
+    printf '%s' 'eHQpOiBMaXN0PEZsb2F0PiB7CiAgICB2YWwgcHJlZnMgPSBjb250ZXh0LmdldFNoYXJlZFByZWZl' >> "$TMPB64"
+    printf '%s' 'cmVuY2VzKCJlcV9zZXR0aW5ncyIsIENvbnRleHQuTU9ERV9QUklWQVRFKQogICAgcmV0dXJuIEVR' >> "$TMPB64"
+    printf '%s' 'X0tFWVMubWFwIHsgayAtPiB0cnkgeyBwcmVmcy5nZXRGbG9hdChrLCAwZikgfSBjYXRjaCAoXzog' >> "$TMPB64"
+    printf '%s' 'RXhjZXB0aW9uKSB7IDBmIH0gfQp9CgovLyBbMzdlcTZdIOWKqOaAgemHj+eoi++8mkRTUCDCsTEy' >> "$TMPB64"
+    printf '%s' 'IC8g57O757ufIMKxOO+8m+WIh+aNouS4juWKoOi9veaXtue7n+S4gOmSs+WItgpwcml2YXRlIGZ1' >> "$TMPB64"
+    printf '%s' 'biBjbGFtcEdhaW5zKGdhaW5zOiBMaXN0PEZsb2F0PiwgbGltOiBGbG9hdCk6IExpc3Q8RmxvYXQ+' >> "$TMPB64"
+    printf '%s' 'ID0gZ2FpbnMubWFwIHsgaXQuY29lcmNlSW4oLWxpbSwgbGltKSB9Cgpwcml2YXRlIGZ1biBsb2Fk' >> "$TMPB64"
+    printf '%s' 'RXFHYWluc0NsYW1wZWQoY29udGV4dDogQ29udGV4dCk6IExpc3Q8RmxvYXQ+IHsKICAgIHZhbCBk' >> "$TMPB64"
+    printf '%s' 'c3BPbiA9IHRyeSB7CiAgICAgICAgY29udGV4dC5nZXRTaGFyZWRQcmVmZXJlbmNlcygiZXFfc2V0' >> "$TMPB64"
+    printf '%s' 'dGluZ3MiLCBDb250ZXh0Lk1PREVfUFJJVkFURSkuZ2V0Qm9vbGVhbigiZHNwIiwgZmFsc2UpCiAg' >> "$TMPB64"
+    printf '%s' 'ICB9IGNhdGNoIChfOiBFeGNlcHRpb24pIHsKICAgICAgICBmYWxzZQogICAgfQogICAgcmV0dXJu' >> "$TMPB64"
+    printf '%s' 'IGNsYW1wR2FpbnMobG9hZEVxR2FpbnMoY29udGV4dCksIDEyZikgLy8gWzM3ZXE4XSDnuq8gRFNQ' >> "$TMPB64"
+    printf '%s' 'IOWbuuWumiDCsTEyCn0KCi8vIFszN2VxOF0g57qvIERTUCDniYjvvJrlhajpobXllK/kuIDokL3n' >> "$TMPB64"
+    printf '%s' 'm5jot6/lvoTjgIJkc3AvNiDlop7nm4rlkIzkuIAgZWRpdG9yIOWOn+WtkOWGmeOAgWNvbW1pdCDl' >> "$TMPB64"
+    printf '%s' 'kIzmraXokL3nm5jvvJsKLy8g57O757ufIEVRIOW3suenu+mZpO+8jCJvbiIg5oGS5YaZIGZhbHNl' >> "$TMPB64"
+    printf '%s' 'IOWPquS4uua4hemBl+eVmeeKtuaAge+8jE1hbmFnZXIg5LiN5YaN6K+75a6D44CCCnByaXZhdGUg' >> "$TMPB64"
+    printf '%s' 'ZnVuIHBlcnNpc3RFcShjb250ZXh0OiBDb250ZXh0LCBkc3A6IEJvb2xlYW4sIGdhaW5zOiBMaXN0' >> "$TMPB64"
+    printf '%s' 'PEZsb2F0PikgewogICAgdHJ5IHsKICAgICAgICB2YWwgZSA9IGNvbnRleHQuZ2V0U2hhcmVkUHJl' >> "$TMPB64"
+    printf '%s' 'ZmVyZW5jZXMoImVxX3NldHRpbmdzIiwgQ29udGV4dC5NT0RFX1BSSVZBVEUpLmVkaXQoKQogICAg' >> "$TMPB64"
+    printf '%s' 'ICAgIGUucHV0Qm9vbGVhbigib24iLCBmYWxzZSkKICAgICAgICBlLnB1dEJvb2xlYW4oImRzcCIs' >> "$TMPB64"
+    printf '%s' 'IGRzcCkKICAgICAgICBFUV9LRVlTLmZvckVhY2hJbmRleGVkIHsgaSwgayAtPiBlLnB1dEZsb2F0' >> "$TMPB64"
+    printf '%s' 'KGssIGdhaW5zLmdldE9yRWxzZShpKSB7IDBmIH0pIH0KICAgICAgICBlLmNvbW1pdCgpCiAgICB9' >> "$TMPB64"
+    printf '%s' 'IGNhdGNoIChfOiBFeGNlcHRpb24pIHsKICAgIH0KICAgIEx4UGxheWVyTWFuYWdlci5hcHBseUVx' >> "$TMPB64"
+    printf '%s' 'RnJvbVByZWZzKCkKfQoKQENvbXBvc2FibGUKZnVuIEVxU2V0dGluZ3NTY3JlZW4ob25CYWNrOiAo' >> "$TMPB64"
+    printf '%s' 'KSAtPiBVbml0KSB7CiAgICB2YWwgY29udGV4dCA9IExvY2FsQ29udGV4dC5jdXJyZW50CiAgICB2' >> "$TMPB64"
+    printf '%s' 'YXIgZ2FpbnMgYnkgcmVtZW1iZXIgeyBtdXRhYmxlU3RhdGVPZihsb2FkRXFHYWluc0NsYW1wZWQo' >> "$TMPB64"
+    printf '%s' 'Y29udGV4dCkpIH0gLy8gWzM3ZXE2XQogICAgdmFyIHByZXNldE5hbWUgYnkgcmVtZW1iZXIgeyBt' >> "$TMPB64"
+    printf '%s' 'dXRhYmxlU3RhdGVPZigi6Ieq5a6a5LmJIikgfQogICAgLy8gWzM3ZXE0XSBEU1Ag5byA5YWz6buY' >> "$TMPB64"
+    printf '%s' '6K6kIGZhbHNl77ya55So5oi35omL5Yqo5byA5ZCv5omN55Sx5YaF572uIERTUCDmjqXnrqEKICAg' >> "$TMPB64"
+    printf '%s' 'IHZhciBkc3AgYnkgcmVtZW1iZXIgewogICAgICAgIG11dGFibGVTdGF0ZU9mKAogICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICB0cnkgewogICAgICAgICAgICAgICAgY29udGV4dC5nZXRTaGFyZWRQcmVmZXJlbmNlcygiZXFf' >> "$TMPB64"
+    printf '%s' 'c2V0dGluZ3MiLCBDb250ZXh0Lk1PREVfUFJJVkFURSkuZ2V0Qm9vbGVhbigiZHNwIiwgZmFsc2Up' >> "$TMPB64"
+    printf '%s' 'CiAgICAgICAgICAgIH0gY2F0Y2ggKF86IEV4Y2VwdGlvbikgewogICAgICAgICAgICAgICAgZmFs' >> "$TMPB64"
+    printf '%s' 'c2UKICAgICAgICAgICAgfQogICAgICAgICkKICAgIH0KCiAgICBDb2x1bW4oCiAgICAgICAgbW9k' >> "$TMPB64"
+    printf '%s' 'aWZpZXIgPSBNb2RpZmllcgogICAgICAgICAgICAuZmlsbE1heFNpemUoKQogICAgICAgICAgICAu' >> "$TMPB64"
+    printf '%s' 'YmFja2dyb3VuZChtdXNpY0NvbG9ycygpLmJhY2tncm91bmQpCiAgICAgICAgICAgIC52ZXJ0aWNh' >> "$TMPB64"
+    printf '%s' 'bFNjcm9sbChyZW1lbWJlclNjcm9sbFN0YXRlKCkpCiAgICAgICAgICAgIC5wYWRkaW5nKGhvcml6' >> "$TMPB64"
+    printf '%s' 'b250YWwgPSAxNi5kcCkKICAgICkgewogICAgICAgIFJvdygKICAgICAgICAgICAgbW9kaWZpZXIg' >> "$TMPB64"
+    printf '%s' 'PSBNb2RpZmllcgogICAgICAgICAgICAgICAgLmZpbGxNYXhXaWR0aCgpCiAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAucGFkZGluZyh0b3AgPSAyNC5kcCwgYm90dG9tID0gOC5kcCksCiAgICAgICAgICAgIHZlcnRp' >> "$TMPB64"
+    printf '%s' 'Y2FsQWxpZ25tZW50ID0gQWxpZ25tZW50LkNlbnRlclZlcnRpY2FsbHkKICAgICAgICApIHsKICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgVGV4dCgKICAgICAgICAgICAgICAgICLigLkiLAogICAgICAgICAgICAgICAgc3R5' >> "$TMPB64"
+    printf '%s' 'bGUgPSBNYXRlcmlhbFRoZW1lLnR5cG9ncmFwaHkuaGVhZGxpbmVMYXJnZSwKICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgIGNvbG9yID0gbXVzaWNDb2xvcnMoKS50ZXh0UHJpbWFyeSwKICAgICAgICAgICAgICAgIG1v' >> "$TMPB64"
+    printf '%s' 'ZGlmaWVyID0gTW9kaWZpZXIKICAgICAgICAgICAgICAgICAgICAucGFkZGluZyhlbmQgPSA4LmRw' >> "$TMPB64"
+    printf '%s' 'KQogICAgICAgICAgICAgICAgICAgIC5jbGlja2FibGUgeyBvbkJhY2soKSB9CiAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICkKICAgICAgICAgICAgVGV4dCgKICAgICAgICAgICAgICAgICLlnYfooaHlmagiLAogICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgc3R5bGUgPSBNYXRlcmlhbFRoZW1lLnR5cG9ncmFwaHkudGl0bGVMYXJnZSwKICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICAgIGZvbnRXZWlnaHQgPSBGb250V2VpZ2h0LkJvbGQsCiAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICBjb2xvciA9IG11c2ljQ29sb3JzKCkudGV4dFByaW1hcnkKICAgICAgICAgICAgKQogICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICBTcGFjZXIoTW9kaWZpZXIud2VpZ2h0KDFmKSkKICAgICAgICAgICAgVGV4dEJ1dHRvbihv' >> "$TMPB64"
+    printf '%s' 'bkNsaWNrID0gewogICAgICAgICAgICAgICAgZ2FpbnMgPSBMaXN0KDYpIHsgMGYgfQogICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgcHJlc2V0TmFtZSA9ICLlubPnm7QiCiAgICAgICAgICAgICAgICBwZXJzaXN0RXEo' >> "$TMPB64"
+    printf '%s' 'Y29udGV4dCwgZHNwLCBnYWlucykKICAgICAgICAgICAgfSkgewogICAgICAgICAgICAgICAgVGV4' >> "$TMPB64"
+    printf '%s' 'dCgi6YeN572uIiwgY29sb3IgPSBtdXNpY0NvbG9ycygpLmFjY2VudCkKICAgICAgICAgICAgfQog' >> "$TMPB64"
+    printf '%s' 'ICAgICAgIH0KCgogICAgICAgIENhcmQoCiAgICAgICAgICAgIG1vZGlmaWVyID0gTW9kaWZpZXIu' >> "$TMPB64"
+    printf '%s' 'ZmlsbE1heFdpZHRoKCksCiAgICAgICAgICAgIHNoYXBlID0gTWF0ZXJpYWxUaGVtZS5zaGFwZXMu' >> "$TMPB64"
+    printf '%s' 'bGFyZ2UsCiAgICAgICAgICAgIGNvbG9ycyA9IENhcmREZWZhdWx0cy5jYXJkQ29sb3JzKGNvbnRh' >> "$TMPB64"
+    printf '%s' 'aW5lckNvbG9yID0gbXVzaWNDb2xvcnMoKS5jYXJkKQogICAgICAgICkgewogICAgICAgICAgICBS' >> "$TMPB64"
+    printf '%s' 'b3coCiAgICAgICAgICAgICAgICBtb2RpZmllciA9IE1vZGlmaWVyCiAgICAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgLmZpbGxNYXhXaWR0aCgpCiAgICAgICAgICAgICAgICAgICAgLnBhZGRpbmcoaG9yaXpvbnRh' >> "$TMPB64"
+    printf '%s' 'bCA9IDE2LmRwLCB2ZXJ0aWNhbCA9IDE0LmRwKSwKICAgICAgICAgICAgICAgIHZlcnRpY2FsQWxp' >> "$TMPB64"
+    printf '%s' 'Z25tZW50ID0gQWxpZ25tZW50LkNlbnRlclZlcnRpY2FsbHkKICAgICAgICAgICAgKSB7CiAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICBDb2x1bW4oTW9kaWZpZXIud2VpZ2h0KDFmKSkgewogICAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgIFRleHQoCiAgICAgICAgICAgICAgICAgICAgICAgICLmnoHoh7Tpn7PotKjvvIhEU1Ag5byV' >> "$TMPB64"
+    printf '%s' '5pOO77yJIiwKICAgICAgICAgICAgICAgICAgICAgICAgc3R5bGUgPSBNYXRlcmlhbFRoZW1lLnR5' >> "$TMPB64"
+    printf '%s' 'cG9ncmFwaHkuYm9keUxhcmdlLAogICAgICAgICAgICAgICAgICAgICAgICBjb2xvciA9IG11c2lj' >> "$TMPB64"
+    printf '%s' 'Q29sb3JzKCkudGV4dFByaW1hcnkKICAgICAgICAgICAgICAgICAgICApCiAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgVGV4dCgKICAgICAgICAgICAgICAgICAgICAgICAgIuWUr+S4gOeahOWdh+ihoeW8leaT' >> "$TMPB64"
+    printf '%s' 'ju+8mjYg5q615YaF572uIERTUCDlpITnkIbvvIzCsTEyZEIg5rex5bqm6LCD6IqC77yMTGltaXRl' >> "$TMPB64"
+    printf '%s' 'ciDkv53miqTkuI3noLTpn7PvvIzlpITnkIblvILluLjoh6rliqjml4Hot68iLAogICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICAgICBzdHlsZSA9IE1hdGVyaWFsVGhlbWUudHlwb2dyYXBoeS5ib2R5U21hbGws' >> "$TMPB64"
+    printf '%s' 'CiAgICAgICAgICAgICAgICAgICAgICAgIGNvbG9yID0gbXVzaWNDb2xvcnMoKS50ZXh0U2Vjb25k' >> "$TMPB64"
+    printf '%s' 'YXJ5CiAgICAgICAgICAgICAgICAgICAgKQogICAgICAgICAgICAgICAgfQogICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgU3dpdGNoKAogICAgICAgICAgICAgICAgICAgIGNoZWNrZWQgPSBkc3AsCiAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgb25DaGVja2VkQ2hhbmdlID0gewogICAgICAgICAgICAgICAgICAgICAgICBkc3Ag' >> "$TMPB64"
+    printf '%s' 'PSBpdAogICAgICAgICAgICAgICAgICAgICAgICBwZXJzaXN0RXEoY29udGV4dCwgZHNwLCBnYWlu' >> "$TMPB64"
+    printf '%s' 'cykgLy8gWzM3ZXE4XSDnuq8gRFNQ77ya5byA5YWz5Y2z5byV5pOOCiAgICAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgfSwKICAgICAgICAgICAgICAgICAgICBjb2xvcnMgPSBTd2l0Y2hEZWZhdWx0cy5jb2xvcnMo' >> "$TMPB64"
+    printf '%s' 'CiAgICAgICAgICAgICAgICAgICAgICAgIGNoZWNrZWRUaHVtYkNvbG9yID0gbXVzaWNDb2xvcnMo' >> "$TMPB64"
+    printf '%s' 'KS5hY2NlbnRUZXh0LAogICAgICAgICAgICAgICAgICAgICAgICBjaGVja2VkVHJhY2tDb2xvciA9' >> "$TMPB64"
+    printf '%s' 'IG11c2ljQ29sb3JzKCkuYWNjZW50LAogICAgICAgICAgICAgICAgICAgICAgICB1bmNoZWNrZWRU' >> "$TMPB64"
+    printf '%s' 'aHVtYkNvbG9yID0gbXVzaWNDb2xvcnMoKS50ZXh0U2Vjb25kYXJ5LAogICAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICB1bmNoZWNrZWRUcmFja0NvbG9yID0gbXVzaWNDb2xvcnMoKS5jYXJkU2Vjb25kYXJ5' >> "$TMPB64"
+    printf '%s' 'CiAgICAgICAgICAgICAgICAgICAgKQogICAgICAgICAgICAgICAgKQogICAgICAgICAgICB9CiAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgfQoKICAgICAgICBTcGFjZXIoTW9kaWZpZXIuaGVpZ2h0KDE2LmRwKSkKICAgICAgICBU' >> "$TMPB64"
+    printf '%s' 'ZXh0KAogICAgICAgICAgICAi6aKE6K6+IiwKICAgICAgICAgICAgc3R5bGUgPSBNYXRlcmlhbFRo' >> "$TMPB64"
+    printf '%s' 'ZW1lLnR5cG9ncmFwaHkudGl0bGVTbWFsbCwKICAgICAgICAgICAgY29sb3IgPSBtdXNpY0NvbG9y' >> "$TMPB64"
+    printf '%s' 'cygpLnRleHRTZWNvbmRhcnksCiAgICAgICAgICAgIG1vZGlmaWVyID0gTW9kaWZpZXIucGFkZGlu' >> "$TMPB64"
+    printf '%s' 'ZyhzdGFydCA9IDQuZHAsIGJvdHRvbSA9IDguZHApCiAgICAgICAgKQogICAgICAgIFJvdygKICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgbW9kaWZpZXIgPSBNb2RpZmllcgogICAgICAgICAgICAgICAgLmZpbGxNYXhXaWR0' >> "$TMPB64"
+    printf '%s' 'aCgpCiAgICAgICAgICAgICAgICAuaG9yaXpvbnRhbFNjcm9sbChyZW1lbWJlclNjcm9sbFN0YXRl' >> "$TMPB64"
+    printf '%s' 'KCkpLAogICAgICAgICAgICBob3Jpem9udGFsQXJyYW5nZW1lbnQgPSBBcnJhbmdlbWVudC5zcGFj' >> "$TMPB64"
+    printf '%s' 'ZWRCeSg4LmRwKQogICAgICAgICkgewogICAgICAgICAgICBFUV9QUkVTRVRTLmZvckVhY2ggeyAo' >> "$TMPB64"
+    printf '%s' 'bmFtZSwgdmFsdWVzKSAtPgogICAgICAgICAgICAgICAgRmlsdGVyQ2hpcCgKICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICBzZWxlY3RlZCA9IHByZXNldE5hbWUgPT0gbmFtZSwKICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICBvbkNsaWNrID0gewogICAgICAgICAgICAgICAgICAgICAgICBnYWlucyA9IHZhbHVlcwogICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICAgICAgICAgICBwcmVzZXROYW1lID0gbmFtZQogICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICBwZXJzaXN0RXEoY29udGV4dCwgZHNwLCBnYWlucykKICAgICAgICAgICAgICAgICAgICB9' >> "$TMPB64"
+    printf '%s' 'LAogICAgICAgICAgICAgICAgICAgIGxhYmVsID0geyBUZXh0KG5hbWUpIH0sCiAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgY29sb3JzID0gRmlsdGVyQ2hpcERlZmF1bHRzLmZpbHRlckNoaXBDb2xvcnMoCiAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICAgICAgICAgICAgIGNvbnRhaW5lckNvbG9yID0gbXVzaWNDb2xvcnMoKS5jYXJk' >> "$TMPB64"
+    printf '%s' 'LAogICAgICAgICAgICAgICAgICAgICAgICBsYWJlbENvbG9yID0gbXVzaWNDb2xvcnMoKS50ZXh0' >> "$TMPB64"
+    printf '%s' 'U2Vjb25kYXJ5LAogICAgICAgICAgICAgICAgICAgICAgICBzZWxlY3RlZENvbnRhaW5lckNvbG9y' >> "$TMPB64"
+    printf '%s' 'ID0gbXVzaWNDb2xvcnMoKS5hY2NlbnQsCiAgICAgICAgICAgICAgICAgICAgICAgIHNlbGVjdGVk' >> "$TMPB64"
+    printf '%s' 'TGFiZWxDb2xvciA9IG11c2ljQ29sb3JzKCkuYWNjZW50VGV4dAogICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICksCiAgICAgICAgICAgICAgICAgICAgYm9yZGVyID0gbnVsbAogICAgICAgICAgICAgICAgKQog' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICB9CiAgICAgICAgfQoKICAgICAgICB2YWwgcHJlc2V0SGludCA9IEVRX1BSRVNF' >> "$TMPB64"
+    printf '%s' 'VF9ISU5UU1twcmVzZXROYW1lXSAvLyBbMzdlcTNdCiAgICAgICAgaWYgKHByZXNldEhpbnQgIT0g' >> "$TMPB64"
+    printf '%s' 'bnVsbCkgewogICAgICAgICAgICBUZXh0KAogICAgICAgICAgICAgICAgcHJlc2V0SGludCwKICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICAgIHN0eWxlID0gTWF0ZXJpYWxUaGVtZS50eXBvZ3JhcGh5LmJvZHlTbWFsbCwK' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICAgICAgIGNvbG9yID0gbXVzaWNDb2xvcnMoKS50ZXh0SGludCwKICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgIG1vZGlmaWVyID0gTW9kaWZpZXIucGFkZGluZyhzdGFydCA9IDQuZHAsIHRvcCA9IDgu' >> "$TMPB64"
+    printf '%s' 'ZHApCiAgICAgICAgICAgICkKICAgICAgICB9CgogICAgICAgIFNwYWNlcihNb2RpZmllci5oZWln' >> "$TMPB64"
+    printf '%s' 'aHQoMTYuZHApKQogICAgICAgIENhcmQoCiAgICAgICAgICAgIG1vZGlmaWVyID0gTW9kaWZpZXIu' >> "$TMPB64"
+    printf '%s' 'ZmlsbE1heFdpZHRoKCksCiAgICAgICAgICAgIHNoYXBlID0gTWF0ZXJpYWxUaGVtZS5zaGFwZXMu' >> "$TMPB64"
+    printf '%s' 'bGFyZ2UsCiAgICAgICAgICAgIGNvbG9ycyA9IENhcmREZWZhdWx0cy5jYXJkQ29sb3JzKGNvbnRh' >> "$TMPB64"
+    printf '%s' 'aW5lckNvbG9yID0gbXVzaWNDb2xvcnMoKS5jYXJkKQogICAgICAgICkgewogICAgICAgICAgICBD' >> "$TMPB64"
+    printf '%s' 'b2x1bW4oTW9kaWZpZXIucGFkZGluZyhob3Jpem9udGFsID0gMTYuZHAsIHZlcnRpY2FsID0gOC5k' >> "$TMPB64"
+    printf '%s' 'cCkpIHsKICAgICAgICAgICAgICAgIEVRX0xBQkVMUy5mb3JFYWNoSW5kZXhlZCB7IGluZGV4LCAo' >> "$TMPB64"
+    printf '%s' 'bGFiZWwsIGhpbnQpIC0+CiAgICAgICAgICAgICAgICAgICAgdmFsIHZhbHVlID0gZ2FpbnMuZ2V0' >> "$TMPB64"
+    printf '%s' 'T3JFbHNlKGluZGV4KSB7IDBmIH0KICAgICAgICAgICAgICAgICAgICBSb3coCiAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICAgIG1vZGlmaWVyID0gTW9kaWZpZXIKICAgICAgICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgIC5maWxsTWF4V2lkdGgoKQogICAgICAgICAgICAgICAgICAgICAgICAgICAgLnBhZGRpbmco' >> "$TMPB64"
+    printf '%s' 'dG9wID0gMTAuZHApLAogICAgICAgICAgICAgICAgICAgICAgICB2ZXJ0aWNhbEFsaWdubWVudCA9' >> "$TMPB64"
+    printf '%s' 'IEFsaWdubWVudC5DZW50ZXJWZXJ0aWNhbGx5CiAgICAgICAgICAgICAgICAgICAgKSB7CiAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICAgICAgICAgIFRleHQoCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBsYWJl' >> "$TMPB64"
+    printf '%s' 'bCwKICAgICAgICAgICAgICAgICAgICAgICAgICAgIHN0eWxlID0gTWF0ZXJpYWxUaGVtZS50eXBv' >> "$TMPB64"
+    printf '%s' 'Z3JhcGh5LmJvZHlMYXJnZSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGNvbG9yID0gbXVz' >> "$TMPB64"
+    printf '%s' 'aWNDb2xvcnMoKS50ZXh0UHJpbWFyeSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgIG1vZGlm' >> "$TMPB64"
+    printf '%s' 'aWVyID0gTW9kaWZpZXIud2lkdGgoNTYuZHApCiAgICAgICAgICAgICAgICAgICAgICAgICkKICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICAgICAgICAgICAgVGV4dCgKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGhp' >> "$TMPB64"
+    printf '%s' 'bnQsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBzdHlsZSA9IE1hdGVyaWFsVGhlbWUudHlw' >> "$TMPB64"
+    printf '%s' 'b2dyYXBoeS5ib2R5U21hbGwsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBjb2xvciA9IG11' >> "$TMPB64"
+    printf '%s' 'c2ljQ29sb3JzKCkudGV4dEhpbnQsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBtb2RpZmll' >> "$TMPB64"
+    printf '%s' 'ciA9IE1vZGlmaWVyLndlaWdodCgxZikKICAgICAgICAgICAgICAgICAgICAgICAgKQogICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICAgICAgICBUZXh0KAogICAgICAgICAgICAgICAgICAgICAgICAgICAgKGlmICh2' >> "$TMPB64"
+    printf '%s' 'YWx1ZSA+IDBmKSAiKyIgZWxzZSAiIikgKyBTdHJpbmcuZm9ybWF0KCIlLjFmIiwgdmFsdWUpICsg' >> "$TMPB64"
+    printf '%s' 'IiBkQiIsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBzdHlsZSA9IE1hdGVyaWFsVGhlbWUu' >> "$TMPB64"
+    printf '%s' 'dHlwb2dyYXBoeS5ib2R5TWVkaXVtLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgY29sb3Ig' >> "$TMPB64"
+    printf '%s' 'PSBpZiAodmFsdWUgIT0gMGYpIG11c2ljQ29sb3JzKCkuYWNjZW50IGVsc2UgbXVzaWNDb2xvcnMo' >> "$TMPB64"
+    printf '%s' 'KS50ZXh0U2Vjb25kYXJ5CiAgICAgICAgICAgICAgICAgICAgICAgICkKICAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICB9CiAgICAgICAgICAgICAgICAgICAgU2xpZGVyKAogICAgICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICB2YWx1ZSA9IHZhbHVlLAogICAgICAgICAgICAgICAgICAgICAgICBvblZhbHVlQ2hhbmdlID0g' >> "$TMPB64"
+    printf '%s' 'eyB2IC0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICB2YWwgbmcgPSBnYWlucy50b011dGFi' >> "$TMPB64"
+    printf '%s' 'bGVMaXN0KCkKICAgICAgICAgICAgICAgICAgICAgICAgICAgIG5nW2luZGV4XSA9IHYKICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICAgICAgICAgICAgIGdhaW5zID0gbmcKICAgICAgICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgIHByZXNldE5hbWUgPSAi6Ieq5a6a5LmJIgogICAgICAgICAgICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'cGVyc2lzdEVxKGNvbnRleHQsIGRzcCwgZ2FpbnMpCiAgICAgICAgICAgICAgICAgICAgICAgIH0s' >> "$TMPB64"
+    printf '%s' 'CiAgICAgICAgICAgICAgICAgICAgICAgIHZhbHVlUmFuZ2UgPSAtMTJmLi4xMmYsIC8vIFszN2Vx' >> "$TMPB64"
+    printf '%s' 'OF0g57qvIERTUCDlm7rlrpogwrExMgogICAgICAgICAgICAgICAgICAgICAgICBzdGVwcyA9IDQ3' >> "$TMPB64"
+    printf '%s' 'LAogICAgICAgICAgICAgICAgICAgICAgICBlbmFibGVkID0gZHNwLAogICAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICBjb2xvcnMgPSBTbGlkZXJEZWZhdWx0cy5jb2xvcnMoCiAgICAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICB0aHVtYkNvbG9yID0gbXVzaWNDb2xvcnMoKS5hY2NlbnQsCiAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICAgICAgICBhY3RpdmVUcmFja0NvbG9yID0gbXVzaWNDb2xvcnMoKS5hY2NlbnQs' >> "$TMPB64"
+    printf '%s' 'CiAgICAgICAgICAgICAgICAgICAgICAgICAgICBpbmFjdGl2ZVRyYWNrQ29sb3IgPSBtdXNpY0Nv' >> "$TMPB64"
+    printf '%s' 'bG9ycygpLmNhcmRTZWNvbmRhcnksIC8vIFszN2VxN10g5Y6757u/54K577ya6L2o6YGT5LiO5Yi7' >> "$TMPB64"
+    printf '%s' '5bqm5YWoIFRva2VuIOWMlgogICAgICAgICAgICAgICAgICAgICAgICAgICAgYWN0aXZlVGlja0Nv' >> "$TMPB64"
+    printf '%s' 'bG9yID0gbXVzaWNDb2xvcnMoKS5hY2NlbnRUZXh0LmNvcHkoYWxwaGEgPSAwLjRmKSwKICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICAgICAgICAgICAgIGluYWN0aXZlVGlja0NvbG9yID0gbXVzaWNDb2xvcnMoKS5j' >> "$TMPB64"
+    printf '%s' 'YXJkU2Vjb25kYXJ5LAogICAgICAgICAgICAgICAgICAgICAgICAgICAgZGlzYWJsZWRUaHVtYkNv' >> "$TMPB64"
+    printf '%s' 'bG9yID0gbXVzaWNDb2xvcnMoKS50ZXh0SGludCwKICAgICAgICAgICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'IGRpc2FibGVkQWN0aXZlVHJhY2tDb2xvciA9IG11c2ljQ29sb3JzKCkudGV4dEhpbnQsCiAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICAgICAgICAgICAgICBkaXNhYmxlZEluYWN0aXZlVHJhY2tDb2xvciA9IG11c2lj' >> "$TMPB64"
+    printf '%s' 'Q29sb3JzKCkuY2FyZFNlY29uZGFyeSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGRpc2Fi' >> "$TMPB64"
+    printf '%s' 'bGVkQWN0aXZlVGlja0NvbG9yID0gbXVzaWNDb2xvcnMoKS50ZXh0SGludCwKICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgICAgICAgICAgICAgIGRpc2FibGVkSW5hY3RpdmVUaWNrQ29sb3IgPSBtdXNpY0NvbG9ycygp' >> "$TMPB64"
+    printf '%s' 'LnRleHRIaW50CiAgICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICAgIG1vZGlmaWVyID0gTW9kaWZpZXIuZmlsbE1heFdpZHRoKCkKICAgICAgICAgICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICApCiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgIH0KICAgICAgICB9CgogICAgICAgIFNw' >> "$TMPB64"
+    printf '%s' 'YWNlcihNb2RpZmllci5oZWlnaHQoMTIuZHApKQogICAgICAgIFRleHQoCiAgICAgICAgICAgICLm' >> "$TMPB64"
+    printf '%s' 'i5bliqjmu5HlnZflrp7ml7bnlJ/mlYjjgILpopHmrrXnlLHlhoXnva4gRFNQIOW8leaTjuWkhOeQ' >> "$TMPB64"
+    printf '%s' 'hu+8jOS4jeS+nei1luiuvuWkh+ezu+e7n+Wdh+ihoeWZqO+8jOiuvue9ruiHquWKqOS/neWtmOOA' >> "$TMPB64"
+    printf '%s' 'giIsCiAgICAgICAgICAgIHN0eWxlID0gTWF0ZXJpYWxUaGVtZS50eXBvZ3JhcGh5LmJvZHlTbWFs' >> "$TMPB64"
+    printf '%s' 'bCwKICAgICAgICAgICAgY29sb3IgPSBtdXNpY0NvbG9ycygpLnRleHRIaW50LAogICAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'ICBtb2RpZmllciA9IE1vZGlmaWVyLnBhZGRpbmcoaG9yaXpvbnRhbCA9IDQuZHApCiAgICAgICAg' >> "$TMPB64"
+    printf '%s' 'KQogICAgICAgIFNwYWNlcihNb2RpZmllci5oZWlnaHQoMjQuZHApKQogICAgfQp9Cg==' >> "$TMPB64"
 base64 -d "$TMPB64" > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt
 rm -f "$TMPB64"
 grep -q 'class LxEqSettingsActivity' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 37 EQ 页写入失败"; exit 1; }
@@ -260,414 +303,6 @@ PYEOF37
 
 echo "=== 37 完成 ==="
 
-# === 37 v2: EQ 防失真（滑块量程 ±12 -> ±8、预设曲线调平缓，全 <= ±3dB） ===
-python3 << 'PYEOF37B'
-import sys
-
-P37 = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
-with open(P37, encoding="utf-8") as f:
-    c = f.read()
-
-if "[37eq2]" in c:
-    print("37 v2: 已应用，跳过")
-    sys.exit(0)
-
-def rep(old, new, tag):
-    global c
-    if c.count(old) != 1:
-        print(f"X 37 v2 锚点计数异常 [{tag}]: {c.count(old)}")
-        sys.exit(1)
-    c = c.replace(old, new)
-    print(f"  OK {tag}")
-
-rep("""                        valueRange = -12f..12f,
-                        steps = 47,""",
-    """                        valueRange = -8f..8f, // [37eq2]
-                        steps = 31,""",
-    "滑块量程 ±8")
-
-rep("""private val EQ_PRESETS: List<Pair<String, List<Float>>> = listOf(
-    "平直" to listOf(0f, 0f, 0f, 0f, 0f, 0f),
-    "低音增强" to listOf(6f, 4f, 0f, 0f, 0f, 1f),
-    "人声突出" to listOf(-2f, 0f, 3f, 5f, 2f, 0f),
-    "摇滚" to listOf(5f, 3f, -1f, 3f, 5f, 2f),
-    "古典" to listOf(3f, 2f, 0f, 2f, 4f, 3f),
-    "明亮" to listOf(0f, 0f, 1f, 4f, 7f, 3f)
-)""",
-    """// [37eq2] 预设按防糊曲线重调：全部 <= ±3dB（古典在界内未动）
-private val EQ_PRESETS: List<Pair<String, List<Float>>> = listOf(
-    "平直" to listOf(0f, 0f, 0f, 0f, 0f, 0f),
-    "低音增强" to listOf(3f, 2f, -1f, 0f, 0f, 0f),
-    "人声突出" to listOf(0f, 0f, 3f, 2f, 1f, 0f),
-    "摇滚" to listOf(0f, 3f, -1f, 0f, 2f, 0f),
-    "古典" to listOf(3f, 2f, 0f, 2f, 4f, 3f),
-    "明亮" to listOf(0f, 0f, 0f, 2f, 3f, 0f)
-)""",
-    "预设重调")
-
-assert "[37eq2]" in c
-with open(P37, "w", encoding="utf-8") as f:
-    f.write(c)
-print("OK 37 v2 完成")
-PYEOF37B
-
-echo "=== 37 v2 完成 ==="
-
-# === 37 v3: 动感低音预设（减法低音曲线 + 预设说明小字） ===
-python3 << 'PYEOF37C'
-import sys
-
-P37 = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
-with open(P37, encoding="utf-8") as f:
-    c = f.read()
-
-if "[37eq3]" in c:
-    print("37 v3: 已应用，跳过")
-    sys.exit(0)
-
-def rep(old, new, tag):
-    global c
-    if c.count(old) != 1:
-        print(f"X 37 v3 锚点计数异常 [{tag}]: {c.count(old)}")
-        sys.exit(1)
-    c = c.replace(old, new)
-    print(f"  OK {tag}")
-
-rep('"低音增强" to listOf(3f, 2f, -1f, 0f, 0f, 0f),',
-    '"动感低音" to listOf(4f, -1f, 0f, 1f, 2f, 0f), // [37eq3]',
-    "动感低音数值")
-
-rep("""    "明亮" to listOf(0f, 0f, 0f, 2f, 3f, 0f)
-)
-
-private fun loadEqGains""",
-    """    "明亮" to listOf(0f, 0f, 0f, 2f, 3f, 0f)
-)
-
-// [37eq3] 预设说明小字（仅配文案的预设显示）
-private val EQ_PRESET_HINTS: Map<String, String> = mapOf(
-    "动感低音" to "切除了浑浊低频，提升了高频空气感，获得干净弹性的低音下潜。"
-)
-
-private fun loadEqGains""",
-    "EQ_PRESET_HINTS 映射")
-
-rep("""        Spacer(Modifier.height(16.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            colors = CardDefaults.cardColors(containerColor = musicColors().card)
-        ) {
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {""",
-    """        val presetHint = EQ_PRESET_HINTS[presetName] // [37eq3]
-        if (presetHint != null) {
-            Text(
-                presetHint,
-                style = MaterialTheme.typography.bodySmall,
-                color = musicColors().textHint,
-                modifier = Modifier.padding(start = 4.dp, top = 8.dp)
-            )
-        }
-
-        Spacer(Modifier.height(16.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            colors = CardDefaults.cardColors(containerColor = musicColors().card)
-        ) {
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {""",
-    "说明小字渲染")
-
-assert "[37eq3]" in c and "动感低音" in c
-with open(P37, "w", encoding="utf-8") as f:
-    f.write(c)
-print("OK 37 v3 完成")
-PYEOF37C
-
-echo "=== 37 v3 完成 ==="
-
-# === 37 v4: 极致音质（DSP 引擎）开关卡（默认关） ===
-python3 << 'PYEOF37D'
-import sys
-
-P37 = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
-with open(P37, encoding="utf-8") as f:
-    c = f.read()
-
-if "[37eq4]" in c:
-    print("37 v4: 已应用，跳过")
-    sys.exit(0)
-
-def rep(old, new, tag):
-    global c
-    if c.count(old) != 1:
-        print(f"X 37 v4 锚点计数异常 [{tag}]: {c.count(old)}")
-        sys.exit(1)
-    c = c.replace(old, new)
-    print(f"  OK {tag}")
-
-DSP_STATE = '    var presetName by remember { mutableStateOf("自定义") }\n    // [37eq4] DSP 开关默认 false：用户手动开启才由内置 DSP 接管\n    var dsp by remember {\n        mutableStateOf(\n            try {\n                context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE).getBoolean("dsp", false)\n            } catch (_: Exception) {\n                false\n            }\n        )\n    }'
-rep('    var presetName by remember { mutableStateOf("自定义") }', DSP_STATE, "dsp 状态（默认关）")
-
-CARD = """        Spacer(Modifier.height(12.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            colors = CardDefaults.cardColors(containerColor = musicColors().card)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "极致音质（DSP 引擎）",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = musicColors().textPrimary
-                    )
-                    Text(
-                        "内置 DSP 接管均衡，系统 EQ 停用；处理异常自动旁路",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = musicColors().textSecondary
-                    )
-                }
-                Switch(
-                    checked = dsp,
-                    onCheckedChange = {
-                        dsp = it
-                        try {
-                            context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE)
-                                .edit().putBoolean("dsp", it).apply()
-                        } catch (_: Exception) {
-                        }
-                        LxPlayerManager.applyEqFromPrefs()
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = musicColors().accentText,
-                        checkedTrackColor = musicColors().accent,
-                        uncheckedThumbColor = musicColors().textSecondary,
-                        uncheckedTrackColor = musicColors().cardSecondary
-                    )
-                )
-            }
-        }
-
-"""
-OLD_HEAD = """        Spacer(Modifier.height(16.dp))
-        Text(
-            "预设","""
-rep(OLD_HEAD, CARD + OLD_HEAD, "DSP 开关卡")
-
-assert "[37eq4]" in c
-with open(P37, "w", encoding="utf-8") as f:
-    f.write(c)
-print("OK 37 v4 完成")
-PYEOF37D
-
-echo "=== 37 v4 完成 ==="
-
-# === 37 v5: 双引擎互斥联动（开一灭一）+ 滑块门放开 + DSP 小字 ===
-python3 << 'PYEOF37E'
-import sys
-
-P37 = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
-with open(P37, encoding="utf-8") as f:
-    c = f.read()
-
-if "[37eq5]" in c:
-    print("37 v5: 已应用，跳过")
-    sys.exit(0)
-
-def rep(old, new, tag):
-    global c
-    if c.count(old) != 1:
-        print(f"X 37 v5 锚点计数异常 [{tag}]: {c.count(old)}")
-        sys.exit(1)
-    c = c.replace(old, new)
-    print(f"  OK {tag}")
-
-OLD_MASTER = """                    onCheckedChange = {
-                        enabled = it
-                        saveEq(context, enabled, gains)
-                    },"""
-NEW_MASTER = """                    onCheckedChange = {
-                        enabled = it
-                        if (it) {
-                            // [37eq5] 互斥联动：开系统 EQ 必须灭 DSP（状态+落盘）
-                            dsp = false
-                            try {
-                                context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE)
-                                    .edit().putBoolean("dsp", false).apply()
-                            } catch (_: Exception) {
-                            }
-                        }
-                        saveEq(context, enabled, gains)
-                    },"""
-rep(OLD_MASTER, NEW_MASTER, "系统 EQ 开关联动")
-
-OLD_DSP = """                    onCheckedChange = {
-                        dsp = it
-                        try {
-                            context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE)
-                                .edit().putBoolean("dsp", it).apply()
-                        } catch (_: Exception) {
-                        }
-                        LxPlayerManager.applyEqFromPrefs()
-                    },"""
-NEW_DSP = """                    onCheckedChange = {
-                        dsp = it
-                        // [37eq5] 互斥联动：开 DSP 必须灭系统 EQ（状态），再统一 saveEq 落盘 on 并触发仲裁
-                        if (it) enabled = false
-                        try {
-                            context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE)
-                                .edit().putBoolean("dsp", it).apply()
-                        } catch (_: Exception) {
-                        }
-                        saveEq(context, enabled, gains)
-                    },"""
-rep(OLD_DSP, NEW_DSP, "DSP 开关联动")
-
-rep("                        enabled = enabled,",
-    "                        enabled = enabled || dsp, // [37eq5] 任一引擎开都能调",
-    "滑块门放开")
-
-rep('"内置 DSP 接管均衡，系统 EQ 停用；处理异常自动旁路",',
-    '"开启后系统 EQ 自动关闭；处理异常自动旁路",',
-    "DSP 小字")
-
-assert "[37eq5]" in c
-with open(P37, "w", encoding="utf-8") as f:
-    f.write(c)
-print("OK 37 v5 完成")
-PYEOF37E
-
-echo "=== 37 v5 完成 ==="
-
-# === 37 v6: 动态量程（DSP ±12 / 系统 ±8）+ 切换/加载降级 + 文案 ===
-python3 << 'PYEOF37F'
-import sys
-
-P37 = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
-with open(P37, encoding="utf-8") as f:
-    c = f.read()
-
-if "[37eq6]" in c:
-    print("37 v6: 已应用，跳过")
-    sys.exit(0)
-
-def rep(old, new, tag):
-    global c
-    if c.count(old) != 1:
-        print(f"X 37 v6 锚点计数异常 [{tag}]: {c.count(old)}")
-        sys.exit(1)
-    c = c.replace(old, new)
-    print(f"  OK {tag}")
-
-OLD_LOAD = """private fun loadEqGains(context: Context): List<Float> {
-    val prefs = context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE)
-    return EQ_KEYS.map { k -> try { prefs.getFloat(k, 0f) } catch (_: Exception) { 0f } }
-}"""
-NEW_LOAD = OLD_LOAD + """
-
-// [37eq6] 动态量程：DSP ±12 / 系统 ±8；切换与加载时统一钳制
-private fun clampGains(gains: List<Float>, lim: Float): List<Float> = gains.map { it.coerceIn(-lim, lim) }
-
-private fun loadEqGainsClamped(context: Context): List<Float> {
-    val dspOn = try {
-        context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE).getBoolean("dsp", false)
-    } catch (_: Exception) {
-        false
-    }
-    return clampGains(loadEqGains(context), if (dspOn) 12f else 8f)
-}"""
-rep(OLD_LOAD, NEW_LOAD, "clampGains/loadEqGainsClamped")
-
-rep("    var gains by remember { mutableStateOf(loadEqGains(context)) }",
-    "    var gains by remember { mutableStateOf(loadEqGainsClamped(context)) } // [37eq6]",
-    "gains 初始化钳制")
-
-OLD_M = """                            } catch (_: Exception) {
-                            }
-                        }
-                        saveEq(context, enabled, gains)"""
-NEW_M = """                            } catch (_: Exception) {
-                            }
-                            gains = clampGains(gains, 8f) // [37eq6] 切回系统引擎：超 8 增益降级
-                        }
-                        saveEq(context, enabled, gains)"""
-rep(OLD_M, NEW_M, "开系统 EQ 时降级")
-
-OLD_D = """                        } catch (_: Exception) {
-                        }
-                        saveEq(context, enabled, gains)
-                    },"""
-NEW_D = """                        } catch (_: Exception) {
-                        }
-                        if (!it) gains = clampGains(gains, 8f) // [37eq6] 关 DSP：超 8 增益降级
-                        saveEq(context, enabled, gains)
-                    },"""
-rep(OLD_D, NEW_D, "关 DSP 时降级")
-
-rep("""                        valueRange = -8f..8f, // [37eq2]
-                        steps = 31,""",
-    """                        valueRange = if (dsp) -12f..12f else -8f..8f, // [37eq6]
-                        steps = if (dsp) 47 else 31,""",
-    "滑块动态量程")
-
-rep('"开启后系统 EQ 自动关闭；处理异常自动旁路",',
-    '"开启后系统 EQ 自动关闭。支持 ±12dB 深度调节，并由内置 Limiter 保护不破音，处理异常自动旁路",',
-    "DSP 文案")
-
-assert "[37eq6]" in c
-with open(P37, "w", encoding="utf-8") as f:
-    f.write(c)
-print("OK 37 v6 完成")
-PYEOF37F
-
-echo "=== 37 v6 完成 ==="
-
-# === 37 v7: Slider 去绿点（tick 刻度色全 Token 化 + 轨道改 cardSecondary） ===
-python3 << 'PYEOF37G'
-import sys
-
-P37 = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
-with open(P37, encoding="utf-8") as f:
-    c = f.read()
-
-if "[37eq7]" in c:
-    print("37 v7: 已应用，跳过")
-    sys.exit(0)
-
-OLD = """                        colors = SliderDefaults.colors(
-                            thumbColor = musicColors().accent,
-                            activeTrackColor = musicColors().accent,
-                            inactiveTrackColor = musicColors().sliderTrack,
-                            disabledThumbColor = musicColors().textHint,
-                            disabledActiveTrackColor = musicColors().textHint,
-                            disabledInactiveTrackColor = musicColors().sliderTrack
-                        ),"""
-NEW = """                        colors = SliderDefaults.colors(
-                            thumbColor = musicColors().accent,
-                            activeTrackColor = musicColors().accent,
-                            inactiveTrackColor = musicColors().cardSecondary, // [37eq7] 去绿点：轨道与刻度全 Token 化
-                            activeTickColor = musicColors().accentText.copy(alpha = 0.4f),
-                            inactiveTickColor = musicColors().cardSecondary,
-                            disabledThumbColor = musicColors().textHint,
-                            disabledActiveTrackColor = musicColors().textHint,
-                            disabledInactiveTrackColor = musicColors().cardSecondary,
-                            disabledActiveTickColor = musicColors().textHint,
-                            disabledInactiveTickColor = musicColors().textHint
-                        ),"""
-if c.count(OLD) != 1:
-    print(f"X 37 v7 锚点计数异常: {c.count(OLD)}")
-    sys.exit(1)
-c = c.replace(OLD, NEW)
-assert "[37eq7]" in c
-with open(P37, "w", encoding="utf-8") as f:
-    f.write(c)
-print("OK 37 v7 完成")
-PYEOF37G
-
-echo "=== 37 v7 完成 ==="
+# === 37 v8: 纯 DSP 版（系统 EQ 已移除） ===
+# 页面只剩 DSP 一个引擎开关；persistEq 唯一落盘（原子写 + commit）；onCreate 一次性清档 eq_v8_clean。
+echo "=== 37 v8 完成 ==="
