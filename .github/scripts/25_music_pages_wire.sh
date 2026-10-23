@@ -203,3 +203,46 @@ print("SettingsScreen( 调用数:", src.count('SettingsScreen('))
 print("残留 AccentBlue 在导航区:", src.count('selectedTab == tab) AccentBlue'))
 PYEOF
 echo "导航接线完成"
+
+# === 25 glass1: 设置页毛玻璃（卡片半透明+高光边 / 底栏半透明+发丝线） ===
+python3 << 'PYEOF25GLASS'
+import sys, os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+def save(p, s):
+    open(p, "w", encoding="utf-8").write(s)
+
+SP = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+s = load(SP)
+if "[25glass1]" in s:
+    print("跳过（25 glass1 设置卡片已应用）")
+else:
+    old = "import androidx.compose.foundation.BorderStroke"
+    assert s.count(old) == 1, "SettingsScreen import 锚点"
+    s = s.replace(old, old + "\nimport com.github.tvbox.osc.ui.activity.musicColors // [25glass1]", 1)
+    old = "        color = MaterialTheme.colorScheme.surface,"
+    assert s.count(old) == 1, "SettingsScreen 卡片底色锚点"
+    s = s.replace(old, "        color = musicColors().card.copy(alpha = 0.75f), // [25glass1] 毛玻璃半透明卡", 1)
+    old = "        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),"
+    assert s.count(old) == 1, "SettingsScreen 描边锚点"
+    s = s.replace(old, "        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)), // [25glass1] 玻璃高光边", 1)
+    save(SP, s)
+    print("OK 25 glass1 设置卡片已玻璃化")
+
+AP = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = load(AP)
+if "[25glass1]" in s:
+    print("跳过（25 glass1 底栏已应用）")
+else:
+    # 注：MusicHomeActivity 用 material3.* 通配导入，HorizontalDivider 无需补 import
+    old = "                NavigationBar(containerColor = BgDarker) {"
+    assert s.count(old) == 1, "MusicHomeActivity 底栏锚点"
+    new = ("                HorizontalDivider(thickness = 0.5.dp, color = musicColors().divider) // [25glass1] 底栏发丝线\n"
+           "                NavigationBar(containerColor = musicColors().background.copy(alpha = 0.85f)) { // [25glass1] 玻璃底栏")
+    s = s.replace(old, new, 1)
+    save(AP, s)
+    print("OK 25 glass1 底栏已玻璃化")
+PYEOF25GLASS
+echo "=== 25 glass1 完成 ==="
