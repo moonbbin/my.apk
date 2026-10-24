@@ -9759,3 +9759,39 @@ open(M, "w", encoding="utf-8").write(s)
 print("OK 32 v130 死 import 已清")
 PYEOF130B
 echo "=== 32 v130 附完成 ==="
+
+# === 32 v131: 构建红修复——positionInParent 未 import 的扩展函数（CI 640 行实证） ===
+# 真机制（已查官方文档，不猜）：positionInParent 在文档里列于 Extension functions（扩展函数），不是成员函数，
+#   文件从未 import 它，故 Unresolved reference——与 v126 的 Modifier.border 缺 import 是同一类坑。
+#   但扩展函数的本版可用性本地无法验证（ci_sim 不编译 Kotlin），为不再赌一轮，改用自 1.0 即有的成员函数
+#   positionInRoot()：宿主与卡片各量一次 root 坐标，相减即 Box 内坐标，构造上精确，与 v130 设计等价。
+python3 << 'PYEOF131'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v131]" in s:
+    print("跳过（32 v131 已应用）")
+else:
+    def rep(old, new, tag, cnt=1):
+        global s
+        assert s.count(old) == cnt, "v131 锚点: " + tag + " 数=" + str(s.count(old))
+        s = s.replace(old, new, cnt)
+
+    rep("            var cardPosInBox by remember { mutableStateOf<Offset?>(null) } // [32v130] 卡片左上角（Box 内坐标，与挂件同系）",
+        """            var cardPosInBox by remember { mutableStateOf<Offset?>(null) } // [32v130] 卡片左上角（Box 内坐标，与挂件同系）
+            var boxRootPos by remember { mutableStateOf(Offset.Zero) } // [32v131] 宿主 root 坐标（供相减用）""",
+        "加宿主 root 坐标态")
+    rep("            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {",
+        "            BoxWithConstraints(modifier = Modifier.fillMaxSize().onGloballyPositioned { boxRootPos = it.positionInRoot() }) {",
+        "宿主量 root 坐标")
+    rep(".onGloballyPositioned { cardPosInBox = it.positionInParent() }",
+        ".onGloballyPositioned { cardPosInBox = it.positionInRoot() - boxRootPos }",
+        "卡片改 root 相减")
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v131 positionInRoot 相减已接")
+PYEOF131
+echo "=== 32 v131 完成 ==="
