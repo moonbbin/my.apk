@@ -6739,3 +6739,285 @@ else:
     print("OK 32 v103 Haze 参数动态绑定完成")
 PYEOF103
 echo "=== 32 v103 完成 ==="
+
+# === 32 v104: 毛玻璃独立化: 新建 GlassSettings(glass_prefs 按组件分组) + 胶囊改读它(可单关回纯色) + 设置页独立卡 ===
+python3 << 'PYEOF104A'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+GLASS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/glass/GlassSettings.kt"
+if os.path.exists(GLASS) and "[32v104]" in open(GLASS, encoding="utf-8").read():
+    print("跳过（GlassSettings 已存在）")
+else:
+    os.makedirs(os.path.dirname(GLASS), exist_ok=True)
+    content = '''package com.github.tvbox.osc.ui.music.glass
+
+import android.content.Context
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+
+// [32v104] 毛玻璃独立设置: 按组件分组存 glass_prefs, 与壁纸彻底分开
+// 每组三件套 enabled / radius(0-50) / tint(0-80%); 以后新组件(如设置项)照此再加一组
+object GlassSettings {
+
+    data class GlassParams(
+        val enabled: Boolean = true,
+        val radius: Int = 30,
+        val tint: Int = 30,
+    )
+
+    private const val PREFS = "glass_prefs"
+    private const val KEY_CAP_ENABLED = "capsule_enabled"
+    private const val KEY_CAP_RADIUS = "capsule_radius"
+    private const val KEY_CAP_TINT = "capsule_tint"
+
+    private val _capsule = MutableStateFlow(GlassParams())
+    val capsule: StateFlow<GlassParams> = _capsule
+
+    private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    fun init(ctx: Context) {
+        try {
+            val p = prefs(ctx)
+            // 一次性迁移: v103 曾把半径/底色暂存 wallpaper_prefs, 有旧值时读过来(新键优先)
+            val legacy = ctx.getSharedPreferences("wallpaper_prefs", Context.MODE_PRIVATE)
+            val radius = if (p.contains(KEY_CAP_RADIUS)) p.getInt(KEY_CAP_RADIUS, 30) else legacy.getInt("hazeBlurRadius", 30)
+            val tint = if (p.contains(KEY_CAP_TINT)) p.getInt(KEY_CAP_TINT, 30) else legacy.getInt("hazeTintAlpha", 30)
+            _capsule.value = GlassParams(
+                enabled = p.getBoolean(KEY_CAP_ENABLED, true),
+                radius = radius.coerceIn(0, 50),
+                tint = tint.coerceIn(0, 80),
+            )
+        } catch (e: Exception) {
+            android.util.Log.w("Glass", "毛玻璃设置读取失败", e)
+        }
+    }
+
+    fun setCapsuleEnabled(ctx: Context, on: Boolean) {
+        try {
+            prefs(ctx).edit().putBoolean(KEY_CAP_ENABLED, on).apply()
+        } catch (e: Exception) {
+            android.util.Log.w("Glass", "毛玻璃开关保存失败", e)
+        }
+        _capsule.value = _capsule.value.copy(enabled = on)
+    }
+
+    fun setCapsuleRadius(ctx: Context, value: Int) {
+        try {
+            prefs(ctx).edit().putInt(KEY_CAP_RADIUS, value.coerceIn(0, 50)).apply()
+        } catch (e: Exception) {
+            android.util.Log.w("Glass", "毛玻璃半径保存失败", e)
+        }
+        _capsule.value = _capsule.value.copy(radius = value.coerceIn(0, 50))
+    }
+
+    fun setCapsuleTint(ctx: Context, pct: Int) {
+        try {
+            prefs(ctx).edit().putInt(KEY_CAP_TINT, pct.coerceIn(0, 80)).apply()
+        } catch (e: Exception) {
+            android.util.Log.w("Glass", "毛玻璃底色保存失败", e)
+        }
+        _capsule.value = _capsule.value.copy(tint = pct.coerceIn(0, 80))
+    }
+}
+'''
+    open(GLASS, "w", encoding="utf-8").write(content)
+    print("OK GlassSettings.kt 已创建")
+PYEOF104A
+python3 << 'PYEOF104B'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = load(MH)
+if "[32v104]" in s:
+    print("跳过（32 v104 MH 已应用）")
+else:
+    old = "                val hazeTintEff = if (wpState.hazeRadius <= 0) 0.8f else wpState.hazeTint / 100f // [32v103] 半径0关模糊时底色自动加深保文字"
+    assert s.count(old) == 1, "v104 hazeTintEff 锚点"
+    s = s.replace(old, "                val glassCap by GlassSettings.capsule.collectAsState() // [32v104] 毛玻璃独立设置(导航胶囊组)\n                val hazeTintEff = if (glassCap.radius <= 0) 0.8f else glassCap.tint / 100f // [32v104] 半径0关模糊时底色自动加深保文字", 1)
+    old_c = "                    color = Color.Transparent, // [32v102] 底色交给 Haze tint"
+    assert s.count(old_c) == 1, "v104 Surface color 锚点"
+    s = s.replace(old_c, "                    color = if (glassCap.enabled) Color.Transparent else if (pillDark) Color.Black.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.70f), // [32v104] 开玻璃透明交给 Haze; 关回 v98 纯色", 1)
+    old_box = """                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(percent = 50))
+                            .hazeBlur(
+                                input = HazeInput.Sources(hazeState), // [32v102fix3] Behind: 无祖先源时全选同级源(壁纸层+页内容层)
+                                style = HazeBlurStyle {
+                                    blurRadius(wpState.hazeRadius.dp) // [32v103] 半径读壁纸设置(0-50)
+                                    colorEffects(listOf(HazeColorEffect.tint(if (pillDark) Color.Black.copy(alpha = hazeTintEff) else Color.White.copy(alpha = hazeTintEff)))) // [32v103] 底色读壁纸设置
+                                },
+                            ),
+                    ) { // [32v102] 实时毛玻璃层"""
+    assert s.count(old_box) == 1, "v104 hazeBlur Box 锚点数 " + str(s.count(old_box))
+    new_box = """                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(percent = 50))
+                            .then(
+                                if (glassCap.enabled) Modifier.hazeBlur(
+                                    input = HazeInput.Sources(hazeState), // [32v102fix3] Behind: 无祖先源时全选同级源(壁纸层+页内容层)
+                                    style = HazeBlurStyle {
+                                        blurRadius(glassCap.radius.dp) // [32v104] 半径读玻璃独立设置
+                                        colorEffects(listOf(HazeColorEffect.tint(if (pillDark) Color.Black.copy(alpha = hazeTintEff) else Color.White.copy(alpha = hazeTintEff)))) // [32v104] 底色读玻璃独立设置
+                                    },
+                                ) else Modifier // [32v104] 关玻璃: 不挂 hazeBlur, 走 Surface 纯色
+                            ),
+                    ) { // [32v102] 实时毛玻璃层"""
+    s = s.replace(old_box, new_box, 1)
+    open(MH, "w", encoding="utf-8").write(s)
+    print("OK 32 v104 MH 胶囊改读 GlassSettings 完成")
+PYEOF104B
+python3 << 'PYEOF104C'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+SS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+s = load(SS)
+if "[32v104]" in s:
+    print("跳过（32 v104 设置页卡已应用）")
+else:
+    a = "import com.github.tvbox.osc.ui.activity.musicColors // [25glass1]"
+    assert s.count(a) == 1, "v104 SS musicColors import 锚点"
+    s = s.replace(a, a + "\nimport com.github.tvbox.osc.ui.music.glass.GlassSettings // [32v104]", 1)
+    a = "import androidx.compose.foundation.layout.Row"
+    assert s.count(a) == 1, "v104 SS Row import 锚点"
+    s = s.replace(a, a + "\nimport androidx.compose.foundation.layout.Spacer", 1)
+    a = "import androidx.compose.material3.Text"
+    assert s.count(a) == 1, "v104 SS Text import 锚点"
+    s = s.replace(a, a + "\nimport androidx.compose.material3.Slider\nimport androidx.compose.material3.SliderDefaults\nimport androidx.compose.material3.Switch\nimport androidx.compose.material3.SwitchDefaults", 1)
+    a = "import androidx.compose.runtime.remember"
+    assert s.count(a) == 1, "v104 SS remember import 锚点"
+    s = s.replace(a, a + "\nimport androidx.compose.runtime.collectAsState\nimport androidx.compose.runtime.mutableStateOf\nimport androidx.compose.runtime.setValue", 1)
+    a = "import androidx.compose.ui.Modifier"
+    assert s.count(a) == 1, "v104 SS Modifier import 锚点"
+    s = s.replace(a, a + "\nimport androidx.compose.ui.platform.LocalContext", 1)
+    old = """        items(groups, key = { it.header }) { group ->
+            SettingGroupCard(group = group) // [25itemcards] 无分组标题, 每项独立卡
+        }
+    }
+}"""
+    assert s.count(old) == 1, "v104 SS LazyColumn 锚点数 " + str(s.count(old))
+    new = """        items(groups, key = { it.header }) { group ->
+            SettingGroupCard(group = group) // [25itemcards] 无分组标题, 每项独立卡
+        }
+        item { GlassCapsuleCard() } // [32v104] 毛玻璃 · 导航胶囊(独立设置卡)
+    }
+}"""
+    s = s.replace(old, new, 1)
+    card = '''
+// ---------- [32v104] 毛玻璃 · 导航胶囊(独立设置卡: 开关+半径+底色, 与壁纸分开存 glass_prefs) ----------
+@Composable
+private fun GlassCapsuleCard() {
+    val context = LocalContext.current
+    val cap by GlassSettings.capsule.collectAsState()
+    var radiusSlider by remember(cap.radius) { mutableStateOf(cap.radius.toFloat()) }
+    var tintSlider by remember(cap.tint) { mutableStateOf(cap.tint.toFloat()) }
+    Surface(
+        color = musicColors().card.copy(alpha = 0.45f),
+        shape = MaterialTheme.shapes.large,
+        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = "毛玻璃 · 导航胶囊",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = musicColors().textPrimary,
+                    )
+                    Text(
+                        text = "底部胶囊的实时模糊，独立于壁纸",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary,
+                    )
+                }
+                Switch(
+                    checked = cap.enabled,
+                    onCheckedChange = { GlassSettings.setCapsuleEnabled(context, it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = musicColors().accentText,
+                        checkedTrackColor = musicColors().accent,
+                        uncheckedThumbColor = musicColors().textSecondary,
+                        uncheckedTrackColor = musicColors().cardSecondary,
+                    ),
+                )
+            }
+            if (cap.enabled) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("模糊强度", style = MaterialTheme.typography.bodyMedium, color = musicColors().textSecondary)
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "${radiusSlider.toInt()}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textPrimary,
+                    )
+                }
+                Slider(
+                    value = radiusSlider,
+                    onValueChange = { radiusSlider = it },
+                    onValueChangeFinished = { GlassSettings.setCapsuleRadius(context, radiusSlider.toInt()) },
+                    valueRange = 0f..50f,
+                    steps = 49,
+                    colors = SliderDefaults.colors(
+                        thumbColor = musicColors().accent,
+                        activeTrackColor = musicColors().accent,
+                        inactiveTrackColor = musicColors().cardSecondary,
+                    ),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("底色深浅", style = MaterialTheme.typography.bodyMedium, color = musicColors().textSecondary)
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "${tintSlider.toInt()}%",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textPrimary,
+                    )
+                }
+                Slider(
+                    value = tintSlider,
+                    onValueChange = { tintSlider = it },
+                    onValueChangeFinished = { GlassSettings.setCapsuleTint(context, tintSlider.toInt()) },
+                    valueRange = 0f..80f,
+                    steps = 79,
+                    colors = SliderDefaults.colors(
+                        thumbColor = musicColors().accent,
+                        activeTrackColor = musicColors().accent,
+                        inactiveTrackColor = musicColors().cardSecondary,
+                    ),
+                )
+                Text(
+                    text = "模糊拉到 0 时底色自动加深，保证文字看得清。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = musicColors().textSecondary,
+                )
+            }
+        }
+    }
+}
+'''
+    s = s.rstrip("\n") + "\n" + card
+    open(SS, "w", encoding="utf-8").write(s)
+    print("OK 32 v104 设置页毛玻璃独立卡完成")
+PYEOF104C
+echo "=== 32 v104 完成 ==="
