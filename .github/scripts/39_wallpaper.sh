@@ -986,6 +986,18 @@ if '[39glass2]' not in h:
 else:
     print('SKIP [39glass2] 已应用')
 
+# ============ 6) [39upbg] 自建歌单页根背景恒主题底(独立页无壁纸层, Transparent 会透浅色窗口底) ============
+UP = BASE + 'ui/music/playlist/UserPlaylistScreen.kt'
+u = load(UP)
+if '[39upbg]' not in u:
+    old = '.background(if (' + WP_CHECK + ') ' + FQ_COLOR + ' else musicColors().background)'
+    assert u.count(old) == 1, '❌ [39upbg] 锚点数 ' + str(u.count(old))
+    u = u.replace(old, '.background(musicColors().background) // [39upbg] 独立页无壁纸层, 壁纸开着时 Transparent 会透出浅色窗口底(#F3EDF7), 恒用主题底', 1)
+    save(UP, u)
+    print('OK [39upbg] 自建歌单页根背景已恒主题底')
+else:
+    print('SKIP [39upbg] 已应用')
+
 print('[39] 全部补丁完成')
 PYEOF39
 echo "=== 39 wp5 完成 ==="
