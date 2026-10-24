@@ -9193,3 +9193,166 @@ import androidx.compose.foundation.border // [32v126] Modifier.border 扩展函�
     print("OK 32 v126 构建红修复已接")
 PYEOF126
 echo "=== 32 v126 完成 ==="
+
+# === 32 v127: 控制台对称居中 + 挂件磁吸卡片左上角（用户 2026-10-24 确认） ===
+# ①顶行：正在播放 labelSmall textSecondary 靠左 + IconButton X 靠右，SpaceBetween，卡片横向内边距 20→16dp。
+# ②底行：X 移出后剩 48/64/48 对称，SpaceEvenly 下播放键中心 = 行中心（已算术证明）；进度条紧贴封面下（8dp）。
+# ③吸附：卡片左上角（窗口坐标）- 宿主左上角（窗口坐标）= 卡片在挂件坐标系位置；目标 = 该位置 - 48dp + 8dp 内缩，
+#   按拖拽同款规则夹紧屏内；animateOffsetAsState tween(300)，拖拽时绕开动画直接跟手，关弹窗滑回原位。
+# ④防互为因果漂移：弹窗定位锚点与吸附目标若都跟活值，卡片上下跳、挂件跟着跑会一路漂移——故弹窗打开瞬间
+#   冻结锚点（frozenAnchor），弹窗期间定位不再跟挂件走，卡片位置固定后吸附才收敛；关弹窗解冻。
+python3 << 'PYEOF127'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v127]" in s:
+    print("跳过（32 v127 已应用）")
+else:
+    def rep(old, new, tag, cnt=1):
+        global s
+        assert s.count(old) == cnt, "v127 锚点: " + tag + " 数=" + str(s.count(old))
+        s = s.replace(old, new, cnt)
+
+    rep("import androidx.compose.animation.core.Animatable // [32v124]",
+        """import androidx.compose.animation.core.Animatable // [32v124]
+import androidx.compose.animation.core.animateOffsetAsState // [32v127] 挂件磁吸动画""",
+        "animateOffsetAsState import")
+    rep("""            var vinylDismissed by remember { mutableStateOf(false) }
+            var showVinylConsole by remember { mutableStateOf(false) }
+            var vinylBounds by remember { mutableStateOf<IntRect?>(null) }""",
+        """            var vinylDismissed by remember { mutableStateOf(false) }
+            var showVinylConsole by remember { mutableStateOf(false) }
+            var vinylBounds by remember { mutableStateOf<IntRect?>(null) }
+            var hostTopLeft by remember { mutableStateOf(Offset.Zero) } // [32v127] 宿主左上角（窗口坐标）
+            var consoleCardTopLeft by remember { mutableStateOf<Offset?>(null) } // [32v127] 卡片左上角（窗口坐标）
+            var frozenAnchor by remember { mutableStateOf<IntRect?>(null) } // [32v127] 弹窗打开瞬间冻结的定位锚点""",
+        "吸附三态")
+    rep("""            LaunchedEffect(playerTitle) {
+                if (playerTitle.isNotEmpty()) vinylDismissed = false
+                if (playerTitle.isEmpty()) showVinylConsole = false
+            }""",
+        """            LaunchedEffect(playerTitle) {
+                if (playerTitle.isNotEmpty()) vinylDismissed = false
+                if (playerTitle.isEmpty()) showVinylConsole = false
+            }
+            LaunchedEffect(showVinylConsole) {
+                if (showVinylConsole) {
+                    if (frozenAnchor == null) frozenAnchor = vinylBounds
+                } else {
+                    frozenAnchor = null
+                }
+            }""",
+        "冻结/解冻锚点")
+    rep("            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {",
+        "            BoxWithConstraints(modifier = Modifier.fillMaxSize().onGloballyPositioned { hostTopLeft = it.boundsInWindow().topLeft }) {",
+        "宿主量左上角")
+    rep("""                var vinylOffset by remember { mutableStateOf<Offset?>(null) }
+                val vinylPos = vinylOffset ?: Offset(
+                    maxWpx - sizePx - with(density) { 16.dp.toPx() },
+                    maxHpx - sizePx - with(density) { 104.dp.toPx() }
+                )""",
+        """                var vinylOffset by remember { mutableStateOf<Offset?>(null) }
+                val vinylPos = vinylOffset ?: Offset(
+                    maxWpx - sizePx - with(density) { 16.dp.toPx() },
+                    maxHpx - sizePx - with(density) { 104.dp.toPx() }
+                )
+                var isDragging by remember { mutableStateOf(false) } // [32v127] 拖拽时绕开吸附动画直接跟手
+                val snapTarget: Offset? = if (showVinylConsole) {
+                    consoleCardTopLeft?.let { card ->
+                        val rel = card - hostTopLeft
+                        val inset = with(density) { 8.dp.toPx() }
+                        Offset(
+                            (rel.x - sizePx + inset).coerceIn(0f, maxWpx - sizePx),
+                            (rel.y - sizePx + inset).coerceIn(0f, maxHpx - sizePx)
+                        )
+                    }
+                } else null
+                val animatedPos by animateOffsetAsState(
+                    targetValue = snapTarget ?: vinylPos,
+                    animationSpec = tween(durationMillis = 300), label = "vinylSnap"
+                )
+                val displayPos = if (isDragging) vinylPos else animatedPos""",
+        "吸附目标与动画")
+    rep(".offset { IntOffset(vinylPos.x.roundToInt(), vinylPos.y.roundToInt()) }",
+        ".offset { IntOffset(displayPos.x.roundToInt(), displayPos.y.roundToInt()) }",
+        "挂件用动画后位置")
+    rep("                                    onDragStart = { showVinylConsole = false },",
+        "                                    onDragStart = { isDragging = true; showVinylConsole = false },",
+        "拖拽开始标记")
+    rep("""                                            (vinylPos.y + dragAmount.y).coerceIn(0f, maxHpx - sizePx)
+                                        )
+                                    }""",
+        """                                            (vinylPos.y + dragAmount.y).coerceIn(0f, maxHpx - sizePx)
+                                        )
+                                    },
+                                    onDragEnd = { isDragging = false }""",
+        "拖拽结束标记")
+    rep("                            popupPositionProvider = VinylConsolePositionProvider(bounds, gapPx)",
+        "                            popupPositionProvider = VinylConsolePositionProvider(frozenAnchor ?: bounds, gapPx)",
+        "弹窗用冻结锚点")
+    rep("                                onTogglePlay = { LxPlayerManager.togglePlayPause() },",
+        """                                onTogglePlay = { LxPlayerManager.togglePlayPause() },
+                                onPositioned = { consoleCardTopLeft = it },""",
+        "卡片位置回传")
+    rep("""    onTogglePlay: () -> Unit,
+    onClose: () -> Unit,
+) {""",
+        """    onTogglePlay: () -> Unit,
+    onClose: () -> Unit,
+    onPositioned: (Offset) -> Unit, // [32v127] 卡片左上角（窗口坐标）回传宿主
+) {""",
+        "控制台签名加 onPositioned")
+    rep("""    Surface(
+        modifier = Modifier.width(cardW).shadow(16.dp, MaterialTheme.shapes.extraLarge),""",
+        """    Surface(
+        modifier = Modifier.width(cardW).shadow(16.dp, MaterialTheme.shapes.extraLarge)
+            .onGloballyPositioned { onPositioned(it.boundsInWindow().topLeft) },""",
+        "卡片量左上角")
+    rep("""        Column(modifier = Modifier.padding(20.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Text(
+                    text = "正在播放",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = musicColors().textSecondary
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))""",
+        """        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "正在播放",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = musicColors().textSecondary
+                )
+                IconButton(onClick = onClose) {
+                    VinylCloseIcon(tint = musicColors().textPrimary)
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))""",
+        "顶行重构")
+    rep("""            Spacer(modifier = Modifier.height(12.dp))
+            Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(musicColors().divider)) {""",
+        """            Spacer(modifier = Modifier.height(8.dp))
+            Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(musicColors().divider)) {""",
+        "进度条紧贴封面")
+    rep("""                Box(
+                    modifier = Modifier.size(48.dp).clickable(onClick = onClose),
+                    contentAlignment = Alignment.Center
+                ) {
+                    VinylCloseIcon(tint = musicColors().textPrimary)
+                }
+""",
+        "",
+        "底行移出 X")
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v127 对称居中+磁吸已接")
+PYEOF127
+echo "=== 32 v127 完成 ==="
