@@ -8385,3 +8385,28 @@ else:
 PYEOF118
 echo "=== 32 v118 完成 ==="
 
+
+# === 32 v119: pyramid pip 源统一切 PyPI（不论之前是哪家镜像） ===
+python3 << 'PYEOF119'
+import os, re
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+P = "avbox/pyramid/build.gradle.kts"
+s = open(P, encoding="utf-8").read()
+if "[32v119]" in s:
+    print("跳过（32 v119 已应用）")
+else:
+    m = re.search(r'options\("-i",\s*"([^"]+)"\)', s)
+    if m is None:
+        print("SKIP 32 v119 未找到 pip -i 行（无 -i 即默认 PyPI）")
+    elif m.group(1) == "https://pypi.org/simple/":
+        print("SKIP 32 v119 pip 源已是 PyPI")
+    else:
+        old_url = m.group(1)
+        s = s.replace(m.group(0), 'options("-i", "https://pypi.org/simple/") // [32v119] 统一切 PyPI 官方，断镜像依赖（此前为 ' + old_url + '）', 1)
+        open(P, "w", encoding="utf-8").write(s)
+        print("OK 32 v119 pyramid pip 源已切 PyPI（原：" + old_url + "）")
+PYEOF119
+echo "=== 32 v119 完成 ==="
