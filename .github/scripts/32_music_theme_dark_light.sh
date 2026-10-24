@@ -9541,3 +9541,221 @@ else:
     print("OK 32 v129 徽章压角+卡片缩小已接")
 PYEOF129
 echo "=== 32 v129 完成 ==="
+
+# === 32 v130: 废 Popup，控制台卡片回 Box 内（用户 2026-10-25 确认） ===
+# ①宿主：卡片放进挂件所在的同一个 BoxWithConstraints（不是更外层 padding Box，否则又是两套父坐标），
+#   遮罩/卡片/挂件同坐标系，offset 与 positionInParent 直接可比，零换算。
+# ②卡片：AnimatedVisibility 淡入淡出 200ms + align(Center)；左上角不手算（高度自适应），positionInParent 实测；
+#   X = (BoxW - cardW) / 2 = 36dp（屏宽方向即屏幕正中），Y 是内容区正中（Scaffold 有顶栏）。
+# ③吸附：target = cardPosInBox - 12dp（两轴），中心 = 角 + 12dp 内侧（v129 的角外 12dp 作废，因挂件已在上层）；
+#   钳制同拖拽，关弹窗滑回原位。
+# ④Z 轴：Box 内顺序 遮罩→卡片→挂件，挂件再加 zIndex(1f) 双保险，真正盖在卡片角上。
+# ⑤删除：Popup 调用、VinylConsolePositionProvider 类、Popup 三 import、vinylBounds/hostTopLeft/providerPos/frozenAnchor
+#   四态、冻结 LaunchedEffect、provider 回报回调、挂件 bounds 实测、宿主 bounds 实测、gapPx。
+python3 << 'PYEOF130'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v130]" in s:
+    print("跳过（32 v130 已应用）")
+else:
+    def rep(old, new, tag, cnt=1):
+        global s
+        assert s.count(old) == cnt, "v130 锚点: " + tag + " 数=" + str(s.count(old))
+        s = s.replace(old, new, cnt)
+
+    rep("import androidx.compose.ui.window.Popup // [32v124]\n",
+        "", "删 Popup import")
+    rep("import androidx.compose.ui.window.PopupPositionProvider // [32v124]\n",
+        "", "删 PopupPositionProvider import")
+    rep("import androidx.compose.ui.window.PopupProperties // [32v124]\n",
+        "", "删 PopupProperties import")
+    rep("import androidx.compose.animation.core.Animatable // [32v124]",
+        """import androidx.compose.animation.AnimatedVisibility // [32v130]
+import androidx.compose.animation.fadeIn // [32v130]
+import androidx.compose.animation.fadeOut // [32v130]
+import androidx.compose.foundation.interaction.MutableInteractionSource // [32v130]
+import androidx.compose.ui.zIndex // [32v130]
+import androidx.compose.animation.core.Animatable // [32v124]""",
+        "加 AnimatedVisibility/zIndex import")
+    rep("""            var vinylDismissed by remember { mutableStateOf(false) }
+            var showVinylConsole by remember { mutableStateOf(false) }
+            var vinylBounds by remember { mutableStateOf<IntRect?>(null) }
+            var hostTopLeft by remember { mutableStateOf(Offset.Zero) } // [32v127] 宿主左上角（窗口坐标）
+            var providerPos by remember { mutableStateOf<IntOffset?>(null) } // [32v128] provider 回报的卡片屏幕坐标
+            var frozenAnchor by remember { mutableStateOf<IntRect?>(null) } // [32v127] 弹窗打开瞬间冻结的定位锚点""",
+        """            var vinylDismissed by remember { mutableStateOf(false) }
+            var showVinylConsole by remember { mutableStateOf(false) }
+            var cardPosInBox by remember { mutableStateOf<Offset?>(null) } // [32v130] 卡片左上角（Box 内坐标，与挂件同系）""",
+        "四态改 cardPosInBox")
+    rep("""            LaunchedEffect(showVinylConsole) {
+                if (showVinylConsole) {
+                    if (frozenAnchor == null) frozenAnchor = vinylBounds
+                } else {
+                    frozenAnchor = null
+                    providerPos = null
+                }
+            }
+""",
+        "",
+        "删冻结 LaunchedEffect")
+    rep("            // [32v124] 悬浮黑胶挂件 + 液态控制台（长条迷你播放器已废，导航胶囊不动）\n            BoxWithConstraints(modifier = Modifier.fillMaxSize().onGloballyPositioned { hostTopLeft = it.boundsInWindow().topLeft }) {",
+        "            // [32v130] 悬浮黑胶挂件 + 液态控制台（Popup 已废，卡片回 Box 内；导航胶囊不动）\n            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {",
+        "宿主去窗口坐标实测")
+    rep("""                val sizePx = with(density) { 48.dp.toPx() }
+                val gapPx = with(density) { 12.dp.toPx() }.toInt()
+""",
+        """                val sizePx = with(density) { 48.dp.toPx() }
+""",
+        "删 gapPx")
+    rep("""                var isDragging by remember { mutableStateOf(false) } // [32v127] 拖拽时绕开吸附动画直接跟手
+                val snapOut = sizePx / 2 + with(density) { 12.dp.toPx() } // [32v129] 中心压角外 12dp
+                val snapTarget: Offset? = if (showVinylConsole) {
+                    providerPos?.let { pos ->
+                        Offset(
+                            (pos.x - hostTopLeft.x - snapOut).coerceIn(0f, maxWpx - sizePx),
+                            (pos.y - hostTopLeft.y - snapOut).coerceIn(0f, maxHpx - sizePx)
+                        )
+                    }
+                } else null""",
+        """                var isDragging by remember { mutableStateOf(false) } // [32v127] 拖拽时绕开吸附动画直接跟手
+                val snapInset = with(density) { 12.dp.toPx() } // [32v130] 挂件左上角 = 卡片左上角 - 12dp
+                val snapTarget: Offset? = if (showVinylConsole) {
+                    cardPosInBox?.let { pos ->
+                        Offset(
+                            (pos.x - snapInset).coerceIn(0f, maxWpx - sizePx),
+                            (pos.y - snapInset).coerceIn(0f, maxHpx - sizePx)
+                        )
+                    }
+                } else null""",
+        "吸附改 Box 内坐标 -12dp")
+    rep("""                if (playerTitle.isNotEmpty() && !vinylDismissed) {
+                    VinylWidget(""",
+        """                // [32v130] 遮罩（透明、无涟漪）：点外部关弹窗、挂件复位
+                if (showVinylConsole) {
+                    Box(
+                        modifier = Modifier.fillMaxSize()
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) { showVinylConsole = false }
+                    )
+                }
+                // [32v130] 控制台卡片：Box 内居中（Popup 已废），挂件随后画在上层
+                AnimatedVisibility(
+                    visible = showVinylConsole,
+                    enter = fadeIn(tween(200)),
+                    exit = fadeOut(tween(200)),
+                    modifier = Modifier.align(Alignment.Center)
+                        .onGloballyPositioned { cardPosInBox = it.positionInParent() }
+                ) {
+                    VinylConsole(
+                        picUrl = playerPic,
+                        isPlaying = playerIsPlaying,
+                        progress = if (playerDur > 0) (playerPos.toFloat() / playerDur.toFloat()).coerceIn(0f, 1f) else 0f,
+                        onPrev = { LxPlayerManager.playPreviousInQueue() },
+                        onNext = { LxPlayerManager.playNextInQueue() }, // [32v125]
+                        onTogglePlay = { LxPlayerManager.togglePlayPause() },
+                        onClose = {
+                            showVinylConsole = false
+                            vinylDismissed = true
+                            LxPlayerManager.pause()
+                        }
+                    )
+                }
+                if (playerTitle.isNotEmpty() && !vinylDismissed) {
+                    VinylWidget(""",
+        "遮罩+卡片插到挂件之前")
+    rep("""                            .offset { IntOffset(displayPos.x.roundToInt(), displayPos.y.roundToInt()) }
+                            .onGloballyPositioned {
+                                val b = it.boundsInWindow()
+                                vinylBounds = IntRect(b.left.roundToInt(), b.top.roundToInt(), b.right.roundToInt(), b.bottom.roundToInt())
+                            }
+""",
+        """                            .offset { IntOffset(displayPos.x.roundToInt(), displayPos.y.roundToInt()) }
+                            .zIndex(1f) // [32v130] 挂件画在卡片上层
+""",
+        "挂件去实测加 zIndex")
+    rep("""                vinylBounds?.let { bounds ->
+                    if (showVinylConsole) {
+                        Popup(
+                            onDismissRequest = { showVinylConsole = false },
+                            properties = PopupProperties(dismissOnClickOutside = true, focusable = true),
+                            popupPositionProvider = VinylConsolePositionProvider(frozenAnchor ?: bounds, gapPx, onPositioned = { providerPos = it })
+                        ) {
+                            VinylConsole(
+                                picUrl = playerPic,
+                                isPlaying = playerIsPlaying,
+                                progress = if (playerDur > 0) (playerPos.toFloat() / playerDur.toFloat()).coerceIn(0f, 1f) else 0f,
+                                onPrev = { LxPlayerManager.playPreviousInQueue() },
+                                onNext = { LxPlayerManager.playNextInQueue() }, // [32v125]
+                                onTogglePlay = { LxPlayerManager.togglePlayPause() },
+                                onClose = {
+                                    showVinylConsole = false
+                                    vinylDismissed = true
+                                    LxPlayerManager.pause()
+                                }
+                            )
+                        }
+                    }
+                }
+""",
+        "",
+        "删 Popup 调用")
+    rep("""// [32v124] 弹窗定位：以挂件实测 bounds 为锚（不用 Popup 自带 anchorBounds，避免语义歧义），
+// 上方够放则放上方，否则放下方，横向夹紧屏内
+private class VinylConsolePositionProvider(
+    private val anchor: IntRect,
+    private val gapPx: Int,
+    private val onPositioned: (IntOffset) -> Unit, // [32v128] 回报算出的卡片屏幕坐标（供吸附用）
+) : PopupPositionProvider {
+    private var lastReported: IntOffset? = null
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): IntOffset {
+        val x = (windowSize.width - popupContentSize.width) / 2
+        val aboveY = anchor.top - popupContentSize.height - gapPx
+        val belowY = anchor.bottom + gapPx
+        val y = if (aboveY >= 0) aboveY
+            else belowY.coerceAtMost((windowSize.height - popupContentSize.height).coerceAtLeast(0))
+        return IntOffset(x, y).also {
+            if (it != lastReported) { lastReported = it; onPositioned(it) }
+        }
+    }
+}
+""",
+        "",
+        "删 Provider 类")
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v130 废 Popup 回 Box 内已接")
+PYEOF130
+echo "=== 32 v130 完成 ==="
+
+# === 32 v130 附：删跨窗口机制死 import（grep 实证：IntRect/boundsInWindow/IntSize/LayoutDirection 在 MH 内已零代码引用） ===
+python3 << 'PYEOF130B'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+for line, tag in [
+    ("import androidx.compose.ui.unit.IntRect // [32v126] PopupPositionProvider 官方签名用 IntRect\n", "IntRect import"),
+    ("import androidx.compose.ui.layout.boundsInWindow // [32v124]\n", "boundsInWindow import"),
+    ("import androidx.compose.ui.unit.IntSize // [32v124]\n", "IntSize import"),
+    ("import androidx.compose.ui.unit.LayoutDirection // [32v124]\n", "LayoutDirection import"),
+]:
+    assert s.count(line) == 1, "v130b 锚点: " + tag + " 数=" + str(s.count(line))
+    s = s.replace(line, "")
+open(M, "w", encoding="utf-8").write(s)
+print("OK 32 v130 死 import 已清")
+PYEOF130B
+echo "=== 32 v130 附完成 ==="
