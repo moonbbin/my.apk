@@ -7021,3 +7021,147 @@ private fun GlassCapsuleCard() {
     print("OK 32 v104 设置页毛玻璃独立卡完成")
 PYEOF104C
 echo "=== 32 v104 完成 ==="
+
+# === 32 v105: 胶囊高级质感: GlassSettings 加 border(边缘反光)/shadow(悬浮高度) + MH 动态绑定 + 设置卡双滑杆 ===
+python3 << 'PYEOF105A'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+GLASS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/glass/GlassSettings.kt"
+s = load(GLASS)
+if "[32v105]" in s:
+    print("跳过（32 v105 GlassSettings 已应用）")
+else:
+    a = "        val tint: Int = 30,\n    )"
+    assert s.count(a) == 1, "v105 GlassParams 锚点"
+    s = s.replace(a, "        val tint: Int = 30,\n        val border: Int = 20, // [32v105] 边缘反光(百分比 0-50)\n        val shadow: Int = 4, // [32v105] 悬浮高度(dp 0-20)\n    )", 1)
+    a = '    private const val KEY_CAP_TINT = "capsule_tint"'
+    assert s.count(a) == 1, "v105 KEY 锚点"
+    s = s.replace(a, a + '\n    private const val KEY_CAP_BORDER = "capsule_border" // [32v105]\n    private const val KEY_CAP_SHADOW = "capsule_shadow" // [32v105]', 1)
+    a = "                tint = tint.coerceIn(0, 80),\n            )"
+    assert s.count(a) == 1, "v105 init 锚点"
+    s = s.replace(a, "                tint = tint.coerceIn(0, 80),\n                border = p.getInt(KEY_CAP_BORDER, 20).coerceIn(0, 50), // [32v105] 无旧键时默认 20, 视觉不变\n                shadow = p.getInt(KEY_CAP_SHADOW, 4).coerceIn(0, 20), // [32v105] 无旧键时默认 4, 视觉不变\n            )", 1)
+    a = "        _capsule.value = _capsule.value.copy(tint = pct.coerceIn(0, 80))\n    }\n}"
+    assert s.count(a) == 1, "v105 setter 尾锚点"
+    setters = """        _capsule.value = _capsule.value.copy(tint = pct.coerceIn(0, 80))
+    }
+
+    // [32v105] 边缘反光: 胶囊高光描边的白色 alpha(百分比 0-50; 默认 20 = v102 定稿)
+    fun setCapsuleBorder(ctx: Context, pct: Int) {
+        try {
+            prefs(ctx).edit().putInt(KEY_CAP_BORDER, pct.coerceIn(0, 50)).apply()
+        } catch (e: Exception) {
+            android.util.Log.w("Glass", "毛玻璃边缘反光保存失败", e)
+        }
+        _capsule.value = _capsule.value.copy(border = pct.coerceIn(0, 50))
+    }
+
+    // [32v105] 悬浮高度: 胶囊 shadowElevation(dp 0-20; 默认 4 = v98 定稿)
+    fun setCapsuleShadow(ctx: Context, dp: Int) {
+        try {
+            prefs(ctx).edit().putInt(KEY_CAP_SHADOW, dp.coerceIn(0, 20)).apply()
+        } catch (e: Exception) {
+            android.util.Log.w("Glass", "毛玻璃悬浮高度保存失败", e)
+        }
+        _capsule.value = _capsule.value.copy(shadow = dp.coerceIn(0, 20))
+    }
+}"""
+    s = s.replace(a, setters, 1)
+    open(GLASS, "w", encoding="utf-8").write(s)
+    print("OK 32 v105 GlassSettings 扩 border/shadow 完成")
+PYEOF105A
+python3 << 'PYEOF105B'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = load(MH)
+if "glassCap.border" in s:
+    print("跳过（32 v105 MH 已应用）")
+else:
+    a = "                    border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.2f)), // [32v102] 高光描边"
+    assert s.count(a) == 1, "v105 border 锚点"
+    s = s.replace(a, "                    border = BorderStroke(0.5.dp, Color.White.copy(alpha = glassCap.border / 100f)), // [32v105] 边缘反光读玻璃设置", 1)
+    a = "                    shadowElevation = 4.dp,"
+    assert s.count(a) == 1, "v105 shadowElevation 锚点数 " + str(s.count(a))
+    s = s.replace(a, "                    shadowElevation = glassCap.shadow.dp, // [32v105] 悬浮高度读玻璃设置", 1)
+    open(MH, "w", encoding="utf-8").write(s)
+    print("OK 32 v105 MH 边缘反光/悬浮高度动态绑定完成")
+PYEOF105B
+python3 << 'PYEOF105C'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+SS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+s = load(SS)
+if "borderSlider" in s:
+    print("跳过（32 v105 设置卡已应用）")
+else:
+    a = "    var tintSlider by remember(cap.tint) { mutableStateOf(cap.tint.toFloat()) }"
+    assert s.count(a) == 1, "v105 SS state 锚点"
+    s = s.replace(a, a + "\n    var borderSlider by remember(cap.border) { mutableStateOf(cap.border.toFloat()) } // [32v105]\n    var shadowSlider by remember(cap.shadow) { mutableStateOf(cap.shadow.toFloat()) } // [32v105]", 1)
+    a = """                Text(
+                    text = "模糊拉到 0 时底色自动加深，保证文字看得清。","""
+    assert s.count(a) == 1, "v105 SS 滑杆插入锚点"
+    sliders = """                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("边缘反光", style = MaterialTheme.typography.bodyMedium, color = musicColors().textSecondary)
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "${borderSlider.toInt()}%",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textPrimary,
+                    )
+                }
+                Slider(
+                    value = borderSlider,
+                    onValueChange = { borderSlider = it },
+                    onValueChangeFinished = { GlassSettings.setCapsuleBorder(context, borderSlider.toInt()) },
+                    valueRange = 0f..50f,
+                    steps = 49,
+                    colors = SliderDefaults.colors(
+                        thumbColor = musicColors().accent,
+                        activeTrackColor = musicColors().accent,
+                        inactiveTrackColor = musicColors().cardSecondary,
+                    ),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("悬浮高度", style = MaterialTheme.typography.bodyMedium, color = musicColors().textSecondary)
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "${shadowSlider.toInt()}dp",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textPrimary,
+                    )
+                }
+                Slider(
+                    value = shadowSlider,
+                    onValueChange = { shadowSlider = it },
+                    onValueChangeFinished = { GlassSettings.setCapsuleShadow(context, shadowSlider.toInt()) },
+                    valueRange = 0f..20f,
+                    steps = 19,
+                    colors = SliderDefaults.colors(
+                        thumbColor = musicColors().accent,
+                        activeTrackColor = musicColors().accent,
+                        inactiveTrackColor = musicColors().cardSecondary,
+                    ),
+                )
+""" + a
+    s = s.replace(a, sliders, 1)
+    open(SS, "w", encoding="utf-8").write(s)
+    print("OK 32 v105 设置卡加边缘反光/悬浮高度滑杆完成")
+PYEOF105C
+echo "=== 32 v105 完成 ==="
