@@ -7165,3 +7165,236 @@ else:
     print("OK 32 v105 设置卡加边缘反光/悬浮高度滑杆完成")
 PYEOF105C
 echo "=== 32 v105 完成 ==="
+
+
+
+# === 32 v106: 排行榜抽屉液态玻璃: GlassSettings 加 drawer 组 + RankScreen 自建 Haze 源/面板玻璃化/手搓线条图标 ===
+python3 << 'PYEOF106A'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+GLASS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/glass/GlassSettings.kt"
+s = load(GLASS)
+if "[32v106]" in s:
+    print("跳过（32 v106 GlassSettings 已应用）")
+else:
+    a = '    private const val KEY_CAP_SHADOW = "capsule_shadow" // [32v105]'
+    assert s.count(a) == 1, "v106 KEY 锚点"
+    s = s.replace(a, a + '\n    // [32v106] 抽屉组(排行榜切换榜单抽屉; 本版只接数据, 设置 UI 后加)\n    private const val KEY_DRW_ENABLED = "drawer_enabled"\n    private const val KEY_DRW_RADIUS = "drawer_radius"\n    private const val KEY_DRW_TINT = "drawer_tint"\n    private const val KEY_DRW_BORDER = "drawer_border"', 1)
+    a = "    private val _capsule = MutableStateFlow(GlassParams())\n    val capsule: StateFlow<GlassParams> = _capsule"
+    assert s.count(a) == 1, "v106 state 锚点"
+    s = s.replace(a, a + "\n\n    private val _drawer = MutableStateFlow(GlassParams()) // [32v106]\n    val drawer: StateFlow<GlassParams> = _drawer // [32v106]", 1)
+    a = "                shadow = p.getInt(KEY_CAP_SHADOW, 4).coerceIn(0, 20), // [32v105] 无旧键时默认 4, 视觉不变\n            )"
+    assert s.count(a) == 1, "v106 init 锚点"
+    s = s.replace(a, a + "\n            _drawer.value = GlassParams(\n                enabled = p.getBoolean(KEY_DRW_ENABLED, true),\n                radius = p.getInt(KEY_DRW_RADIUS, 30).coerceIn(0, 50),\n                tint = p.getInt(KEY_DRW_TINT, 30).coerceIn(0, 80),\n                border = p.getInt(KEY_DRW_BORDER, 15).coerceIn(0, 50),\n            ) // [32v106] 抽屉组默认值 30/30/15", 1)
+    a = "        _capsule.value = _capsule.value.copy(shadow = dp.coerceIn(0, 20))\n    }\n}"
+    assert s.count(a) == 1, "v106 setter 尾锚点"
+    setters = """        _capsule.value = _capsule.value.copy(shadow = dp.coerceIn(0, 20))
+    }
+
+    // [32v106] 抽屉组 setter(与 capsule 同模子; 设置 UI 后加时直接调用)
+    fun setDrawerEnabled(ctx: Context, on: Boolean) {
+        try {
+            prefs(ctx).edit().putBoolean(KEY_DRW_ENABLED, on).apply()
+        } catch (e: Exception) {
+            android.util.Log.w("Glass", "抽屉玻璃开关保存失败", e)
+        }
+        _drawer.value = _drawer.value.copy(enabled = on)
+    }
+
+    fun setDrawerRadius(ctx: Context, value: Int) {
+        try {
+            prefs(ctx).edit().putInt(KEY_DRW_RADIUS, value.coerceIn(0, 50)).apply()
+        } catch (e: Exception) {
+            android.util.Log.w("Glass", "抽屉玻璃半径保存失败", e)
+        }
+        _drawer.value = _drawer.value.copy(radius = value.coerceIn(0, 50))
+    }
+
+    fun setDrawerTint(ctx: Context, pct: Int) {
+        try {
+            prefs(ctx).edit().putInt(KEY_DRW_TINT, pct.coerceIn(0, 80)).apply()
+        } catch (e: Exception) {
+            android.util.Log.w("Glass", "抽屉玻璃底色保存失败", e)
+        }
+        _drawer.value = _drawer.value.copy(tint = pct.coerceIn(0, 80))
+    }
+
+    fun setDrawerBorder(ctx: Context, pct: Int) {
+        try {
+            prefs(ctx).edit().putInt(KEY_DRW_BORDER, pct.coerceIn(0, 50)).apply()
+        } catch (e: Exception) {
+            android.util.Log.w("Glass", "抽屉玻璃边框保存失败", e)
+        }
+        _drawer.value = _drawer.value.copy(border = pct.coerceIn(0, 50))
+    }
+}"""
+    s = s.replace(a, setters, 1)
+    open(GLASS, "w", encoding="utf-8").write(s)
+    print("OK 32 v106 GlassSettings 加 drawer 组完成")
+PYEOF106A
+python3 << 'PYEOF106B'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+RS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt"
+s = load(RS)
+if "[32v106]" in s:
+    print("跳过（32 v106 RankScreen 已应用）")
+else:
+    a = "import androidx.compose.foundation.Canvas // [32v100]"
+    assert s.count(a) == 1, "v106 Canvas import 锚点"
+    add = a + "\nimport androidx.compose.foundation.BorderStroke // [32v106]"
+    for imp in [
+        "import dev.chrisbanes.haze.rememberHazeState // [32v106]",
+        "import dev.chrisbanes.haze.hazeSource // [32v106]",
+        "import dev.chrisbanes.haze.HazeInput // [32v106]",
+        "import dev.chrisbanes.haze.blur.hazeBlur // [32v106]",
+        "import dev.chrisbanes.haze.blur.HazeBlurStyle // [32v106]",
+        "import dev.chrisbanes.haze.blur.HazeColorEffect // [32v106]",
+        "import com.github.tvbox.osc.ui.music.glass.GlassSettings // [32v106]",
+    ]:
+        if imp.split(" // ")[0] not in s:
+            add += "\n" + imp
+    if "import androidx.compose.runtime.collectAsState" not in s:
+        add += "\nimport androidx.compose.runtime.collectAsState // [32v106]"
+    s = s.replace(a, add, 1)
+    a = "    var showDrawer by remember { mutableStateOf(false) } // [32v100] 抽屉显隐(原底部弹窗状态)"
+    assert s.count(a) == 1, "v106 state 锚点"
+    s = s.replace(a, a + "\n    val drawerHazeState = rememberHazeState() // [32v106] 抽屉毛玻璃采样(本页自建源)\n    val drawerGlass by GlassSettings.drawer.collectAsState() // [32v106] 抽屉玻璃参数(独立组)\n    val drawerDark by com.github.tvbox.osc.ui.activity.MusicThemeManager.isDarkTheme // [32v106]", 1)
+    a = "                .fillMaxSize()\n                .background(musicColors().background),"
+    assert s.count(a) == 1, "v106 LazyColumn 锚点"
+    s = s.replace(a, "                .fillMaxSize()\n                .hazeSource(drawerHazeState) // [32v106] 榜单内容作抽屉采样源\n                .background(musicColors().background),", 1)
+    a = ".background(Color.Black.copy(alpha = 0.45f))"
+    assert s.count(a) == 1, "v106 scrim 锚点数 " + str(s.count(a))
+    s = s.replace(a, ".background(Color.Black.copy(alpha = 0.30f)) // [32v106] 玻璃时代遮罩调淡(原 0.45)", 1)
+    old = """            Surface(
+                shape = RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp),
+                color = musicColors().card,
+                shadowElevation = 8.dp,
+                modifier = Modifier.width(264.dp).fillMaxHeight(),
+            ) {
+                Column(modifier = Modifier.padding(top = 16.dp)) {"""
+    assert s.count(old) == 1, "v106 Surface 锚点数 " + str(s.count(old))
+    new = """            Surface(
+                shape = RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp),
+                color = if (drawerGlass.enabled) Color.Transparent else musicColors().card, // [32v106] 开玻璃透明交给 Haze; 关回实色卡
+                border = BorderStroke(0.5.dp, Color.White.copy(alpha = drawerGlass.border / 100f)), // [32v106] 高光边(默认 15%)
+                shadowElevation = 8.dp,
+                modifier = Modifier.width(280.dp).fillMaxHeight(), // [32v106] 264→280
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize()
+                        .clip(RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp))
+                        .then(
+                            if (drawerGlass.enabled) Modifier.hazeBlur(
+                                input = HazeInput.Sources(drawerHazeState),
+                                style = HazeBlurStyle {
+                                    blurRadius(drawerGlass.radius.dp)
+                                    colorEffects(listOf(HazeColorEffect.tint(if (drawerDark) Color.Black.copy(alpha = drawerGlass.tint / 100f) else Color.White.copy(alpha = drawerGlass.tint / 100f))))
+                                },
+                            ) else Modifier // [32v106] 关玻璃: 不挂 hazeBlur
+                        ),
+                ) { // [32v106] 抽屉毛玻璃层
+                Column(modifier = Modifier.padding(top = 16.dp)) {"""
+    s = s.replace(old, new, 1)
+    old = """                }
+                }
+            }
+        }
+    }
+
+}"""
+    assert s.count(old) == 1, "v106 抽屉收尾锚点数 " + str(s.count(old))
+    new = """                }
+                }
+                } // [32v106] 毛玻璃 Box 结束
+            }
+        }
+    }
+
+}"""
+    s = s.replace(old, new, 1)
+    a = '                    text = "切换榜单",\n                    style = MaterialTheme.typography.titleSmall,'
+    assert s.count(a) == 1, "v106 标题锚点"
+    s = s.replace(a, '                    text = "切换榜单",\n                    style = MaterialTheme.typography.labelLarge, // [32v106] 标题降为辅助说明', 1)
+    old = """                            Icon(
+                                imageVector = tabIconFor(tab),
+                                contentDescription = null,
+                                tint = musicColors().textSecondary,
+                                modifier = Modifier.size(22.dp),
+                            )"""
+    assert s.count(old) == 1, "v106 图标行锚点"
+    new = """                            RankTabIcon(
+                                tab = tab,
+                                tint = if (isSelected) musicColors().accent else musicColors().textSecondary, // [32v106] 手搓线条图标, 选中跟 accent
+                                modifier = Modifier.size(22.dp),
+                            )"""
+    s = s.replace(old, new, 1)
+    a = "                                color = if (isSelected) MaterialTheme.colorScheme.primary\n                                else musicColors().textPrimary,"
+    assert s.count(a) == 1, "v106 选中文字锚点"
+    s = s.replace(a, "                                color = if (isSelected) musicColors().accent // [32v106] 选中统一 accent\n                                else musicColors().textPrimary,", 1)
+    a = '                                    contentDescription = "当前选中",\n                                    tint = MaterialTheme.colorScheme.primary,'
+    assert s.count(a) == 1, "v106 勾锚点"
+    s = s.replace(a, '                                    contentDescription = "当前选中",\n                                    tint = musicColors().accent, // [32v106]', 1)
+    icon = '''
+
+// ---------- [32v106] 抽屉榜单手搓线条图标(2dp 描边, 与胶囊同一套画风; 分支沿用 tabIconFor 规则) ----------
+@Composable
+private fun RankTabIcon(tab: String, tint: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = 2.dp.toPx()
+        val s = size
+        val off = { x: Float, y: Float -> androidx.compose.ui.geometry.Offset(s.width * x, s.height * y) }
+        when {
+            tab.contains("飙升") -> {
+                // 折线: 三段上扬 + 末端箭头
+                val pts = listOf(off(0.08f, 0.78f), off(0.38f, 0.48f), off(0.58f, 0.62f), off(0.90f, 0.20f))
+                for (i in 0 until pts.size - 1) drawLine(tint, pts[i], pts[i + 1], w, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(tint, off(0.68f, 0.18f), pts[3], w, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(tint, off(0.92f, 0.42f), pts[3], w, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            }
+            tab.contains("TOP") || tab.contains("热") -> {
+                // 五角星轮廓: 外/内半径交替 10 点极坐标
+                val cx = s.width / 2
+                val cy = s.height / 2
+                val rO = s.width * 0.46f
+                val rI = rO * 0.45f
+                val path = androidx.compose.ui.graphics.Path()
+                for (i in 0 until 10) {
+                    val ang = -Math.PI / 2 + i * Math.PI / 5
+                    val r = if (i % 2 == 0) rO else rI
+                    val x = cx + (r * kotlin.math.cos(ang)).toFloat()
+                    val y = cy + (r * kotlin.math.sin(ang)).toFloat()
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                path.close()
+                drawPath(path, tint, style = androidx.compose.ui.graphics.drawscope.Stroke(width = w, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+            }
+            else -> {
+                // 放射圆: 圆 + 8 根短辐条(新歌榜等)
+                val c = androidx.compose.ui.geometry.Offset(s.width / 2, s.height / 2)
+                drawCircle(tint, s.width * 0.26f, c, style = androidx.compose.ui.graphics.drawscope.Stroke(width = w))
+                for (i in 0 until 8) {
+                    val ang = i * Math.PI / 4
+                    drawLine(
+                        tint,
+                        androidx.compose.ui.geometry.Offset(c.x + (s.width * 0.36f * kotlin.math.cos(ang)).toFloat(), c.y + (s.width * 0.36f * kotlin.math.sin(ang)).toFloat()),
+                        androidx.compose.ui.geometry.Offset(c.x + (s.width * 0.47f * kotlin.math.cos(ang)).toFloat(), c.y + (s.width * 0.47f * kotlin.math.sin(ang)).toFloat()),
+                        w, cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                    )
+                }
+            }
+        }
+    }
+}
+'''
+    s = s.rstrip("\n") + "\n" + icon
+    open(RS, "w", encoding="utf-8").write(s)
+    print("OK 32 v106 RankScreen 抽屉液态玻璃完成")
+PYEOF106B
+echo "=== 32 v106 完成 ==="
