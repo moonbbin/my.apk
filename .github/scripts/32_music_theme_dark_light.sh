@@ -7883,3 +7883,454 @@ else:
     print("OK 32 v113 搜索历史词条防挤完成")
 PYEOF113
 echo "=== 32 v113 完成 ==="
+
+
+# === 32 v115: 运行日志缓冲 + 引擎失败漏斗 ===
+python3 << 'PYEOF115'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+LOG = "avbox/app/src/main/java/com/github/tvbox/osc/util/LxRuntimeLog.kt"
+if not os.path.exists(LOG):
+    open(LOG, "w", encoding="utf-8").write("""package com.github.tvbox.osc.util
+
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+// [32v115] 运行时日志缓冲：引擎/验证失败直通 UI，免 PC 看 logcat；超 100 条截头
+object LxRuntimeLog {
+    private const val MAX_LINES = 100
+    private val _logs = MutableStateFlow<List<String>>(emptyList())
+    val logs: StateFlow<List<String>> = _logs
+
+    @Synchronized
+    fun add(msg: String) {
+        val t = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+        _logs.value = (_logs.value + "[$t] " + msg.take(500)).takeLast(MAX_LINES)
+    }
+
+    @Synchronized
+    fun clear() {
+        _logs.value = emptyList()
+    }
+}
+""")
+    print("OK 32 v115 LxRuntimeLog.kt 已创建")
+else:
+    print("SKIP LxRuntimeLog.kt 已存在")
+
+E = "avbox/app/src/main/java/com/github/tvbox/osc/util/LxScriptEngine.kt"
+s = open(E, encoding="utf-8").read()
+if "[32v115]" in s:
+    print("跳过（32 v115 引擎漏斗已应用）")
+else:
+    assert "package com.github.tvbox.osc.util" in s, "v115 引擎包名"
+    # 漏斗 helper：插在 runOnMain 之前
+    a = "    // ---------------- 内部：工具 ----------------"
+    assert s.count(a) == 1, "v115 工具区锚点"
+    s = s.replace(a, """    // [32v115] 失败直通运行日志缓冲（与 Log.e 并行，不改回调行为；同包直调，零接线）
+    private fun reportErr(where: String, e: Throwable?) {
+        try {
+            val detail = if (e != null) " | " + e::class.simpleName + ": " + e.message else ""
+            LxRuntimeLog.add(where + detail)
+        } catch (_: Exception) { }
+    }
+
+""" + a, 1)
+    pairs = [
+        ('            Log.e(TAG, "loadScript failed: preload not loaded, call loadPreloadJs() first")',
+         '            reportErr("loadScript: preload 未加载", null)'),
+        ('            Log.e(TAG, "loadScript failed: scriptContent is blank")',
+         '            reportErr("loadScript: 脚本内容为空", null)'),
+        ('                    Log.e(TAG, "loadScript timeout: no inited event from script $sourceId")',
+         '                    reportErr("loadScript 超时: $sourceId 未收到 inited", null)'),
+        ('            Log.e(TAG, "loadScript failed", e)',
+         '            reportErr("loadScript 失败", e)'),
+        ('                            Log.e(TAG, "requestMusicUrl: empty url, raw=$raw")',
+         '                            reportErr("requestMusicUrl: 返回空地址 raw=$raw", null)'),
+        ('                        Log.e(TAG, "requestMusicUrl: parse failed", e)',
+         '                        reportErr("requestMusicUrl: 解析失败", e)'),
+        ('                    Log.e(TAG, "requestMusicUrl failed: source=$sourceKey quality=$quality", e)',
+         '                    reportErr("requestMusicUrl 失败: source=$sourceKey quality=$quality", e)'),
+        ('                        Log.e(TAG, "requestLyric: parse failed", e)',
+         '                        reportErr("requestLyric: 解析失败", e)'),
+        ('                    Log.e(TAG, "requestLyric failed: source=$sourceKey", e)',
+         '                    reportErr("requestLyric 失败: source=$sourceKey", e)'),
+        ('                            Log.e(TAG, "requestPic: empty url, raw=$raw")',
+         '                            reportErr("requestPic: 返回空地址 raw=$raw", null)'),
+        ('                        Log.e(TAG, "requestPic: parse failed", e)',
+         '                        reportErr("requestPic: 解析失败", e)'),
+        ('                    Log.e(TAG, "requestPic failed: source=$sourceKey", e)',
+         '                    reportErr("requestPic 失败: source=$sourceKey", e)'),
+        ('                    Log.e(TAG, "script http failed: $url", e)',
+         '                    reportErr("脚本 HTTP 失败: $url", e)'),
+    ]
+    for old, rep in pairs:
+        assert s.count(old) == 1, "v115 引擎锚点: " + old.strip()[:60]
+        s = s.replace(old, old + "\n" + rep, 1)
+    # 脚本侧 console：error/warn 直通缓冲
+    a = '                "error" -> Log.e(TAG, "[script] $message")'
+    assert s.count(a) == 1, "v115 script error 锚点"
+    s = s.replace(a, '                "error" -> { Log.e(TAG, "[script] $message"); LxRuntimeLog.add("[script][error] $message") }', 1)
+    a = '                "warn", "warning" -> Log.w(TAG, "[script] $message")'
+    assert s.count(a) == 1, "v115 script warn 锚点"
+    s = s.replace(a, '                "warn", "warning" -> { Log.w(TAG, "[script] $message"); LxRuntimeLog.add("[script][warn] $message") }', 1)
+    open(E, "w", encoding="utf-8").write(s)
+    print("OK 32 v115 引擎失败漏斗完成")
+PYEOF115
+echo "=== 32 v115 完成 ==="
+
+# === 32 v116: 验证侧捞异常 + 源管理页日志入口/查看原因/抽屉 ===
+python3 << 'PYEOF116'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(P, encoding="utf-8").read()
+if "[32v116]" in s:
+    print("跳过（32 v116 已应用）")
+else:
+    def rep(old, new, tag):
+        global s
+        assert s.count(old) == 1, "v116 锚点: " + tag + " 数=" + str(s.count(old))
+        s = s.replace(old, new, 1)
+
+    # ---- imports ----
+    rep("import com.github.tvbox.osc.util.LxScriptEngine",
+        "import com.github.tvbox.osc.util.LxScriptEngine\nimport com.github.tvbox.osc.util.LxRuntimeLog", "util import")
+    rep("import androidx.compose.material3.MaterialTheme",
+        "import androidx.compose.material3.MaterialTheme\nimport androidx.compose.material3.ModalBottomSheet\nimport androidx.compose.material3.rememberModalBottomSheetState", "sheet import")
+    rep("import androidx.compose.foundation.layout.fillMaxWidth",
+        "import androidx.compose.foundation.layout.fillMaxHeight\nimport androidx.compose.foundation.layout.fillMaxWidth", "fillMaxHeight import")
+    rep("import androidx.compose.runtime.getValue",
+        "import androidx.compose.runtime.collectAsState\nimport androidx.compose.runtime.getValue", "collectAsState import")
+
+    # ---- 抽屉状态 ----
+    rep("    var verifyResults by remember { mutableStateOf(LxSourceVerifier.loadResultCache(context)) }",
+        "    var verifyResults by remember { mutableStateOf(LxSourceVerifier.loadResultCache(context)) }\n    var showLogSheet by remember { mutableStateOf(false) } // [32v116] 运行日志抽屉",
+        "showLogSheet 状态")
+
+    # ---- TopAppBar 日志入口 ----
+    rep("""            TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                title = { Text("音乐源管理", color = musicColors().textPrimary) },""",
+        """            TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                title = { Text("音乐源管理", color = musicColors().textPrimary) },
+                actions = { TextButton(onClick = { showLogSheet = true }) { Text("日志", color = musicColors().textPrimary) } },""",
+        "TopAppBar actions")
+
+    # ---- 抽屉挂载（内容区开头） ----
+    rep("""    ) { padding ->
+        if (sources.isEmpty()) {""",
+        """    ) { padding ->
+        if (showLogSheet) { RuntimeLogSheet(onDismiss = { showLogSheet = false }) }
+        if (sources.isEmpty()) {""",
+        "抽屉挂载")
+
+    # ---- SourceCard：查看原因入参 ----
+    rep("""    onPingClick: () -> Unit = {},
+    isRefreshing: Boolean = false
+) {""",
+        """    onPingClick: () -> Unit = {},
+    isRefreshing: Boolean = false,
+    onShowLog: () -> Unit = {}
+) {""",
+        "SourceCard 入参")
+
+    # ---- ❌ 分支旁加查看原因 ----
+    rep("""                        else -> {
+                            val msg = if (verifyResult.latencyMs >= 10000) "超时" else "验证失败"
+                            Text(
+                                text = "❌ $msg",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFFF44336)
+                            )
+                        }""",
+        """                        else -> {
+                            val msg = if (verifyResult.latencyMs >= 10000) "超时" else "验证失败"
+                            Text(
+                                text = "❌ $msg",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFFF44336)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "查看原因",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = musicColors().accent,
+                                modifier = Modifier.clickable { onShowLog() }
+                            )
+                        }""",
+        "查看原因")
+
+    # ---- 调用点接线 ----
+    rep("                        onPingClick = { pingOne(source.id) },",
+        "                        onPingClick = { pingOne(source.id) },\n                        onShowLog = { showLogSheet = true },",
+        "调用点接线")
+
+    # ---- VerifyResult 加 error 字段（仅内存，不进缓存格式） ----
+    rep("""    data class VerifyResult(
+        val sourceId: String,
+        val success: Boolean,
+        val latencyMs: Long = 0,
+        val verifying: Boolean = false
+    )""",
+        """    data class VerifyResult(
+        val sourceId: String,
+        val success: Boolean,
+        val latencyMs: Long = 0,
+        val verifying: Boolean = false,
+        val error: String? = null // [32v116] 失败原因（仅内存，不进 id|0/1|ms 缓存格式）
+    )""",
+        "VerifyResult error 字段")
+
+    # ---- finish 加 error 参数 ----
+    rep("""            fun finish(passed: Boolean, latencyMs: Long) {
+                updatePool(context, sourceId, passed)
+                saveResultCache(context, sourceId, passed, latencyMs)
+                onResult(VerifyResult(sourceId, passed, latencyMs))
+            }""",
+        """            fun finish(passed: Boolean, latencyMs: Long, error: String? = null) {
+                updatePool(context, sourceId, passed)
+                saveResultCache(context, sourceId, passed, latencyMs)
+                onResult(VerifyResult(sourceId, passed, latencyMs, error = error))
+            }""",
+        "finish error 参数")
+
+    # ---- 阶段失败：脚本为空 ----
+    rep("""                if (scriptContent.isNullOrBlank()) {
+                    android.util.Log.w(TAG, "验证 $sourceId: 脚本内容为空")
+                    finish(false, System.currentTimeMillis() - start)""",
+        """                if (scriptContent.isNullOrBlank()) {
+                    android.util.Log.w(TAG, "验证 $sourceId: 脚本内容为空")
+                    LxRuntimeLog.add("验证 $sourceId: 脚本内容为空")
+                    finish(false, System.currentTimeMillis() - start, "脚本内容为空")""",
+        "脚本为空")
+
+    # ---- 阶段失败：preload 读取异常 ----
+    rep("""                } catch (e: Exception) {
+                    android.util.Log.e(TAG, "读取 preload.js 失败", e)
+                    ""
+                }""",
+        """                } catch (e: Exception) {
+                    android.util.Log.e(TAG, "读取 preload.js 失败", e)
+                    LxRuntimeLog.add("验证 $sourceId: 读取 preload.js 失败: " + e.message)
+                    ""
+                }""",
+        "preload 读取异常")
+
+    # ---- 阶段失败：preload 为空 ----
+    rep("""                if (preloadJs.isBlank()) {
+                    finish(false, System.currentTimeMillis() - start)""",
+        """                if (preloadJs.isBlank()) {
+                    LxRuntimeLog.add("验证 $sourceId: preload.js 为空")
+                    finish(false, System.currentTimeMillis() - start, "preload.js 为空")""",
+        "preload 为空")
+
+    # ---- 阶段失败：preload 加载失败 ----
+    rep("""                if (!preloadDone.get() || !preloadOk.get()) {
+                    android.util.Log.w(TAG, "验证 $sourceId: preload 加载失败")
+                    finish(false, System.currentTimeMillis() - start)""",
+        """                if (!preloadDone.get() || !preloadOk.get()) {
+                    android.util.Log.w(TAG, "验证 $sourceId: preload 加载失败")
+                    LxRuntimeLog.add("验证 $sourceId: preload 加载失败（15 秒超时或就绪失败）")
+                    finish(false, System.currentTimeMillis() - start, "preload 加载失败")""",
+        "preload 加载失败")
+
+    # ---- 脚本加载异常捕获 ----
+    rep("""                val declRef = java.util.concurrent.atomic.AtomicReference<Map<String, LxSourceDeclaration>?>(null)""",
+        """                val declRef = java.util.concurrent.atomic.AtomicReference<Map<String, LxSourceDeclaration>?>(null)
+                val scriptErr = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)""",
+        "scriptErr 声明")
+    rep("""                eng.loadScript(sourceId, scriptContent, ScriptInfo(id = sourceId, name = sourceName)) { result ->
+                    declRef.set(result.getOrNull())
+                    scriptDone.set(true)
+                }""",
+        """                eng.loadScript(sourceId, scriptContent, ScriptInfo(id = sourceId, name = sourceName)) { result ->
+                    declRef.set(result.getOrNull())
+                    scriptErr.set(result.exceptionOrNull())
+                    scriptDone.set(true)
+                }""",
+        "脚本加载异常捕获")
+    rep("""                if (!scriptDone.get() || decls == null) {
+                    android.util.Log.w(TAG, "验证 $sourceId: 脚本加载失败")
+                    finish(false, System.currentTimeMillis() - start)""",
+        """                if (!scriptDone.get() || decls == null) {
+                    android.util.Log.w(TAG, "验证 $sourceId: 脚本加载失败")
+                    val se = scriptErr.get()
+                    LxRuntimeLog.add("验证 $sourceId: 脚本加载失败" + if (se != null) ": " + se::class.simpleName + ": " + se.message else "")
+                    finish(false, System.currentTimeMillis() - start, "脚本加载失败" + if (se != null) ": " + se.message else "")""",
+        "脚本加载失败")
+
+    # ---- 阶段失败：无平台声明 ----
+    rep("""                    else -> {
+                        android.util.Log.w(TAG, "验证 $sourceId: 脚本未声明任何平台")
+                        finish(false, System.currentTimeMillis() - start)""",
+        """                    else -> {
+                        android.util.Log.w(TAG, "验证 $sourceId: 脚本未声明任何平台")
+                        LxRuntimeLog.add("验证 $sourceId: 脚本未声明任何平台")
+                        finish(false, System.currentTimeMillis() - start, "脚本未声明任何平台")""",
+        "无平台声明")
+
+    # ---- 逐首失败：lastError 声明 ----
+    rep("""                var successCount = 0
+                var totalLatency = 0L""",
+        """                var successCount = 0
+                var totalLatency = 0L
+                var lastError: String? = null""",
+        "lastError 声明")
+
+    # ---- 逐首失败：捞 exceptionOrNull（带严格校验注释的块，ping 那处无此注释故唯一） ----
+    rep("""                        res.fold(
+                            onSuccess = { url ->
+                                // 严格校验 URL：必须是有效 http 链接，排除错误信息冒充
+                                if (isValidMusicUrl(url)) {
+                                    resolvedUrl.set(url)
+                                    urlOk.set(true)
+                                } else {
+                                    urlOk.set(false)
+                                }
+                            },
+                            onFailure = { urlOk.set(false) }
+                        )""",
+        """                        res.fold(
+                            onSuccess = { url ->
+                                // 严格校验 URL：必须是有效 http 链接，排除错误信息冒充
+                                if (isValidMusicUrl(url)) {
+                                    resolvedUrl.set(url)
+                                    urlOk.set(true)
+                                } else {
+                                    urlOk.set(false)
+                                }
+                            },
+                            onFailure = { e ->
+                                urlOk.set(false)
+                                lastError = "《" + name + "》取地址失败: " + e::class.simpleName + ": " + e.message
+                                LxRuntimeLog.add("验证 $sourceId 平台 $testPlatform " + lastError)
+                            }
+                        )""",
+        "逐首失败捞异常")
+
+    # ---- Range 校验失败 ----
+    rep("""                    val url = resolvedUrl.get()
+                    if (urlOk.get() && url != null) {
+                        urlOk.set(rangeCheckOk(url))
+                    }""",
+        """                    val url = resolvedUrl.get()
+                    if (urlOk.get() && url != null) {
+                        val rangeOk = rangeCheckOk(url)
+                        if (!rangeOk) {
+                            lastError = "《" + name + "》Range 校验失败: " + url.take(120)
+                            LxRuntimeLog.add("验证 $sourceId 平台 $testPlatform " + lastError)
+                        }
+                        urlOk.set(rangeOk)
+                    }""",
+        "Range 校验失败")
+
+    # ---- 终局：带原因 finish + 汇总进日志 ----
+    rep("""                val avgLatency = if (successCount > 0) totalLatency / testSongs.size else System.currentTimeMillis() - start
+                val passed = successCount >= 4
+                android.util.Log.i(TAG, "验证 $sourceId: $successCount/5 通过, ${if (passed) "有效" else "无效"}")
+                finish(passed, avgLatency)""",
+        """                val avgLatency = if (successCount > 0) totalLatency / testSongs.size else System.currentTimeMillis() - start
+                val passed = successCount >= 4
+                android.util.Log.i(TAG, "验证 $sourceId: $successCount/5 通过, ${if (passed) "有效" else "无效"}")
+                LxRuntimeLog.add("验证 $sourceId($sourceName): $successCount/5 通过, " + if (passed) "有效" else "无效")
+                finish(passed, avgLatency, if (passed) null else lastError)""",
+        "终局 finish")
+
+    # ---- 验证总 catch ----
+    rep("""            } catch (e: Exception) {
+                android.util.Log.e(TAG, "验证失败 $sourceId", e)
+                finish(false, System.currentTimeMillis() - start)
+            } finally {""",
+        """            } catch (e: Exception) {
+                android.util.Log.e(TAG, "验证失败 $sourceId", e)
+                LxRuntimeLog.add("验证 $sourceId 异常: " + e::class.simpleName + ": " + e.message)
+                finish(false, System.currentTimeMillis() - start, "验证异常: " + e.message)
+            } finally {""",
+        "验证总 catch")
+
+    open(P, "w", encoding="utf-8").write(s)
+    print("OK 32 v116 验证侧 + 源管理页 UI 完成")
+PYEOF116
+# 抽屉 composable 追加到文件尾（CWD 可能是仓库根或 avbox/，两路都认）
+if [ -f avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt ]; then
+  TGT116=avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt
+else
+  TGT116=app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt
+fi
+cat >> "$TGT116" << 'KT116EOF'
+
+// [32v116] 运行日志抽屉：引擎/验证失败直通 UI，免 PC 看 logcat
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RuntimeLogSheet(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val sheetState = rememberModalBottomSheetState()
+    val logLines by LxRuntimeLog.logs.collectAsState()
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = musicColors().card,
+        modifier = Modifier.fillMaxHeight(0.8f)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(bottom = 24.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "运行日志",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = musicColors().textPrimary
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                TextButton(onClick = { LxRuntimeLog.clear() }) {
+                    Text("清空日志", color = musicColors().textSecondary)
+                }
+                TextButton(onClick = {
+                    val text = logLines.joinToString("\n")
+                    (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                        .setPrimaryClip(android.content.ClipData.newPlainText("运行日志", text))
+                    Toast.makeText(context, "已复制 " + logLines.size + " 条日志", Toast.LENGTH_SHORT).show()
+                }) {
+                    Text("复制日志", color = musicColors().textSecondary)
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            if (logLines.isEmpty()) {
+                Text(
+                    text = "暂无日志",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = musicColors().textSecondary
+                )
+            } else {
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    items(logLines) { line ->
+                        val isErr = line.contains("Exception", ignoreCase = true) ||
+                            line.contains("error", ignoreCase = true) ||
+                            line.contains("timeout", ignoreCase = true) ||
+                            line.contains("失败", ignoreCase = true)
+                        Text(
+                            text = line,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isErr) Color.Red else musicColors().textSecondary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+KT116EOF
+echo "=== 32 v116 完成 ==="
