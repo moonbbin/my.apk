@@ -7630,3 +7630,29 @@ private fun GlassDrawerCard() {
     print("OK 32 v108 设置页抽屉卡完成")
 PYEOF108D
 echo "=== 32 v108 完成 ==="
+
+# === 32 v109: 抽屉状态跨函数传递(修 1141:27 Unresolved reference) ===
+python3 << 'PYEOF109'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = load(MH)
+if "[32v109]" in s:
+    print("跳过（32 v109 已应用）")
+else:
+    a = "import dev.chrisbanes.haze.rememberHazeState // [32v102]"
+    assert s.count(a) == 1, "v109 import 锚点"
+    s = s.replace(a, a + "\nimport dev.chrisbanes.haze.HazeState // [32v109]", 1)
+    a = "fun RankingTab(\n    platform: String,\n    platformName: String,\n    initialChartId: String? = null\n) {"
+    assert s.count(a) == 1, "v109 RankingTab 签名锚点"
+    s = s.replace(a, "fun RankingTab(\n    platform: String,\n    platformName: String,\n    initialChartId: String? = null,\n    drawerHazeState: HazeState = rememberHazeState(), // [32v109] 由 MusicHomeScreen 传入(与壁纸层同源; 预览走默认)\n) {", 1)
+    a = "                    RankingTab(\n                        platform = selectedPlatform,\n                        platformName = platformNames[selectedPlatform] ?: selectedPlatform,\n                        initialChartId = pendingChartId\n                    )"
+    assert s.count(a) == 1, "v109 RankingTab 调用锚点"
+    s = s.replace(a, "                    RankingTab(\n                        platform = selectedPlatform,\n                        platformName = platformNames[selectedPlatform] ?: selectedPlatform,\n                        initialChartId = pendingChartId,\n                        drawerHazeState = drawerHazeState, // [32v109] 抽屉状态跨函数传递(v108 只在 MusicHomeScreen 内声明, RankingTab 内不可见)\n                    )", 1)
+    open(MH, "w", encoding="utf-8").write(s)
+    print("OK 32 v109 抽屉状态跨函数传递完成")
+PYEOF109
+echo "=== 32 v109 完成 ==="
