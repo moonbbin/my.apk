@@ -8410,3 +8410,69 @@ else:
         print("OK 32 v119 pyramid pip 源已切 PyPI（原：" + old_url + "）")
 PYEOF119
 echo "=== 32 v119 完成 ==="
+
+# === 32 v120: 播放器报错接入运行日志 + 超时高亮补中文 ===
+python3 << 'PYEOF120'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v120]" in s:
+    print("跳过（32 v120 已应用）")
+else:
+    def rep(old, new, tag):
+        global s
+        assert s.count(old) == 1, "v120 锚点: " + tag + " 数=" + str(s.count(old))
+        s = s.replace(old, new, 1)
+
+    # import（Manager 此前无 util 包 import）
+    rep("import android.util.Log",
+        "import android.util.Log\nimport com.github.tvbox.osc.util.LxRuntimeLog // [32v120] 播放器报错入运行日志",
+        "Manager import")
+    # 播放器流错误：onPlayerError（直接写 _error，不走 setError，必须单点补）
+    rep("""                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        Log.e(TAG,"播错",error)""",
+        """                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        Log.e(TAG,"播错",error)
+                        try { LxRuntimeLog.add("播放器报错: " + _currentTitle.value + " / " + _currentArtist.value + " | code=" + error.errorCode + " " + error.message) } catch (_: Exception) { } // [32v120]""",
+        "onPlayerError")
+    # 播放器初始化失败（同样直接写 _error）
+    rep("""            Log.e(TAG,"ExoFail",e)
+            _error.value = "播放器初始化失败: ${e.message}\"""",
+        """            Log.e(TAG,"ExoFail",e)
+            _error.value = "播放器初始化失败: ${e.message}"
+            try { LxRuntimeLog.add("播放器初始化失败: " + e.message) } catch (_: Exception) { } // [32v120]""",
+        "ExoFail")
+    # setError 中央漏斗（解析失败/引擎错误/播放器未初始化/Activity 终局失败都走这里）
+    rep("""    fun setError(msg: String?) { // [21v30] 密封：报错必复位探针态
+        _error.value = msg""",
+        """    fun setError(msg: String?) { // [21v30] 密封：报错必复位探针态
+        _error.value = msg
+        if (msg != null) { try { LxRuntimeLog.add("播放: " + _currentTitle.value + " / " + _currentArtist.value + " | " + msg) } catch (_: Exception) { } } // [32v120]""",
+        "setError 漏斗")
+    # 探针无法探测（此前静默吞掉，流拉不到时无迹可查）
+    rep("            _probeTier.value = prA.first",
+        "            _probeTier.value = prA.first\n            if (prA.first < 0) { try { LxRuntimeLog.add(\"探针无法探测: \" + url.take(120)) } catch (_: Exception) { } } // [32v120]",
+        "探针失败")
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v120 播放器报错已接入运行日志")
+
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+t = open(P, encoding="utf-8").read()
+if "[32v120]" in t:
+    print("跳过（32 v120 抽屉高亮已应用）")
+else:
+    a = """                        val isErr = line.contains("Exception", ignoreCase = true) ||
+                            line.contains("error", ignoreCase = true) ||
+                            line.contains("timeout", ignoreCase = true) ||
+                            line.contains("失败", ignoreCase = true)"""
+    assert t.count(a) == 1, "v120 高亮锚点数=" + str(t.count(a))
+    t = t.replace(a, a + """ ||
+                            line.contains("超时") // [32v120] 中文超时也标红（此前 loadScript 超时显示为灰）""", 1)
+    open(P, "w", encoding="utf-8").write(t)
+    print("OK 32 v120 超时高亮已补中文")
+PYEOF120
+echo "=== 32 v120 完成 ==="
