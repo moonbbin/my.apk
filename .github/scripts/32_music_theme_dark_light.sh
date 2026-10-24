@@ -7656,3 +7656,36 @@ else:
     print("OK 32 v109 抽屉状态跨函数传递完成")
 PYEOF109
 echo "=== 32 v109 完成 ==="
+
+# === 32 v110: 两张毛玻璃设置卡整体缩小(字小一档+内边距/间距收紧) ===
+python3 << 'PYEOF110'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+SS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+s = load(SS)
+if "[32v110]" in s:
+    print("跳过（32 v110 已应用）")
+else:
+    def shrink(body):
+        assert body.count("Modifier.padding(16.dp)") == 1, "v110 卡内边距锚点"
+        body = body.replace("Modifier.padding(16.dp)", "Modifier.padding(12.dp)", 1)
+        assert body.count("typography.bodyLarge") == 1, "v110 标题锚点"
+        body = body.replace("typography.bodyLarge", "typography.bodyMedium", 1)
+        body = body.replace("typography.bodyMedium", "typography.bodySmall")
+        body = body.replace("height(12.dp)", "height(__TMP__.dp)")
+        body = body.replace("height(8.dp)", "height(4.dp)")
+        body = body.replace("height(__TMP__.dp)", "height(8.dp)")
+        return body
+    i = s.index("private fun GlassCapsuleCard()")
+    j = s.index("private fun GlassDrawerCard()")
+    cap = shrink(s[i:j])
+    drw = shrink(s[j:])
+    s = s[:i] + cap + drw
+    s = s.rstrip("\n") + "\n// [32v110] 两张毛玻璃卡缩小: 内边距 16→12dp, 标题 bodyLarge→bodyMedium, 副标题/标签/数值 bodyMedium→bodySmall, 间距 12→8/8→4dp(滑杆系统 48dp 触摸高度未动, 硬压有闪退风险)\n"
+    open(SS, "w", encoding="utf-8").write(s)
+    print("OK 32 v110 两张毛玻璃卡缩小完成")
+PYEOF110
+echo "=== 32 v110 完成 ==="
