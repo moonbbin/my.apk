@@ -8535,3 +8535,35 @@ else:
     print("OK 32 v121 队列链死链跳过 + 验活 helper 已接")
 PYEOF121
 echo "=== 32 v121 完成 ==="
+
+# === 32 v122: 验活改播放器式拿流（普通 GET + 浏览器 UA，不带 Range） ===
+python3 << 'PYEOF122'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v122]" in s:
+    print("跳过（32 v122 已应用）")
+else:
+    def rep(old, new, tag):
+        global s
+        assert s.count(old) == 1, "v122 锚点: " + tag + " 数=" + str(s.count(old))
+        s = s.replace(old, new, 1)
+
+    # 验活方式：Range+JavaUA 在裤佬中转站上全灭、PeekPili 播放器能播（同机对照已排除时机翻转），
+    # 故改按播放器拿流方式验：普通 GET（不带 Range，拿响应头即断开，不下载正文）+ 浏览器 UA
+    rep("    // [32v121] 取地址时验活：Range 拉 1KB，200/206 才算给流；level=undefined 免网络直接判死",
+        "    // [32v121] 取地址时验活；[32v122] 改播放器式拿流：普通 GET（不带 Range）+ 浏览器 UA，200/206 算给流；level=undefined 免网络直接判死",
+        "验活注释")
+    rep("""            conn.requestMethod = "GET"
+            conn.setRequestProperty("Range", "bytes=0-1023")""",
+        """            conn.requestMethod = "GET"
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36") // [32v122] 浏览器 UA，按播放器拿流方式验""",
+        "验活去 Range 加 UA")
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v122 验活已改播放器式拿流")
+PYEOF122
+echo "=== 32 v122 完成 ==="
