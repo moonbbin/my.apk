@@ -8334,3 +8334,24 @@ private fun RuntimeLogSheet(onDismiss: () -> Unit) {
 }
 KT116EOF
 echo "=== 32 v116 完成 ==="
+
+# === 32 v117: 运行日志抽屉补 FontWeight 导入（构建红：1316 未解析） ===
+python3 << 'PYEOF117'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(P, encoding="utf-8").read()
+if "[32v117]" in s:
+    print("跳过（32 v117 已应用）")
+else:
+    a = "import androidx.compose.ui.Alignment"
+    assert s.count(a) == 1, "v117 Alignment 锚点"
+    assert "import androidx.compose.ui.text.font.FontWeight" not in s, "v117 FontWeight 已存在？"
+    s = s.replace(a, a + "\nimport androidx.compose.ui.text.font.FontWeight // [32v117] 运行日志抽屉标题 Bold 用", 1)
+    open(P, "w", encoding="utf-8").write(s)
+    print("OK 32 v117 FontWeight 导入已补")
+PYEOF117
+echo "=== 32 v117 完成 ==="
