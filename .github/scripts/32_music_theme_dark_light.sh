@@ -9025,3 +9025,90 @@ private fun VinylCloseIcon(tint: Color) {
     print("OK 32 v124 黑胶挂件 + 液态控制台已接")
 PYEOF124
 echo "=== 32 v124 完成 ==="
+
+# === 32 v125: 液态控制台加下一曲按钮（上一首/播放暂停/下一曲/X 四键） ===
+python3 << 'PYEOF125'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v125]" in s:
+    print("跳过（32 v125 已应用）")
+else:
+    def rep(old, new, tag, cnt=1):
+        global s
+        assert s.count(old) == cnt, "v125 锚点: " + tag + " 数=" + str(s.count(old))
+        s = s.replace(old, new, cnt)
+
+    rep("""private fun VinylConsole(
+    picUrl: String,
+    isPlaying: Boolean,
+    progress: Float,
+    onPrev: () -> Unit,
+    onTogglePlay: () -> Unit,
+    onClose: () -> Unit,
+) {""",
+        """private fun VinylConsole(
+    picUrl: String,
+    isPlaying: Boolean,
+    progress: Float,
+    onPrev: () -> Unit,
+    onNext: () -> Unit, // [32v125] 下一曲
+    onTogglePlay: () -> Unit,
+    onClose: () -> Unit,
+) {""",
+        "控制台签名加 onNext")
+    rep("""                    if (isPlaying) VinylPauseIcon(tint = Color.Black) else VinylPlayIcon(tint = Color.Black)
+                }
+                Box(
+                    modifier = Modifier.size(48.dp).clickable(onClick = onClose),""",
+        """                    if (isPlaying) VinylPauseIcon(tint = Color.Black) else VinylPlayIcon(tint = Color.Black)
+                }
+                Box(
+                    modifier = Modifier.size(48.dp).clickable(onClick = onNext),
+                    contentAlignment = Alignment.Center
+                ) {
+                    VinylNextIcon(tint = musicColors().textPrimary)
+                }
+                Box(
+                    modifier = Modifier.size(48.dp).clickable(onClick = onClose),""",
+        "控制台加下一曲键")
+    rep("""                                onPrev = { LxPlayerManager.playPreviousInQueue() },
+                                onTogglePlay = { LxPlayerManager.togglePlayPause() },""",
+        """                                onPrev = { LxPlayerManager.playPreviousInQueue() },
+                                onNext = { LxPlayerManager.playNextInQueue() }, // [32v125]
+                                onTogglePlay = { LxPlayerManager.togglePlayPause() },""",
+        "宿主接 onNext")
+    rep("""@Composable
+private fun VinylPlayIcon(tint: Color) {""",
+        """@Composable
+private fun VinylNextIcon(tint: Color) {
+    // [32v125] 下一曲：上一首的镜像（三角朝右 + 右侧竖条），2dp 圆头
+    Canvas(modifier = Modifier.size(28.dp)) {
+        val sw = 2.dp.toPx()
+        drawLine(
+            color = tint,
+            start = Offset(21.dp.toPx(), 7.dp.toPx()),
+            end = Offset(21.dp.toPx(), 21.dp.toPx()),
+            strokeWidth = sw, cap = StrokeCap.Round
+        )
+        val tri = Path().apply {
+            moveTo(4.dp.toPx(), 7.dp.toPx())
+            lineTo(17.dp.toPx(), 14.dp.toPx())
+            lineTo(4.dp.toPx(), 21.dp.toPx())
+            close()
+        }
+        drawPath(tri, tint)
+    }
+}
+
+@Composable
+private fun VinylPlayIcon(tint: Color) {""",
+        "下一曲图标")
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v125 控制台下一曲已接")
+PYEOF125
+echo "=== 32 v125 完成 ==="
