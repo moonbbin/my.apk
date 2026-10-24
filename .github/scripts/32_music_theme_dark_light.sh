@@ -6400,3 +6400,122 @@ else:
     print("OK 32 v99 RankScreen FAB 上移完成")
 PYEOF99
 echo "=== 32 v99 完成 ==="
+
+
+
+# === 32 v100: 排行榜 FAB+底部弹窗 -> 左侧边缘小尾巴 + 滑出抽屉(内容整段平移) ===
+python3 << 'PYEOF100'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+RS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt"
+s = load(RS)
+if "[32v100]" in s:
+    print("跳过（32 v100 已应用）")
+else:
+    # 1) imports(缺才加)
+    imp_anchor = "import androidx.compose.foundation.background"
+    assert s.count(imp_anchor) == 1, "v100 import 锚点"
+    need = [
+        "androidx.compose.foundation.Canvas",
+        "androidx.compose.foundation.layout.offset",
+        "androidx.compose.foundation.layout.fillMaxHeight",
+        "androidx.compose.foundation.shape.RoundedCornerShape",
+        "androidx.compose.animation.AnimatedVisibility",
+        "androidx.compose.animation.fadeIn",
+        "androidx.compose.animation.fadeOut",
+        "androidx.compose.animation.slideInHorizontally",
+        "androidx.compose.animation.slideOutHorizontally",
+        "androidx.compose.animation.core.tween",
+        "androidx.compose.ui.graphics.Color",
+    ]
+    add = ""
+    for fq in need:
+        if ("import " + fq) not in s:
+            add += "\nimport " + fq + " // [32v100]"
+    if add:
+        s = s.replace(imp_anchor, imp_anchor + add, 1)
+    # 2) 状态正名 showSheet -> showDrawer, 删 sheetState
+    old = "    var showSheet by remember { mutableStateOf(false) }\n    val sheetState = rememberModalBottomSheetState()"
+    assert s.count(old) == 1, "v100 状态锚点"
+    s = s.replace(old, "    var showDrawer by remember { mutableStateOf(false) } // [32v100] 抽屉显隐(原底部弹窗状态)", 1)
+    # 3) 抽出底部弹窗内层内容(标题 + LazyColumn), 改关抽屉 + 整体右移 4sp
+    sp1 = s.index("    // 细节2：底部弹窗")
+    sp2 = s.index("\n}\n\n// ---------- 带状态的包装", sp1)
+    span = s[sp1:sp2]
+    assert "ModalBottomSheet(" in span and "items(tabs)" in span, "v100 sheet 跨度校验"
+    a = span.index("            Text(")
+    b = span.rindex("            }\n        }")
+    inner = span[a:b + len("            }")]
+    inner = inner.replace("showSheet = false", "showDrawer = false")
+    inner16 = "\n".join(("    " + ln) if ln.strip() else ln for ln in inner.split("\n"))
+    # 4) 删除整个底部弹窗块(保留其后的函数闭合)
+    s = s[:sp1] + s[sp2 + 1:]
+    assert "ModalBottomSheet(" not in s, "v100 sheet 未删净"
+    # 5) FAB 跨度 -> 小尾巴 + 抽屉
+    f1 = s.index("        // 细节1：右下角 FAB")
+    f2 = s.index("        }\n    }\n", f1) + len("        }")
+    tail = ("        // [32v100] 左侧边缘小尾巴(原 细节1 FAB 已废): 半个身位贴边, 纯点击开抽屉\n"
+        "        Box(\n"
+        "            modifier = Modifier\n"
+        "                .align(Alignment.CenterStart)\n"
+        "                .offset(x = (-22).dp)\n"
+        "                .size(width = 44.dp, height = 76.dp)\n"
+        "                .clip(RoundedCornerShape(topEnd = 18.dp, bottomEnd = 18.dp))\n"
+        "                .background(musicColors().cardSecondary.copy(alpha = 0.8f))\n"
+        "                .clickable { showDrawer = true },\n"
+        "            contentAlignment = Alignment.Center,\n"
+        "        ) {\n"
+        "            val dotColor100 = musicColors().textSecondary\n"
+        "            Canvas(modifier = Modifier.fillMaxSize()) {\n"
+        "                listOf(0.32f, 0.5f, 0.68f).forEach { fr ->\n"
+        "                    drawCircle(\n"
+        "                        color = dotColor100,\n"
+        "                        radius = 1.8.dp.toPx(),\n"
+        "                        center = androidx.compose.ui.geometry.Offset(size.width * 0.72f, size.height * fr),\n"
+        "                    )\n"
+        "                }\n"
+        "            }\n"
+        "        }\n")
+    drawer_head = ("        // [32v100] 抽屉遮罩 + 左侧滑出面板(内容 = 原底部弹窗切换列表整段平移)\n"
+        "        AnimatedVisibility(\n"
+        "            visible = showDrawer,\n"
+        "            enter = fadeIn(),\n"
+        "            exit = fadeOut(),\n"
+        "        ) {\n"
+        "            Box(\n"
+        "                modifier = Modifier\n"
+        "                    .fillMaxSize()\n"
+        "                    .background(Color.Black.copy(alpha = 0.45f))\n"
+        "                    .clickable(\n"
+        "                        interactionSource = remember { MutableInteractionSource() },\n"
+        "                        indication = null,\n"
+        "                    ) { showDrawer = false }\n"
+        "            )\n"
+        "        }\n"
+        "        AnimatedVisibility(\n"
+        "            visible = showDrawer,\n"
+        "            enter = slideInHorizontally(tween(220)) { -it },\n"
+        "            exit = slideOutHorizontally(tween(200)) { -it },\n"
+        "            modifier = Modifier.align(Alignment.CenterStart),\n"
+        "        ) {\n"
+        "            Surface(\n"
+        "                shape = RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp),\n"
+        "                color = musicColors().card,\n"
+        "                shadowElevation = 8.dp,\n"
+        "                modifier = Modifier.width(264.dp).fillMaxHeight(),\n"
+        "            ) {\n"
+        "                Column(modifier = Modifier.padding(top = 16.dp)) {\n")
+    drawer_tail = ("                }\n"
+        "            }\n"
+        "        }")
+    s = s[:f1] + tail + drawer_head + inner16 + "\n" + drawer_tail + s[f2:]
+    assert "FloatingActionButton(" not in s.replace("import androidx.compose.material3.FloatingActionButton", ""), "v100 FAB 未删净"
+    assert "showSheet" not in s and "sheetState" not in s, "v100 旧状态未删净"
+    assert s.count("[32v100]") >= 4, "v100 post-check"
+    open(RS, "w", encoding="utf-8").write(s)
+    print("OK 32 v100 排行榜抽屉化完成")
+PYEOF100
+echo "=== 32 v100 完成 ==="
