@@ -978,6 +978,17 @@ if '[39glass]' not in h:
 else:
     print('SKIP [39glass] 已应用')
 
+# ============ 5) [39glass2] 壁纸层兼作抽屉采样源(抽屉 backdrop 补全: 壁纸层+列表层同源, 空区不透原图) ============
+h = load(MH)
+if '[39glass2]' not in h:
+    old = '            Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState)) { // [39haze2] 壁纸层作 Haze 源'
+    assert h.count(old) == 1, '❌ [39glass2] 壁纸源锚点数 ' + str(h.count(old))
+    h = h.replace(old, '            Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState).hazeSource(drawerHazeState)) { // [39haze2] 壁纸层作 Haze 源 // [39glass2] 壁纸层兼作抽屉采样源(drawerHazeState 由 32 v108 在 MH 声明)', 1)
+    save(MH, h)
+    print('OK [39glass2] 壁纸层已兼作抽屉采样源')
+else:
+    print('SKIP [39glass2] 已应用')
+
 print('[39] 全部补丁完成')
 PYEOF39
 echo "=== 39 wp5 完成 ==="

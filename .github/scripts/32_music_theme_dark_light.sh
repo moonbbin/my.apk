@@ -7418,3 +7418,215 @@ else:
     print("OK 32 v107 排行榜键改行号完成")
 PYEOF107
 echo "=== 32 v107 完成 ==="
+
+# === 32 v108: 抽屉玻璃补全采样+垫底+抽屉调节卡(主次分清/右上角花了) ===
+python3 << 'PYEOF108A'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+GLASS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/glass/GlassSettings.kt"
+s = load(GLASS)
+if "KEY_DRW_TINT, 50" in s:
+    print("跳过（32 v108 GlassSettings 已应用）")
+else:
+    a = "tint = p.getInt(KEY_DRW_TINT, 30).coerceIn(0, 80),"
+    assert s.count(a) == 1, "v108 drawer tint 锚点"
+    s = s.replace(a, "tint = p.getInt(KEY_DRW_TINT, 50).coerceIn(0, 80), // [32v108] 抽屉底色默认 30→50, 主次分清(本组无存量可调值)", 1)
+    open(GLASS, "w", encoding="utf-8").write(s)
+    print("OK 32 v108 抽屉 tint 默认改 50 完成")
+PYEOF108A
+python3 << 'PYEOF108B'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = load(MH)
+if "[32v108]" in s:
+    print("跳过（32 v108 MH 已应用）")
+else:
+    a = "    val hazeState = rememberHazeState() // [32v102] Haze 采样状态(根 Box 采样源由 39 挂)"
+    assert s.count(a) == 1, "v108 hazeState 锚点"
+    s = s.replace(a, a + "\n    val drawerHazeState = rememberHazeState() // [32v108] 抽屉采样状态上移 MH(壁纸层+列表层同源)", 1)
+    a = "        tabs = charts.map { it.name },"
+    assert s.count(a) == 1, "v108 RankScreen 调用锚点"
+    s = s.replace(a, "        drawerHazeState = drawerHazeState, // [32v108]\n" + a, 1)
+    open(MH, "w", encoding="utf-8").write(s)
+    print("OK 32 v108 MH 抽屉状态上移完成")
+PYEOF108B
+python3 << 'PYEOF108C'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+RS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt"
+s = load(RS)
+if "[32v108]" in s:
+    print("跳过（32 v108 RankScreen 已应用）")
+else:
+    if "import dev.chrisbanes.haze.HazeState" not in s:
+        a = "import dev.chrisbanes.haze.rememberHazeState // [32v106]"
+        assert s.count(a) == 1, "v108 HazeState import 锚点"
+        s = s.replace(a, a + "\nimport dev.chrisbanes.haze.HazeState // [32v108]", 1)
+    a = "    onPlayClick: (RankSong) -> Unit = {},\n) {"
+    assert s.count(a) == 1, "v108 签名锚点"
+    s = s.replace(a, "    onPlayClick: (RankSong) -> Unit = {},\n    drawerHazeState: HazeState = rememberHazeState(), // [32v108] 由 MH 传入(壁纸层同源; 预览走默认)\n) {", 1)
+    a = "    val drawerHazeState = rememberHazeState() // [32v106] 抽屉毛玻璃采样(本页自建源)\n"
+    assert s.count(a) == 1, "v108 内部状态锚点"
+    s = s.replace(a, "", 1)
+    a = "                                    blurRadius(drawerGlass.radius.dp)"
+    assert s.count(a) == 1, "v108 style 锚点"
+    s = s.replace(a, a + "\n                                    backgroundColor(if (drawerDark) Color.Black.copy(alpha = 0.30f) else Color.White.copy(alpha = 0.30f)) // [32v108] 垫底暗纱: 空采样区不透原图, 主次分清", 1)
+    open(RS, "w", encoding="utf-8").write(s)
+    print("OK 32 v108 RankScreen 抽屉采样上移+垫底完成")
+PYEOF108C
+python3 << 'PYEOF108D'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+SS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+s = load(SS)
+if "GlassDrawerCard" in s:
+    print("跳过（32 v108 抽屉卡已应用）")
+else:
+    a = "        item { GlassCapsuleCard() } // [32v104] 毛玻璃 · 导航胶囊(独立设置卡)"
+    assert s.count(a) == 1, "v108 SS item 锚点"
+    s = s.replace(a, a + "\n        item { GlassDrawerCard() } // [32v108] 毛玻璃 · 排行榜抽屉(独立设置卡)", 1)
+    card = '''
+
+// ---------- [32v108] 毛玻璃 · 排行榜抽屉(独立设置卡: 开关+半径+底色+边框, 与胶囊组分开) ----------
+@Composable
+private fun GlassDrawerCard() {
+    val context = LocalContext.current
+    val drw by GlassSettings.drawer.collectAsState()
+    var radiusSlider by remember(drw.radius) { mutableStateOf(drw.radius.toFloat()) }
+    var tintSlider by remember(drw.tint) { mutableStateOf(drw.tint.toFloat()) }
+    var borderSlider by remember(drw.border) { mutableStateOf(drw.border.toFloat()) }
+    Surface(
+        color = musicColors().card.copy(alpha = 0.45f),
+        shape = MaterialTheme.shapes.large,
+        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = "毛玻璃 · 排行榜抽屉",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = musicColors().textPrimary,
+                    )
+                    Text(
+                        text = "切换榜单抽屉的实时模糊，独立于胶囊",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary,
+                    )
+                }
+                Switch(
+                    checked = drw.enabled,
+                    onCheckedChange = { GlassSettings.setDrawerEnabled(context, it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = musicColors().accentText,
+                        checkedTrackColor = musicColors().accent,
+                        uncheckedThumbColor = musicColors().textSecondary,
+                        uncheckedTrackColor = musicColors().cardSecondary,
+                    ),
+                )
+            }
+            if (drw.enabled) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("模糊强度", style = MaterialTheme.typography.bodyMedium, color = musicColors().textSecondary)
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "${radiusSlider.toInt()}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textPrimary,
+                    )
+                }
+                Slider(
+                    value = radiusSlider,
+                    onValueChange = { radiusSlider = it },
+                    onValueChangeFinished = { GlassSettings.setDrawerRadius(context, radiusSlider.toInt()) },
+                    valueRange = 0f..50f,
+                    steps = 49,
+                    colors = SliderDefaults.colors(
+                        thumbColor = musicColors().accent,
+                        activeTrackColor = musicColors().accent,
+                        inactiveTrackColor = musicColors().cardSecondary,
+                    ),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("底色深浅", style = MaterialTheme.typography.bodyMedium, color = musicColors().textSecondary)
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "${tintSlider.toInt()}%",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textPrimary,
+                    )
+                }
+                Slider(
+                    value = tintSlider,
+                    onValueChange = { tintSlider = it },
+                    onValueChangeFinished = { GlassSettings.setDrawerTint(context, tintSlider.toInt()) },
+                    valueRange = 0f..80f,
+                    steps = 79,
+                    colors = SliderDefaults.colors(
+                        thumbColor = musicColors().accent,
+                        activeTrackColor = musicColors().accent,
+                        inactiveTrackColor = musicColors().cardSecondary,
+                    ),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("边缘反光", style = MaterialTheme.typography.bodyMedium, color = musicColors().textSecondary)
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "${borderSlider.toInt()}%",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textPrimary,
+                    )
+                }
+                Slider(
+                    value = borderSlider,
+                    onValueChange = { borderSlider = it },
+                    onValueChangeFinished = { GlassSettings.setDrawerBorder(context, borderSlider.toInt()) },
+                    valueRange = 0f..50f,
+                    steps = 49,
+                    colors = SliderDefaults.colors(
+                        thumbColor = musicColors().accent,
+                        activeTrackColor = musicColors().accent,
+                        inactiveTrackColor = musicColors().cardSecondary,
+                    ),
+                )
+            }
+        }
+    }
+}
+'''
+    s = s.rstrip("\n") + "\n" + card
+    open(SS, "w", encoding="utf-8").write(s)
+    print("OK 32 v108 设置页抽屉卡完成")
+PYEOF108D
+echo "=== 32 v108 完成 ==="
