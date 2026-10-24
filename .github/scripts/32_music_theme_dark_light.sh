@@ -7398,3 +7398,23 @@ private fun RankTabIcon(tab: String, tint: Color, modifier: Modifier = Modifier)
     print("OK 32 v106 RankScreen 抽屉液态玻璃完成")
 PYEOF106B
 echo "=== 32 v106 完成 ==="
+
+# === 32 v107: 排行榜键改行号(酷狗新歌榜同名双版本撞键闪退) ===
+python3 << 'PYEOF107'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+RS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt"
+s = load(RS)
+if "[32v107]" in s:
+    print("跳过（32 v107 已应用）")
+else:
+    old = "            itemsIndexed(songs, key = { _, s -> s.title + s.artist }) { index, song ->"
+    assert s.count(old) == 1, "v107 itemsIndexed 锚点数 " + str(s.count(old))
+    s = s.replace(old, "            itemsIndexed(songs, key = { index, _ -> index }) { index, song -> // [32v107] 键改行号: 酷狗新歌榜同名同歌手双版本(山风山风等等我 合唱版×2,hash 不同)标题键撞键致 Compose 抛异常闪退", 1)
+    open(RS, "w", encoding="utf-8").write(s)
+    print("OK 32 v107 排行榜键改行号完成")
+PYEOF107
+echo "=== 32 v107 完成 ==="
