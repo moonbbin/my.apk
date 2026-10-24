@@ -7851,3 +7851,35 @@ else:
     print("OK 32 v112 CompactSlider 指针 API 修正完成")
 PYEOF112
 echo "=== 32 v112 完成 ==="
+
+# === 32 v113: 搜索历史 chip 词条防挤(长词不顶掉删除钮) ===
+python3 << 'PYEOF113'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+SR = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchResultScreen.kt"
+s = open(SR, encoding="utf-8").read()
+if "[32v113]" in s:
+    print("跳过（32 v113 已应用）")
+else:
+    a = """                                    Text(
+                                        text = word,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = musicColors().textPrimary,
+                                        maxLines = 1,
+                                    )"""
+    assert s.count(a) == 1, "v113 历史词条锚点"
+    s = s.replace(a, """                                    Text(
+                                        text = word,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = musicColors().textPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f), // [32v113] 超长词(粘贴网址)只压自己, 不顶掉后方删除钮
+                                    )""", 1)
+    open(SR, "w", encoding="utf-8").write(s)
+    print("OK 32 v113 搜索历史词条防挤完成")
+PYEOF113
+echo "=== 32 v113 完成 ==="
