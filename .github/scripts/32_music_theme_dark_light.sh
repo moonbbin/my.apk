@@ -6623,3 +6623,27 @@ else:
     print("OK 32 v102 MH Haze 胶囊完成")
 PYEOF102
 echo "=== 32 v102 完成 ==="
+
+# === 32 v102fix: Haze 2.0 tint 正确 API(HazeColorEffect.tint 经 colorEffects 应用) ===
+python3 << 'PYEOF102F'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = load(MH)
+if "[32v102fix]" in s:
+    print("跳过（32 v102fix 已应用）")
+else:
+    imp = "import dev.chrisbanes.haze.blur.HazeBlurStyle // [32v102]"
+    assert s.count(imp) == 1, "v102fix import 锚点"
+    if "import dev.chrisbanes.haze.blur.HazeColorEffect" not in s:
+        s = s.replace(imp, imp + "\nimport dev.chrisbanes.haze.blur.HazeColorEffect // [32v102fix]", 1)
+    old = "                                    tint(if (pillDark) Color.Black.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.3f))"
+    assert s.count(old) == 1, "v102fix tint 锚点数 " + str(s.count(old))
+    s = s.replace(old, "                                    colorEffects(listOf(HazeColorEffect.tint(if (pillDark) Color.Black.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.3f)))) // [32v102fix] tint 是 HazeColorEffect 工厂函数", 1)
+    open(MH, "w", encoding="utf-8").write(s)
+    print("OK 32 v102fix tint API 修正完成")
+PYEOF102F
+echo "=== 32 v102fix 完成 ==="
