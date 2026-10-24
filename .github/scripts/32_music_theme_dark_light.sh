@@ -6713,3 +6713,29 @@ else:
     print("OK 32 v102fix3 Haze 拓扑修正完成")
 PYEOF102F3
 echo "=== 32 v102fix3 完成 ==="
+
+# === 32 v103: Haze 参数动态绑定(半径/底色读 WallpaperManager 设置, 半径0时底色兜底0.8) ===
+python3 << 'PYEOF103'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = load(MH)
+if "[32v103]" in s:
+    print("跳过（32 v103 已应用）")
+else:
+    anchor = "                val pillDark by MusicThemeManager.isDarkTheme // [32v98] 胶囊明暗随主题"
+    assert s.count(anchor) == 1, "v103 pillDark 锚点"
+    s = s.replace(anchor, anchor + "\n                val hazeTintEff = if (wpState.hazeRadius <= 0) 0.8f else wpState.hazeTint / 100f // [32v103] 半径0关模糊时底色自动加深保文字", 1)
+    old_r = "                                    blurRadius(30.dp)"
+    assert s.count(old_r) == 1, "v103 blurRadius 锚点"
+    s = s.replace(old_r, "                                    blurRadius(wpState.hazeRadius.dp) // [32v103] 半径读壁纸设置(0-50)", 1)
+    old_t = "                                    colorEffects(listOf(HazeColorEffect.tint(if (pillDark) Color.Black.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.3f)))) // [32v102fix] tint 是 HazeColorEffect 工厂函数"
+    assert s.count(old_t) == 1, "v103 tint 锚点"
+    s = s.replace(old_t, "                                    colorEffects(listOf(HazeColorEffect.tint(if (pillDark) Color.Black.copy(alpha = hazeTintEff) else Color.White.copy(alpha = hazeTintEff)))) // [32v103] 底色读壁纸设置", 1)
+    open(MH, "w", encoding="utf-8").write(s)
+    print("OK 32 v103 Haze 参数动态绑定完成")
+PYEOF103
+echo "=== 32 v103 完成 ==="
