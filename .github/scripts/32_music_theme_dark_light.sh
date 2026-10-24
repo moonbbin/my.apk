@@ -6672,3 +6672,44 @@ else:
     print("OK 32 v102fix2 源选择改 All 完成")
 PYEOF102F2
 echo "=== 32 v102fix2 完成 ==="
+
+# === 32 v102fix3: Haze 拓扑修正: 页内容 when 包同级源 Box + input 回 Behind(祖先源禁采) ===
+python3 << 'PYEOF102F3'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = load(MH)
+if "[32v102fix3]" in s:
+    print("跳过（32 v102fix3 已应用）")
+else:
+    imp = "import dev.chrisbanes.haze.HazeSourceSelection // [32v102fix2]\n"
+    assert s.count(imp) == 1, "v102fix3 import 锚点"
+    s = s.replace(imp, "", 1)
+    old_in = "                                input = HazeInput.Sources(hazeState, HazeSourceSelection.All), // [32v102fix2] Behind 会排除祖先源自身,All 才采根源"
+    assert s.count(old_in) == 1, "v102fix3 input 锚点"
+    s = s.replace(old_in, "                                input = HazeInput.Sources(hazeState), // [32v102fix3] Behind: 无祖先源时全选同级源(壁纸层+页内容层)", 1)
+    when_line = "            when (selectedTab) {"
+    assert s.count(when_line) == 1, "v102fix3 when 锚点数 " + str(s.count(when_line))
+    wi = s.index(when_line)
+    depth = 0; j = wi; end = -1
+    while j < len(s):
+        c = s[j]
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                end = j; break
+        j += 1
+    assert end > 0, "v102fix3 when 结尾未找到"
+    after = s[end + 1:end + 200]
+    assert "// [32v97] 悬浮层" in after, "v102fix3 when 结尾后未见悬浮层注释, 计数疑错位"
+    s = s[:end + 1] + "\n            } // [32v102fix3] 页内容源 Box 结束" + s[end + 1:]
+    s = s[:wi] + "            Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState)) { // [32v102fix3] 页内容作 Haze 源(与胶囊同级非祖先)\n" + s[wi:]
+    open(MH, "w", encoding="utf-8").write(s)
+    print("OK 32 v102fix3 Haze 拓扑修正完成")
+PYEOF102F3
+echo "=== 32 v102fix3 完成 ==="

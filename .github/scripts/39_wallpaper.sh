@@ -950,17 +950,19 @@ page_bg('ui/music/rank/RankScreen.kt', 'RankScreen')
 page_bg('ui/music/playlist/PlaylistScreen.kt', 'PlaylistScreen')
 page_bg('ui/music/playlist/UserPlaylistScreen.kt', 'UserPlaylistScreen')
 page_bg('ui/music/search/SearchScreen.kt', 'SearchScreen', after_fun='fun SearchScreen(')
-# ============ 3) [39haze] 根 Box 挂 hazeSource(Haze 采样源; HazeState 由 32 v102 在 MusicHomeScreen 声明) ============
+# ============ 3) [39haze2] 壁纸层挂 hazeSource(与胶囊同级非祖先; 根 Box 不作源: 祖先源被 Haze 节点 require 禁采, 装机闪退实证) ============
 h = load(MH)
-if '.hazeSource(hazeState)' not in h:
-    h = rep(h,
-        '    Box(modifier = Modifier.fillMaxSize()) { // [39wp1] 壁纸底层(图+遮罩)',
-        '    Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState)) { // [39wp1] 壁纸底层(图+遮罩) // [39haze] Haze 采样源',
-        'MH-haze')
+if '[39haze2]' not in h:
+    if_line = '        if (wpActive) { // [39wp2] 渐变/图片二选一 + 遮罩'
+    assert h.count(if_line) == 1, '❌ [39haze2] wpActive 锚点数 ' + str(h.count(if_line))
+    h = h.replace(if_line, if_line + '\n            Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState)) { // [39haze2] 壁纸层作 Haze 源', 1)
+    scrim = '            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = wpScrimA)))'
+    assert h.count(scrim) == 1, '❌ [39haze2] scrim 锚点数 ' + str(h.count(scrim))
+    h = h.replace(scrim, scrim + '\n            } // [39haze2] 壁纸源 Box 结束', 1)
     save(MH, h)
-    print('OK [39haze] 根 Box 已挂 hazeSource')
+    print('OK [39haze2] 壁纸层已挂 hazeSource')
 else:
-    print('SKIP [39haze] 已挂 hazeSource')
+    print('SKIP [39haze2] 已应用')
 
 print('[39] 全部补丁完成')
 PYEOF39
