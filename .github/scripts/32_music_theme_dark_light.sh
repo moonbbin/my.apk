@@ -8355,3 +8355,24 @@ else:
     print("OK 32 v117 FontWeight 导入已补")
 PYEOF117
 echo "=== 32 v117 完成 ==="
+
+# === 32 v118: pyramid Chaquopy pip 索引源阿里云切回 PyPI 官方（修 pyquery 装包失败） ===
+python3 << 'PYEOF118'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+P = "avbox/pyramid/build.gradle.kts"
+s = open(P, encoding="utf-8").read()
+if "[32v118]" in s:
+    print("跳过（32 v118 已应用）")
+else:
+    a = 'options("-i", "https://mirrors.aliyun.com/pypi/simple/")'
+    assert s.count(a) == 1, "v118 阿里云 pip 源锚点数=" + str(s.count(a))
+    assert "pypi.org/simple" not in s, "v118 已是 PyPI？"
+    s = s.replace(a, 'options("-i", "https://pypi.org/simple/") // [32v118] 阿里云镜像致 pyquery==2.0.2 无版本可用，改走 PyPI 官方；Chaquo 安卓 wheel 仍走 extra-index', 1)
+    open(P, "w", encoding="utf-8").write(s)
+    print("OK 32 v118 pyramid pip 源已切回 PyPI")
+PYEOF118
+echo "=== 32 v118 完成 ==="
