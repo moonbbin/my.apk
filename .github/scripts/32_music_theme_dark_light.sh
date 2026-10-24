@@ -7825,3 +7825,29 @@ else:
     print("OK 32 v111 两张毛玻璃卡换紧凑滑杆完成")
 PYEOF111
 echo "=== 32 v111 完成 ==="
+
+# === 32 v112: CompactSlider 指针 API 修正(修构建红 3 处 Unresolved reference) ===
+python3 << 'PYEOF112'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+CS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/glass/CompactSlider.kt"
+s = open(CS, encoding="utf-8").read()
+if "[32v112]" in s:
+    print("跳过（32 v112 已应用）")
+else:
+    a = "import androidx.compose.ui.input.pointer.awaitPointerEventScope\n"
+    assert s.count(a) == 1, "v112 awaitPointerEventScope import 锚点"
+    s = s.replace(a, "", 1)
+    a = "import androidx.compose.ui.input.pointer.changedToUpOrCanceled\n"
+    assert s.count(a) == 1, "v112 changedToUpOrCanceled import 锚点"
+    s = s.replace(a, "", 1)
+    a = "if (change.changedToUpOrCanceled()) {"
+    assert s.count(a) == 1, "v112 松手判断锚点"
+    s = s.replace(a, "if (!change.pressed) { // [32v112] 松手/取消统一按抬起处理: awaitPointerEventScope 是 PointerInputScope 成员(无需 import), changedToUpOrCanceled 在此 Compose 版不存在, 以 pressed=false 判定", 1)
+    open(CS, "w", encoding="utf-8").write(s)
+    print("OK 32 v112 CompactSlider 指针 API 修正完成")
+PYEOF112
+echo "=== 32 v112 完成 ==="
