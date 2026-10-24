@@ -6647,3 +6647,28 @@ else:
     print("OK 32 v102fix tint API 修正完成")
 PYEOF102F
 echo "=== 32 v102fix 完成 ==="
+
+# === 32 v102fix2: Haze 源选择 Behind 排除祖先源自身(节点源码实证)改 All ===
+python3 << 'PYEOF102F2'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = load(MH)
+if "[32v102fix2]" in s:
+    print("跳过（32 v102fix2 已应用）")
+else:
+    imp = "import dev.chrisbanes.haze.HazeInput // [32v102]"
+    assert s.count(imp) == 1, "v102fix2 import 锚点"
+    if "import dev.chrisbanes.haze.HazeSourceSelection" not in s:
+        s = s.replace(imp, imp + "\nimport dev.chrisbanes.haze.HazeSourceSelection // [32v102fix2]", 1)
+    old = "                                input = HazeInput.Sources(hazeState),"
+    assert s.count(old) == 1, "v102fix2 input 锚点数 " + str(s.count(old))
+    # Behind 语义(HazeEffectNode 源码):源入选条件=zIndex<祖先源 zIndex;根 Box 既是唯一源又是祖先源→恒假→无源→只剩 scrim 假模糊。All 无条件入选。
+    s = s.replace(old, "                                input = HazeInput.Sources(hazeState, HazeSourceSelection.All), // [32v102fix2] Behind 会排除祖先源自身,All 才采根源", 1)
+    open(MH, "w", encoding="utf-8").write(s)
+    print("OK 32 v102fix2 源选择改 All 完成")
+PYEOF102F2
+echo "=== 32 v102fix2 完成 ==="
