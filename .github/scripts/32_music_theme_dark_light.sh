@@ -9356,3 +9356,121 @@ import androidx.compose.animation.core.animateOffsetAsState // [32v127] 挂件�
     print("OK 32 v127 对称居中+磁吸已接")
 PYEOF127
 echo "=== 32 v127 完成 ==="
+
+# === 32 v128: 弹窗绝对居中 + 吸附坐标系修复（用户 2026-10-25 确认） ===
+# ①居中：cardW 删 300dp 上限改 screenW - 32dp；provider X 改 (windowW - popupW) / 2，不再跟挂件走。
+# ②吸附真机制：v127 在弹窗内 onGloballyPositioned 量到的 boundsInWindow 是相对弹窗窗口自身原点（≈0,0），
+#   不是屏幕坐标，减宿主坐标再钳制必然落到 (0,0)——故整条卡片内量坐标机制删除，改 provider 回报自己算出的
+#   IntOffset（按定义即卡片屏幕坐标）；宿主仍 boundsInWindow（全屏 Activity 下窗口原点即屏幕原点），相减得 Box 系坐标。
+# ③吸附公式按用户给定：target = providerPos - hostTopLeft - 24dp（v127 的 -40dp 作废），钳制同拖拽；重开先清旧 pos。
+# ④冻结锚点保留：Y 仍用 frozenAnchor，弹窗期间 provider 回报位置固定，不互为因果。
+python3 << 'PYEOF128'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v128]" in s:
+    print("跳过（32 v128 已应用）")
+else:
+    def rep(old, new, tag, cnt=1):
+        global s
+        assert s.count(old) == cnt, "v128 锚点: " + tag + " 数=" + str(s.count(old))
+        s = s.replace(old, new, cnt)
+
+    rep("            var consoleCardTopLeft by remember { mutableStateOf<Offset?>(null) } // [32v127] 卡片左上角（窗口坐标）",
+        "            var providerPos by remember { mutableStateOf<IntOffset?>(null) } // [32v128] provider 回报的卡片屏幕坐标",
+        "卡片位置态改 provider 回报")
+    rep("""                } else {
+                    frozenAnchor = null
+                }""",
+        """                } else {
+                    frozenAnchor = null
+                    providerPos = null
+                }""",
+        "关弹窗清旧位置")
+    rep("""                val snapTarget: Offset? = if (showVinylConsole) {
+                    consoleCardTopLeft?.let { card ->
+                        val rel = card - hostTopLeft
+                        val inset = with(density) { 8.dp.toPx() }
+                        Offset(
+                            (rel.x - sizePx + inset).coerceIn(0f, maxWpx - sizePx),
+                            (rel.y - sizePx + inset).coerceIn(0f, maxHpx - sizePx)
+                        )
+                    }
+                } else null""",
+        """                val snapTarget: Offset? = if (showVinylConsole) {
+                    providerPos?.let { pos ->
+                        Offset(
+                            (pos.x - hostTopLeft.x - sizePx / 2).coerceIn(0f, maxWpx - sizePx),
+                            (pos.y - hostTopLeft.y - sizePx / 2).coerceIn(0f, maxHpx - sizePx)
+                        )
+                    }
+                } else null""",
+        "吸附公式改 provider 坐标 -24dp")
+    rep("                            popupPositionProvider = VinylConsolePositionProvider(frozenAnchor ?: bounds, gapPx)",
+        "                            popupPositionProvider = VinylConsolePositionProvider(frozenAnchor ?: bounds, gapPx, onPositioned = { providerPos = it })",
+        "provider 接回报回调")
+    rep("""                                onPositioned = { consoleCardTopLeft = it },
+""",
+        "",
+        "宿主删卡片内量回传")
+    rep("""    onPositioned: (Offset) -> Unit, // [32v127] 卡片左上角（窗口坐标）回传宿主
+""",
+        "",
+        "控制台签名删 onPositioned")
+    rep("""        modifier = Modifier.width(cardW).shadow(16.dp, MaterialTheme.shapes.extraLarge)
+            .onGloballyPositioned { onPositioned(it.boundsInWindow().topLeft) },""",
+        """        modifier = Modifier.width(cardW).shadow(16.dp, MaterialTheme.shapes.extraLarge),""",
+        "卡片删内量坐标")
+    rep("    val cardW = minOf(300.dp, screenW - 32.dp)",
+        "    val cardW = screenW - 32.dp // [32v128] 删 300dp 上限，两端各留 16dp",
+        "卡片宽改全宽减 32dp")
+    rep("""private class VinylConsolePositionProvider(
+    private val anchor: IntRect,
+    private val gapPx: Int,
+) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): IntOffset {
+        val x = (anchor.center.x - popupContentSize.width / 2)
+            .coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
+        val aboveY = anchor.top - popupContentSize.height - gapPx
+        val belowY = anchor.bottom + gapPx
+        val y = if (aboveY >= 0) aboveY
+            else belowY.coerceAtMost((windowSize.height - popupContentSize.height).coerceAtLeast(0))
+        return IntOffset(x, y)
+    }
+}""",
+        """private class VinylConsolePositionProvider(
+    private val anchor: IntRect,
+    private val gapPx: Int,
+    private val onPositioned: (IntOffset) -> Unit, // [32v128] 回报算出的卡片屏幕坐标（供吸附用）
+) : PopupPositionProvider {
+    private var lastReported: IntOffset? = null
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): IntOffset {
+        val x = (windowSize.width - popupContentSize.width) / 2
+        val aboveY = anchor.top - popupContentSize.height - gapPx
+        val belowY = anchor.bottom + gapPx
+        val y = if (aboveY >= 0) aboveY
+            else belowY.coerceAtMost((windowSize.height - popupContentSize.height).coerceAtLeast(0))
+        return IntOffset(x, y).also {
+            if (it != lastReported) { lastReported = it; onPositioned(it) }
+        }
+    }
+}""",
+        "provider 居中 X + 回报位置")
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v128 居中+吸附坐标修复已接")
+PYEOF128
+echo "=== 32 v128 完成 ==="
