@@ -9474,3 +9474,70 @@ else:
     print("OK 32 v128 居中+吸附坐标修复已接")
 PYEOF128
 echo "=== 32 v128 完成 ==="
+
+# === 32 v129: 控制台终极打磨——徽章压角 + 卡片缩小（用户 2026-10-25 确认，默认不移弹窗、额外量 12dp） ===
+# ①卡片：screenW - 32dp → screenW - 72dp（两边各 36dp）；固定 320dp 不用（360dp 屏留边仅 20dp，挂件左缘负数被钳制）。
+# ②封面：宽改卡片宽 × 0.7f、居中、仍正方形；进度条保持全宽。
+# ③吸附：target = 角 - 36dp（v128 的 -24dp + 用户要的 -12dp），中心 = 角 - 12dp 斜向外，只一小口压住卡片角；
+#   左缘正好 0dp 不钳制；弹窗不移位（移位会破坏绝对居中，36dp 边距已解决钳制）。
+# ④紧凑：X 按钮 48→40dp；底行上一首/下一曲 48→40dp、播放 64→56dp；图标 28dp/2dp 线条不动；
+#   顶行文字已是 labelSmall（最小 label 档，无更小 Token，不动）；40/56/40 对称，播放键仍绝对居中。
+python3 << 'PYEOF129'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v129]" in s:
+    print("跳过（32 v129 已应用）")
+else:
+    def rep(old, new, tag, cnt=1):
+        global s
+        assert s.count(old) == cnt, "v129 锚点: " + tag + " 数=" + str(s.count(old))
+        s = s.replace(old, new, cnt)
+
+    rep("    val cardW = screenW - 32.dp // [32v128] 删 300dp 上限，两端各留 16dp",
+        "    val cardW = screenW - 72.dp // [32v129] 两边各留 36dp，挂件压角不钳制",
+        "卡片宽改 72dp 边距")
+    rep("                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(16.dp)),",
+        "                    modifier = Modifier.fillMaxWidth(0.7f).align(Alignment.CenterHorizontally).aspectRatio(1f).clip(RoundedCornerShape(16.dp)),",
+        "封面图改 0.7f 居中")
+    rep("                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(16.dp))",
+        "                    modifier = Modifier.fillMaxWidth(0.7f).align(Alignment.CenterHorizontally).aspectRatio(1f).clip(RoundedCornerShape(16.dp))",
+        "封面占位改 0.7f 居中")
+    rep("""                val snapTarget: Offset? = if (showVinylConsole) {
+                    providerPos?.let { pos ->
+                        Offset(
+                            (pos.x - hostTopLeft.x - sizePx / 2).coerceIn(0f, maxWpx - sizePx),
+                            (pos.y - hostTopLeft.y - sizePx / 2).coerceIn(0f, maxHpx - sizePx)
+                        )
+                    }
+                } else null""",
+        """                val snapOut = sizePx / 2 + with(density) { 12.dp.toPx() } // [32v129] 中心压角外 12dp
+                val snapTarget: Offset? = if (showVinylConsole) {
+                    providerPos?.let { pos ->
+                        Offset(
+                            (pos.x - hostTopLeft.x - snapOut).coerceIn(0f, maxWpx - sizePx),
+                            (pos.y - hostTopLeft.y - snapOut).coerceIn(0f, maxHpx - sizePx)
+                        )
+                    }
+                } else null""",
+        "吸附改角外 12dp")
+    rep("                IconButton(onClick = onClose) {",
+        "                IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {",
+        "X 按钮改 40dp")
+    rep("                    modifier = Modifier.size(48.dp).clickable(onClick = onPrev),",
+        "                    modifier = Modifier.size(40.dp).clickable(onClick = onPrev),",
+        "上一首改 40dp")
+    rep("                    modifier = Modifier.size(64.dp).clip(CircleShape).background(Color.White)",
+        "                    modifier = Modifier.size(56.dp).clip(CircleShape).background(Color.White)",
+        "播放改 56dp")
+    rep("                    modifier = Modifier.size(48.dp).clickable(onClick = onNext),",
+        "                    modifier = Modifier.size(40.dp).clickable(onClick = onNext),",
+        "下一曲改 40dp")
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v129 徽章压角+卡片缩小已接")
+PYEOF129
+echo "=== 32 v129 完成 ==="
