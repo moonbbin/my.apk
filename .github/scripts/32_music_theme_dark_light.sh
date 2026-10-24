@@ -8356,7 +8356,8 @@ else:
 PYEOF117
 echo "=== 32 v117 完成 ==="
 
-# === 32 v118: pyramid Chaquopy pip 索引源阿里云切回 PyPI 官方（修 pyquery 装包失败） ===
+
+# === 32 v118: pyramid Chaquopy pip 索引源阿里云切回 PyPI 官方（修 pyquery 装包失败；容错版） ===
 python3 << 'PYEOF118'
 import os
 def find_root():
@@ -8369,10 +8370,18 @@ if "[32v118]" in s:
     print("跳过（32 v118 已应用）")
 else:
     a = 'options("-i", "https://mirrors.aliyun.com/pypi/simple/")'
-    assert s.count(a) == 1, "v118 阿里云 pip 源锚点数=" + str(s.count(a))
-    assert "pypi.org/simple" not in s, "v118 已是 PyPI？"
-    s = s.replace(a, 'options("-i", "https://pypi.org/simple/") // [32v118] 阿里云镜像致 pyquery==2.0.2 无版本可用，改走 PyPI 官方；Chaquo 安卓 wheel 仍走 extra-index', 1)
-    open(P, "w", encoding="utf-8").write(s)
-    print("OK 32 v118 pyramid pip 源已切回 PyPI")
+    b = 'options("-i", "https://pypi.org/simple/")'
+    if s.count(a) == 1:
+        s = s.replace(a, b + ' // [32v118] 阿里云镜像致 pyquery==2.0.2 无版本可用，改走 PyPI 官方；Chaquo 安卓 wheel 仍走 extra-index', 1)
+        open(P, "w", encoding="utf-8").write(s)
+        print("OK 32 v118 pyramid pip 源已切回 PyPI")
+    elif b in s:
+        print("SKIP 32 v118 pyramid pip 源已是 PyPI（此前步骤已改过），不重复改")
+    else:
+        print("WARN 32 v118 pyramid pip 源既非阿里云亦非 PyPI，原样放行以便 gradle 暴露真实配置：")
+        for line in s.split("\n"):
+            if "options(" in line or "install(" in line or "pip {" in line:
+                print("  [32v118-config] " + line.strip())
 PYEOF118
 echo "=== 32 v118 完成 ==="
+
