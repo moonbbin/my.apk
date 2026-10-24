@@ -6549,3 +6549,77 @@ else:
     print("OK 32 v101 设置卡磨砂化完成")
 PYEOF101
 echo "=== 32 v101 完成 ==="
+
+
+# === 32 v102: Haze 实时毛玻璃(依赖 + HazeState + 胶囊 hazeBlur/描边/未选中 tint) ===
+python3 << 'PYEOF102'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+def save(p, s):
+    open(p, "w", encoding="utf-8").write(s)
+
+# --- 1) gradle 依赖: haze-blur 2.0.1 进 dependencies 首行 ---
+GP = "avbox/app/build.gradle.kts"
+g = load(GP)
+if "[32v102]" in g:
+    print("跳过（32 v102 gradle 已应用）")
+else:
+    anchor = "dependencies {\n"
+    assert g.count(anchor) == 1, "v102 gradle 锚点数 " + str(g.count(anchor))
+    g = g.replace(anchor, anchor + "    implementation(\"dev.chrisbanes.haze:haze-blur:2.0.1\") // [32v102] Haze 实时毛玻璃\n", 1)
+    save(GP, g)
+    print("OK 32 v102 gradle 依赖已加")
+
+# --- 2) MH: imports + HazeState + 胶囊改造 ---
+MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = load(MH)
+if "[32v102]" in s:
+    print("跳过（32 v102 MH 已应用）")
+else:
+    imp_anchor = "import androidx.compose.foundation.background"
+    assert s.count(imp_anchor) == 1, "v102 import 锚点"
+    need = [
+        "androidx.compose.foundation.BorderStroke",
+        "dev.chrisbanes.haze.rememberHazeState",
+        "dev.chrisbanes.haze.hazeSource",
+        "dev.chrisbanes.haze.HazeInput",
+        "dev.chrisbanes.haze.blur.hazeBlur",
+        "dev.chrisbanes.haze.blur.HazeBlurStyle",
+    ]
+    add = ""
+    for fq in need:
+        if ("import " + fq) not in s:
+            add += "\nimport " + fq + " // [32v102]"
+    if add:
+        s = s.replace(imp_anchor, imp_anchor + add, 1)
+    def rep(old, new, cnt=1):
+        global s
+        assert s.count(old) == cnt, "v102 锚点数 %d: %s" % (s.count(old), old[:50])
+        s = s.replace(old, new, 1)
+    # HazeState 声明(MusicHomeScreen 顶部; 锚点带函数签名防撞其他 composable 的 context 行)
+    rep("fun MusicHomeScreen(initialTab: MusicTab = MusicTab.SEARCH, onBackToAppHome: () -> Unit) { // [15tab1]\n    val context = LocalContext.current\n",
+        "fun MusicHomeScreen(initialTab: MusicTab = MusicTab.SEARCH, onBackToAppHome: () -> Unit) { // [15tab1]\n    val context = LocalContext.current\n    val hazeState = rememberHazeState() // [32v102] Haze 采样状态(根 Box 采样源由 39 挂)\n")
+    # Surface: 纯色 -> 透明 + 高光描边
+    rep("                    color = if (pillDark) Color.Black.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.70f), // [32v98] 毛玻璃底(0.70f 避开 39 的 scrim 锚点)\n                    shadowElevation = 4.dp,",
+        "                    color = Color.Transparent, // [32v102] 底色交给 Haze tint\n                    border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.2f)), // [32v102] 高光描边\n                    shadowElevation = 4.dp,")
+    # Row 外包一层 clip + hazeBlur 的 Box
+    rep("                ) {\n                    Row(\n                        modifier = Modifier.fillMaxWidth().height(56.dp), // [32v98] 总高锁定 56dp",
+        "                ) {\n                    Box(\n                        modifier = Modifier\n                            .clip(RoundedCornerShape(percent = 50))\n                            .hazeBlur(\n                                input = HazeInput.Sources(hazeState),\n                                style = HazeBlurStyle {\n                                    blurRadius(30.dp)\n                                    tint(if (pillDark) Color.Black.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.3f))\n                                },\n                            ),\n                    ) { // [32v102] 实时毛玻璃层\n                    Row(\n                        modifier = Modifier.fillMaxWidth().height(56.dp), // [32v98] 总高锁定 56dp")
+    # Box 收尾: Row 结束与 Surface 结束之间补 Box 闭合
+    rep("                            )\n                        }\n                    }\n                }\n            }",
+        "                            )\n                        }\n                    }\n                    } // [32v102] hazeBlur Box 结束\n                }\n            }")
+    # PillTabItem97: 加 dark 入参 + 未选中 tint 三分支
+    rep("private fun PillTabItem97(tab: MusicTab, label: String, selected: Boolean, onClick: () -> Unit) {",
+        "private fun PillTabItem97(tab: MusicTab, label: String, selected: Boolean, dark: Boolean, onClick: () -> Unit) { // [32v102] dark 入参")
+    rep("    val tint = if (selected) musicColors().accent else musicColors().textSecondary",
+        "    val tint = if (selected) musicColors().accent else if (dark) Color.White.copy(alpha = 0.6f) else musicColors().textSecondary // [32v102] 深色未选中用白 0.6 提对比")
+    rep("                                selected = selectedTab == tab,",
+        "                                selected = selectedTab == tab,\n                                dark = pillDark, // [32v102]")
+    assert s.count("[32v102]") >= 6, "v102 post-check"
+    save(MH, s)
+    print("OK 32 v102 MH Haze 胶囊完成")
+PYEOF102
+echo "=== 32 v102 完成 ==="

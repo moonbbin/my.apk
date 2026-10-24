@@ -950,6 +950,18 @@ page_bg('ui/music/rank/RankScreen.kt', 'RankScreen')
 page_bg('ui/music/playlist/PlaylistScreen.kt', 'PlaylistScreen')
 page_bg('ui/music/playlist/UserPlaylistScreen.kt', 'UserPlaylistScreen')
 page_bg('ui/music/search/SearchScreen.kt', 'SearchScreen', after_fun='fun SearchScreen(')
+# ============ 3) [39haze] 根 Box 挂 hazeSource(Haze 采样源; HazeState 由 32 v102 在 MusicHomeScreen 声明) ============
+h = load(MH)
+if '.hazeSource(hazeState)' not in h:
+    h = rep(h,
+        '    Box(modifier = Modifier.fillMaxSize()) { // [39wp1] 壁纸底层(图+遮罩)',
+        '    Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState)) { // [39wp1] 壁纸底层(图+遮罩) // [39haze] Haze 采样源',
+        'MH-haze')
+    save(MH, h)
+    print('OK [39haze] 根 Box 已挂 hazeSource')
+else:
+    print('SKIP [39haze] 已挂 hazeSource')
+
 print('[39] 全部补丁完成')
 PYEOF39
 echo "=== 39 wp5 完成 ==="
