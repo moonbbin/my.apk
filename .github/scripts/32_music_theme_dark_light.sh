@@ -9112,3 +9112,84 @@ private fun VinylPlayIcon(tint: Color) {""",
     print("OK 32 v125 控制台下一曲已接")
 PYEOF125
 echo "=== 32 v125 完成 ==="
+
+# === 32 v126: 构建红修复（CI 实证两根因，见下） ===
+# 根因1：851 行 VinylWidget 的 Modifier.border() 无 import——文件此前只 import 了 BorderStroke 类（Surface 参数用），
+#   从未用过 Modifier.border 扩展函数（androidx.compose.foundation.border），故 Unresolved reference。
+# 根因2：PopupPositionProvider 官方签名 anchorBounds 是 IntRect（非 Rect），我方写 Rect 致 override 不上 +
+#   抽象成员未实现（CI 967/971 行）。改 IntRect 全链（状态/实测转换/Provider 入参/整型 math）。
+python3 << 'PYEOF126'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v126]" in s:
+    print("跳过（32 v126 已应用）")
+else:
+    def rep(old, new, tag, cnt=1):
+        global s
+        assert s.count(old) == cnt, "v126 锚点: " + tag + " 数=" + str(s.count(old))
+        s = s.replace(old, new, cnt)
+
+    rep("import androidx.compose.foundation.shape.CircleShape",
+        """import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border // [32v126] Modifier.border 扩展函数""",
+        "border import")
+    rep("import androidx.compose.ui.geometry.Rect // [32v124]",
+        "import androidx.compose.ui.unit.IntRect // [32v126] PopupPositionProvider 官方签名用 IntRect",
+        "Rect import 换 IntRect")
+    rep("var vinylBounds by remember { mutableStateOf<Rect?>(null) }",
+        "var vinylBounds by remember { mutableStateOf<IntRect?>(null) }",
+        "挂件 bounds 状态改 IntRect")
+    rep(".onGloballyPositioned { vinylBounds = it.boundsInWindow() }",
+        """.onGloballyPositioned {
+                                val b = it.boundsInWindow()
+                                vinylBounds = IntRect(b.left.roundToInt(), b.top.roundToInt(), b.right.roundToInt(), b.bottom.roundToInt())
+                            }""",
+        "实测 bounds 转 IntRect")
+    rep("""private class VinylConsolePositionProvider(
+    private val anchor: Rect,
+    private val gapPx: Int,
+) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: Rect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): IntOffset {
+        val x = (anchor.center.x - popupContentSize.width / 2f)
+            .coerceIn(0f, (windowSize.width - popupContentSize.width).coerceAtLeast(0).toFloat())
+        val aboveY = anchor.top - popupContentSize.height - gapPx
+        val belowY = anchor.bottom + gapPx
+        val y = if (aboveY >= 0) aboveY
+            else belowY.coerceAtMost((windowSize.height - popupContentSize.height).coerceAtLeast(0).toFloat())
+        return IntOffset(x.toInt(), y.toInt())
+    }
+}""",
+        """private class VinylConsolePositionProvider(
+    private val anchor: IntRect,
+    private val gapPx: Int,
+) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): IntOffset {
+        val x = (anchor.center.x - popupContentSize.width / 2)
+            .coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
+        val aboveY = anchor.top - popupContentSize.height - gapPx
+        val belowY = anchor.bottom + gapPx
+        val y = if (aboveY >= 0) aboveY
+            else belowY.coerceAtMost((windowSize.height - popupContentSize.height).coerceAtLeast(0))
+        return IntOffset(x, y)
+    }
+}""",
+        "Provider 改 IntRect")
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v126 构建红修复已接")
+PYEOF126
+echo "=== 32 v126 完成 ==="
