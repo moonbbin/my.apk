@@ -8476,3 +8476,62 @@ else:
     print("OK 32 v120 超时高亮已补中文")
 PYEOF120
 echo "=== 32 v120 完成 ==="
+
+# === 32 v121: 队列链死链跳过 + 取地址验活 helper（配合 39 点歌链） ===
+python3 << 'PYEOF121'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v121]" in s:
+    print("跳过（32 v121 已应用）")
+else:
+    def rep(old, new, tag):
+        global s
+        assert s.count(old) == 1, "v121 锚点: " + tag + " 数=" + str(s.count(old))
+        s = s.replace(old, new, 1)
+
+    # 验活 helper：放在音质验货段前（对象成员，供点歌链/队列链共用）
+    rep("    // ============ 音质验货（防糊）v6 ============",
+        """    // [32v121] 取地址时验活：Range 拉 1KB，200/206 才算给流；level=undefined 免网络直接判死
+    fun isStreamUrlAlive(url: String): Boolean {
+        if (url.contains("level=undefined")) return false
+        return try {
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("Range", "bytes=0-1023")
+            conn.instanceFollowRedirects = true
+            conn.connectTimeout = 3000
+            conn.readTimeout = 3000
+            try {
+                val code = conn.responseCode
+                code == 200 || code == 206
+            } finally {
+                try { conn.disconnect() } catch (_: Exception) { }
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    // ============ 音质验货（防糊）v6 ============""",
+        "验活 helper")
+    # 队列链：探针拉不到且验活失败 = 死链，换平台重试（不记备选，免得终局播死链）
+    rep("""                                        } else {
+                                            // 达标或无法探测：播放，并把真实档位/码率回传 UI（替换假标签）。""",
+        """                                        } else if (tier < 0 && !isStreamUrlAlive(url)) {
+                                            // [32v121] 探针拉不到且地址不给流：死链，换平台重试（不记备选）
+                                            try { LxRuntimeLog.add("地址验活失败(队列链): " + url.take(80)) } catch (_: Exception) { }
+                                            Log.w(TAG, "音质 $q @平台 ${cand.plat} 验活失败，换平台重试")
+                                            candidateIndex++
+                                            tryNext()
+                                        } else {
+                                            // 达标或无法探测但给流：播放，并把真实档位/码率回传 UI（替换假标签）。""",
+        "队列链死链跳过")
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v121 队列链死链跳过 + 验活 helper 已接")
+PYEOF121
+echo "=== 32 v121 完成 ==="

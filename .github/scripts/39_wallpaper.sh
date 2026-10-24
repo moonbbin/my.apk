@@ -998,6 +998,56 @@ if '[39upbg]' not in u:
 else:
     print('SKIP [39upbg] 已应用')
 
+# ============ 7) [39resolve] 点歌链取地址时验活：死链自动降档（Activity 属 35 基线文件，39 在 35 后补） ============
+PA = BASE + 'ui/activity/LxPlayerActivity.kt'
+a = load(PA)
+if '[39resolve]' not in a:
+    a = rep(a, 'import com.github.tvbox.osc.util.LxScriptEngine',
+        'import com.github.tvbox.osc.util.LxScriptEngine\nimport com.github.tvbox.osc.util.LxRuntimeLog // [39resolve] 验活失败记日志', '39resolve import')
+    old = '''                        onSuccess = { url ->
+                            if (url.isNotBlank()) {
+                                android.util.Log.i("LxPlayer", "获取 URL 成功，音质档位: $q")
+                                LxPlayerManager.setLoading(false)
+                                LxPlayerManager.setError(null)
+                                LxPlayerManager.recordHistory(mapOf(
+                                    "songId" to musicInfo["songId"].orEmpty(), "platform" to sourceId,
+                                    "title" to title, "artist" to artist, "url" to url))
+                                LxPlayerManager.play(url, title, artist)
+                                Thread { LxPlayerManager.probeAndSetQuality(url) }.start() // [34v57] 点歌链补探针
+                                LxPlayerManager.fetchCommentsAsync(sourceId, musicInfo["songId"].orEmpty(), title, artist) // [35cmt1] 评论并行拉取（只读）
+                            } else {'''
+    new = '''                        onSuccess = { url ->
+                            if (url.isNotBlank()) {
+                                android.util.Log.i("LxPlayer", "获取 URL 成功，音质档位: $q，验活中")
+                                Thread { // [39resolve] 取地址时验活：死链不交给播放器，自动降档
+                                    val alive = LxPlayerManager.isStreamUrlAlive(url)
+                                    runOnUiThread {
+                                        if (!alive) {
+                                            try { LxRuntimeLog.add("地址验活失败: " + title + " / " + artist + " | 档位 " + q + " " + url.take(80)) } catch (_: Exception) { }
+                                            android.util.Log.w("LxPlayer", "音质 $q 地址验活失败，降级重试")
+                                            qualityIndex++
+                                            tryQuality()
+                                        } else if (isFinishing || isDestroyed || (title.isNotEmpty() && (LxPlayerManager.currentTitle.value != title || LxPlayerManager.currentArtist.value != artist))) {
+                                            android.util.Log.w("LxPlayer", "验活期间已切歌，丢弃旧地址")
+                                        } else {
+                                            LxPlayerManager.setLoading(false)
+                                            LxPlayerManager.setError(null)
+                                            LxPlayerManager.recordHistory(mapOf(
+                                                "songId" to musicInfo["songId"].orEmpty(), "platform" to sourceId,
+                                                "title" to title, "artist" to artist, "url" to url))
+                                            LxPlayerManager.play(url, title, artist)
+                                            Thread { LxPlayerManager.probeAndSetQuality(url) }.start() // [34v57] 点歌链补探针
+                                            LxPlayerManager.fetchCommentsAsync(sourceId, musicInfo["songId"].orEmpty(), title, artist) // [35cmt1] 评论并行拉取（只读）
+                                        }
+                                    }
+                                }.start()
+                            } else {'''
+    a = rep(a, old, new, '39resolve 验活')
+    save(PA, a)
+    print('OK [39resolve] 点歌链验活已接')
+else:
+    print('SKIP [39resolve] 已应用')
+
 print('[39] 全部补丁完成')
 PYEOF39
 echo "=== 39 wp5 完成 ==="
