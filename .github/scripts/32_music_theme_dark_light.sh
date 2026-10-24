@@ -7689,3 +7689,139 @@ else:
     print("OK 32 v110 两张毛玻璃卡缩小完成")
 PYEOF110
 echo "=== 32 v110 完成 ==="
+# === 32 v111: 自绘紧凑滑杆 CompactSlider + 两张毛玻璃卡换装 ===
+python3 << 'PYEOF111A'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+GLASSDIR = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/glass"
+os.makedirs(GLASSDIR, exist_ok=True)
+content = '''package com.github.tvbox.osc.ui.music.glass
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.awaitPointerEventScope
+import androidx.compose.ui.input.pointer.changedToDown
+import androidx.compose.ui.input.pointer.changedToUpOrCanceled
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import com.github.tvbox.osc.ui.activity.musicColors
+import kotlin.math.roundToInt
+
+// [32v111] 紧凑滑杆: 系统 Slider 强制 48dp 触摸高度撑大卡片, 自绘版只占 28dp(点按+拖动, 离散步进与原 Slider 一致)
+@Composable
+fun CompactSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+    steps: Int = 0,
+) {
+    val changeState = rememberUpdatedState(onValueChange)
+    val finishedState = rememberUpdatedState(onValueChangeFinished)
+    val accent = musicColors().accent
+    val trackColor = musicColors().cardSecondary
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(28.dp)
+            .pointerInput(valueRange, steps) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val down = awaitPointerEvent().changes.firstOrNull { it.changedToDown() } ?: continue
+                        down.consume()
+                        fun update(pos: Offset) {
+                            val frac = (pos.x / size.width).coerceIn(0f, 1f)
+                            val snapped = if (steps > 0) (frac * (steps + 1)).roundToInt() / (steps + 1).toFloat() else frac
+                            changeState.value(valueRange.start + snapped * (valueRange.endInclusive - valueRange.start))
+                        }
+                        update(down.position)
+                        var released = false
+                        while (!released) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id }
+                            if (change == null) continue
+                            if (change.changedToUpOrCanceled()) {
+                                released = true
+                                change.consume()
+                            } else if (change.positionChanged()) {
+                                change.consume()
+                                update(change.position)
+                            }
+                        }
+                        finishedState.value()
+                    }
+                }
+            },
+    ) {
+        val span = (valueRange.endInclusive - valueRange.start).takeIf { it > 0f } ?: 1f
+        val fraction = ((value - valueRange.start) / span).coerceIn(0f, 1f)
+        Box(
+            modifier = Modifier.align(Alignment.CenterStart).fillMaxWidth().height(4.dp).clip(CircleShape).background(trackColor),
+        )
+        Box(
+            modifier = Modifier.align(Alignment.CenterStart).fillMaxWidth(fraction).height(4.dp).clip(CircleShape).background(accent),
+        )
+        val thumbPx = with(LocalDensity.current) { 16.dp.toPx() }
+        val maxPx = with(LocalDensity.current) { maxWidth.toPx() }
+        Box(
+            modifier = Modifier.align(Alignment.CenterStart)
+                .offset { IntOffset(((maxPx - thumbPx) * fraction).roundToInt(), 0) }
+                .size(16.dp).clip(CircleShape).background(accent),
+        )
+    }
+}
+'''
+open(GLASSDIR + "/CompactSlider.kt", "w", encoding="utf-8").write(content)
+print("OK 32 v111 CompactSlider.kt 已写入")
+PYEOF111A
+python3 << 'PYEOF111'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+SS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+s = load(SS)
+if "[32v111]" in s:
+    print("跳过（32 v111 设置页已应用）")
+else:
+    a = "import com.github.tvbox.osc.ui.music.glass.GlassSettings // [32v104]"
+    assert s.count(a) == 1, "v111 import 锚点"
+    s = s.replace(a, a + "\nimport com.github.tvbox.osc.ui.music.glass.CompactSlider // [32v111]", 1)
+    def swap(body, n):
+        assert body.count("                Slider(") == n, "v111 滑杆数"
+        body = body.replace("                Slider(", "                CompactSlider(", n)
+        colors = """                    colors = SliderDefaults.colors(
+                        thumbColor = musicColors().accent,
+                        activeTrackColor = musicColors().accent,
+                        inactiveTrackColor = musicColors().cardSecondary,
+                    ),
+"""
+        assert body.count(colors) == n, "v111 colors 块数"
+        body = body.replace(colors, "", n)
+        return body
+    i = s.index("private fun GlassCapsuleCard()")
+    j = s.index("private fun GlassDrawerCard()")
+    s = s[:i] + swap(s[i:j], 4) + swap(s[j:], 3)
+    open(SS, "w", encoding="utf-8").write(s)
+    print("OK 32 v111 两张毛玻璃卡换紧凑滑杆完成")
+PYEOF111
+echo "=== 32 v111 完成 ==="
