@@ -6519,3 +6519,33 @@ else:
     print("OK 32 v100 排行榜抽屉化完成")
 PYEOF100
 echo "=== 32 v100 完成 ==="
+
+# === 32 v101: 设置卡磨砂化(alpha 0.45) + 间距 16dp + 底部避让 140dp(算入迷你播放器) ===
+python3 << 'PYEOF101'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+SS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+s = load(SS)
+if "[32v101]" in s:
+    print("跳过（32 v101 已应用）")
+else:
+    def rep(old, new, cnt=1):
+        global s
+        assert s.count(old) == cnt, "v101 锚点数 %d: %s" % (s.count(old), old[:50])
+        s = s.replace(old, new, 1)
+    rep("                color = musicColors().card.copy(alpha = 0.75f),",
+        "                color = musicColors().card.copy(alpha = 0.45f), // [32v101] 磨砂玻璃")
+    rep("        verticalArrangement = Arrangement.spacedBy(12.dp), // [25itemcards] 项间统一 12dp",
+        "        verticalArrangement = Arrangement.spacedBy(16.dp), // [32v101] 组间呼吸(原 [25itemcards] 12dp)")
+    rep("    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {",
+        "    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { // [32v101] 卡间呼吸")
+    rep("        contentPadding = PaddingValues(start = 16.dp, top = 24.dp, end = 16.dp, bottom = 104.dp), // [32v97] 底部避让悬浮胶囊",
+        "        contentPadding = PaddingValues(start = 16.dp, top = 24.dp, end = 16.dp, bottom = 140.dp), // [32v101] 底部避让胶囊+迷你播放器(原 [32v97] 104 只避让胶囊)")
+    assert s.count("[32v101]") >= 4, "v101 post-check"
+    open(SS, "w", encoding="utf-8").write(s)
+    print("OK 32 v101 设置卡磨砂化完成")
+PYEOF101
+echo "=== 32 v101 完成 ==="
