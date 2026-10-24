@@ -8567,3 +8567,82 @@ else:
     print("OK 32 v122 验活已改播放器式拿流")
 PYEOF122
 echo "=== 32 v122 完成 ==="
+
+# === 32 v123: 解析前取交集（引擎存 inited 声明 + Manager 按源声明过滤档位） ===
+python3 << 'PYEOF123'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+
+# ---- 1) 引擎：存下 inited 声明 + 取声明口子 ----
+E = "avbox/app/src/main/java/com/github/tvbox/osc/util/LxScriptEngine.kt"
+e = open(E, encoding="utf-8").read()
+if "[32v123]" in e:
+    print("跳过（32 v123 引擎已应用）")
+else:
+    def erep(old, new, tag):
+        global e
+        assert e.count(old) == 1, "v123 引擎锚点: " + tag + " 数=" + str(e.count(old))
+        e = e.replace(old, new, 1)
+    erep("    private var initedCallback: ((Result<Map<String, LxSourceDeclaration>>) -> Unit)? = null",
+        "    private var initedCallback: ((Result<Map<String, LxSourceDeclaration>>) -> Unit)? = null\n    @Volatile private var lastDeclarations: Map<String, LxSourceDeclaration> = emptyMap() // [32v123] 解析前取交集用：inited 上报的源声明",
+        "声明字段")
+    erep('            Log.i(TAG, "script inited, sources=${declarations.keys}")',
+        '            lastDeclarations = declarations // [32v123] 存下声明，供解析前取交集\n            Log.i(TAG, "script inited, sources=${declarations.keys}")',
+        "声明存盘")
+    erep("    /**\n     * 请求歌曲播放地址。",
+        """    /** [32v123] 取源声明的音质档位（inited 上报）；未知返回 null，调用方回退原顺序 */
+    fun getSourceQualitys(sourceKey: String): List<String>? {
+        return try { lastDeclarations[sourceKey]?.qualitys } catch (_: Exception) { null }
+    }
+
+    /**
+     * 请求歌曲播放地址。""",
+        "取声明口子")
+    open(E, "w", encoding="utf-8").write(e)
+    print("OK 32 v123 引擎声明存盘 + 取声明口子已接")
+
+# ---- 2) Manager：按源声明过滤 + 队列链用过滤后顺序 ----
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v123]" in s:
+    print("跳过（32 v123 Manager 已应用）")
+else:
+    def rep(old, new, tag):
+        global s
+        assert s.count(old) == 1, "v123 Manager 锚点: " + tag + " 数=" + str(s.count(old))
+        s = s.replace(old, new, 1)
+    rep("""    fun getQualityTryOrder(): List<String> {
+        return qualityTryOrder()
+    }""",
+        """    fun getQualityTryOrder(): List<String> {
+        return qualityTryOrder()
+    }
+
+
+    // [32v123] 解析前取交集：只发源声明过的档位（AUDIO_SPEC 老规矩）；声明未知/为空/交集为空时回退原顺序
+    fun getQualityTryOrderFor(sourceKey: String): List<String> {
+        val base = qualityTryOrder()
+        return try {
+            val declared = com.github.tvbox.osc.ui.activity.LxEngineHolder.get().getSourceQualitys(sourceKey)
+            if (declared.isNullOrEmpty()) base else {
+                val filtered = base.filter { it in declared }
+                if (filtered.isEmpty()) base else {
+                    if (filtered != base) Log.i(TAG, "音质交集: 源 $sourceKey 声明 $declared，试听顺序 $filtered")
+                    filtered
+                }
+            }
+        } catch (_: Exception) { base }
+    }""",
+        "按源过滤函数")
+    rep("""                val engine = com.github.tvbox.osc.ui.activity.LxEngineHolder.get()
+                val tryOrder = qualityTryOrder()""",
+        """                val engine = com.github.tvbox.osc.ui.activity.LxEngineHolder.get()
+                val tryOrder = getQualityTryOrderFor(platform) // [32v123] 队列链解析前取交集""",
+        "队列链取交集")
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v123 Manager 按源过滤 + 队列链取交集已接")
+PYEOF123
+echo "=== 32 v123 完成 ==="

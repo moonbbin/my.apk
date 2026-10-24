@@ -1051,3 +1051,23 @@ else:
 print('[39] 全部补丁完成')
 PYEOF39
 echo "=== 39 wp5 完成 ==="
+
+# === 39 [39intersect]: 点歌链解析前取交集（Activity 在 35 基线内，补丁放 39） ===
+python3 << 'PYEOFINT'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+A = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+s = open(A, encoding="utf-8").read()
+if "[39intersect]" in s:
+    print("跳过（39intersect 已应用）")
+else:
+    old = "        val tryOrder = LxPlayerManager.getQualityTryOrder()"
+    assert s.count(old) == 1, "39intersect 锚点数=" + str(s.count(old))
+    s = s.replace(old, "        val tryOrder = LxPlayerManager.getQualityTryOrderFor(sourceId) // [39intersect] 点歌链解析前取交集", 1)
+    open(A, "w", encoding="utf-8").write(s)
+    print("OK 39intersect 点歌链取交集已接")
+PYEOFINT
+echo "=== 39intersect 完成 ==="
