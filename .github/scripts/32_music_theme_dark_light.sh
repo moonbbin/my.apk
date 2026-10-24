@@ -6302,3 +6302,101 @@ else:
     print("OK 32 v98 胶囊瘦身完成")
 PYEOF98
 echo "=== 32 v98 完成 ==="
+
+# === 32 v99: 迷你播放器单行瘦身(约36dp) + 排行榜 FAB 上移避让 ===
+python3 << 'PYEOF99'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = load(MH)
+if "[32v99]" in s:
+    print("跳过（32 v99 MH 已应用）")
+else:
+    # imports for AnnotatedString(缺才加)
+    imp_anchor = "import androidx.compose.foundation.background"
+    assert s.count(imp_anchor) == 1, "v99 import 锚点"
+    add = ""
+    for fq in ["androidx.compose.ui.text.buildAnnotatedString", "androidx.compose.ui.text.SpanStyle", "androidx.compose.ui.text.withStyle"]:
+        if ("import " + fq) not in s:
+            add += "\nimport " + fq + " // [32v99]"
+    if add:
+        s = s.replace(imp_anchor, imp_anchor + add, 1)
+    # 切出 MiniPlayerBar 函数跨度
+    i1 = s.index("fun MiniPlayerBar(")
+    i2 = s.index("fun playSongs(", i1)
+    span = s[i1:i2]
+    def rep(old, new, cnt=1):
+        global span
+        assert span.count(old) == cnt, "v99 span 锚点数 %d: %s" % (span.count(old), old[:48])
+        span = span.replace(old, new)
+    # 卡片: 纵 padding 4->2, 圆角统一 16
+    rep(".padding(vertical = 4.dp) // [32v97] 与胶囊同宽对齐",
+        ".padding(vertical = 2.dp) // [32v99] 瘦身 + 与胶囊同宽对齐")
+    rep("shape = RoundedCornerShape(if (isDark) 12.dp else 20.dp),",
+        "shape = RoundedCornerShape(16.dp), // [32v99]")
+    # Row 纵 padding 6->3
+    rep(".padding(horizontal = 8.dp, vertical = 6.dp),",
+        ".padding(horizontal = 8.dp, vertical = 3.dp), // [32v99]")
+    # 封面 40->24, 圆角 8->6 (两处)
+    rep(".size(40.dp)", ".size(24.dp) // [32v99] 封面瘦身", 2)
+    rep(".clip(RoundedCornerShape(8.dp))", ".clip(RoundedCornerShape(6.dp))", 2)
+    rep("Spacer(modifier = Modifier.width(12.dp))", "Spacer(modifier = Modifier.width(8.dp)) // [32v99]")
+    # 歌名+歌手: 双行 Column -> 单行 AnnotatedString
+    old_col = ("                Column(modifier = Modifier.weight(1f)) {\n"
+               "                    Text(\n"
+               "                        text = title,\n"
+               "                        style = MaterialTheme.typography.titleSmall,\n"
+               "                        color = musicColors().textPrimary,\n"
+               "                        maxLines = 1,\n"
+               "                        overflow = TextOverflow.Ellipsis\n"
+               "                    )\n"
+               "                    Text(\n"
+               "                        text = artist,\n"
+               "                        style = MaterialTheme.typography.bodySmall,\n"
+               "                        color = TextGray,\n"
+               "                        maxLines = 1,\n"
+               "                        overflow = TextOverflow.Ellipsis\n"
+               "                    )\n"
+               "                }")
+    new_col = ("                val artistColor99 = musicColors().textSecondary // [32v99] 单行: 歌名 13sp 主色 + 歌手 11sp 次色\n"
+               "                Text(\n"
+               "                    text = buildAnnotatedString {\n"
+               "                        append(title)\n"
+               "                        if (artist.isNotEmpty()) {\n"
+               "                            withStyle(SpanStyle(fontSize = 11.sp, color = artistColor99)) {\n"
+               "                                append(\" · \" + artist)\n"
+               "                            }\n"
+               "                        }\n"
+               "                    },\n"
+               "                    fontSize = 13.sp,\n"
+               "                    color = musicColors().textPrimary,\n"
+               "                    maxLines = 1,\n"
+               "                    overflow = TextOverflow.Ellipsis,\n"
+               "                    modifier = Modifier.weight(1f)\n"
+               "                )")
+    rep(old_col, new_col)
+    # 按钮: 播放 36->28, 关闭 32->24, 字形 bodyLarge->bodyMedium
+    rep(".size(36.dp)", ".size(28.dp) // [32v99] 播放钮瘦身")
+    rep(".size(32.dp)", ".size(24.dp) // [32v99] 关闭钮瘦身")
+    rep("style = MaterialTheme.typography.bodyLarge", "style = MaterialTheme.typography.bodyMedium // [32v99]", 2)
+    s = s[:i1] + span + s[i2:]
+    assert s.count("[32v99]") >= 6, "v99 post-check"
+    open(MH, "w", encoding="utf-8").write(s)
+    print("OK 32 v99 MiniPlayerBar 单行瘦身完成")
+
+# --- RankScreen FAB 上移 ---
+RS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt"
+t = load(RS)
+if "[32v99]" in t:
+    print("跳过（32 v99 FAB 已应用）")
+else:
+    old = ".padding(end = 16.dp, bottom = 16.dp), // 细节1：右 16dp、下 16dp"
+    assert t.count(old) == 1, "v99 FAB 锚点数 " + str(t.count(old))
+    t = t.replace(old, ".padding(end = 16.dp, bottom = 140.dp), // [32v99] 避让悬浮胶囊+迷你播放器(原 细节1)", 1)
+    open(RS, "w", encoding="utf-8").write(t)
+    print("OK 32 v99 RankScreen FAB 上移完成")
+PYEOF99
+echo "=== 32 v99 完成 ==="
