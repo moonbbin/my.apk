@@ -6265,3 +6265,40 @@ bump("avbox/app/src/main/java/com/github/tvbox/osc/ui/music/playlist/PlaylistScr
      "PlaylistScreen")
 PYEOF97
 echo "=== 32 v97 完成 ==="
+
+
+# === 32 v98: 胶囊瘦身(总高 56dp) + 真胶囊圆角 + 黑白毛玻璃底 ===
+python3 << 'PYEOF98'
+import os
+def load(p):
+    while not os.path.exists(p) and os.getcwd() != "/":
+        os.chdir("..")
+    return open(p, encoding="utf-8").read()
+MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = load(MH)
+if "[32v98]" in s:
+    print("跳过（32 v98 已应用）")
+else:
+    def rep(old, new, cnt=1):
+        global s
+        assert s.count(old) == cnt, "v98 锚点数 %d: %s" % (s.count(old), old[:50])
+        s = s.replace(old, new, 1)
+    # 1) Surface 三参数: percent50 真胶囊 + 黑/白毛玻璃 + 阴影 4
+    rep("                    shape = MaterialTheme.shapes.extraLarge,\n"
+        "                    color = musicColors().card.copy(alpha = 0.85f), // [32v97] 毛玻璃胶囊\n"
+        "                    shadowElevation = 8.dp,",
+        "                    shape = RoundedCornerShape(percent = 50), // [32v98] 真胶囊圆角\n"
+        "                    color = if (pillDark) Color.Black.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.70f), // [32v98] 毛玻璃底(0.70f 避开 39 的 scrim 锚点)\n"
+        "                    shadowElevation = 4.dp,")
+    # 2) pillDark 状态行插在 Surface 之前
+    rep("                Surface(\n                    shape = RoundedCornerShape(percent = 50),",
+        "                val pillDark by MusicThemeManager.isDarkTheme // [32v98] 胶囊明暗随主题\n"
+        "                Surface(\n                    shape = RoundedCornerShape(percent = 50),")
+    # 3) Row 去纵 padding, 总高锁定 56dp
+    rep("                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),",
+        "                        modifier = Modifier.fillMaxWidth().height(56.dp), // [32v98] 总高锁定 56dp")
+    assert s.count("[32v98]") >= 3, "v98 post-check"
+    open(MH, "w", encoding="utf-8").write(s)
+    print("OK 32 v98 胶囊瘦身完成")
+PYEOF98
+echo "=== 32 v98 完成 ==="

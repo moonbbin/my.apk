@@ -94,7 +94,7 @@
 | 29 | `29_music_rank_capsule_fix.sh` | 胶囊修复（历史，已跑过） |
 | 30 | `30_music_rank_capsule_green.sh` | 胶囊绿色版（未被 build.yml 引用，内容已并入 28） |
 | 31 | `31_music_search_result.sh` | **搜索二级结果页**<br>SearchResultScreen.kt + 接线到 LxMusicSearchActivity |
-| 32 | `32_music_theme_dark_light.sh` | **深色/浅色主题切换**<br>三档（跟随系统/深色/浅色）存 theme_prefs；LxMusicTheme 桥接；独立 Activity 全量覆盖<br>v96（2026-10-24）：默认深色（theme_mode 未设置时 5 处读取默认 0→1，存量语义不变）+ 设置页「主题外观」入口改 Toast 开发中。<br>v97（2026-10-24）：底部 Tab 改悬浮胶囊——废 Scaffold bottomBar，迷你播放器+胶囊悬浮于根 Box 底部（Surface extraLarge + card 85% + shadowElevation 8），5 个 Canvas 线条图标（选中 accent+放大 1.15、无色块），设置/排行/歌单三页列表底部避让 104dp。 |
+| 32 | `32_music_theme_dark_light.sh` | **深色/浅色主题切换**<br>三档（跟随系统/深色/浅色）存 theme_prefs；LxMusicTheme 桥接；独立 Activity 全量覆盖<br>v96（2026-10-24）：默认深色（theme_mode 未设置时 5 处读取默认 0→1，存量语义不变）+ 设置页「主题外观」入口改 Toast 开发中。<br>v97（2026-10-24）：底部 Tab 改悬浮胶囊——废 Scaffold bottomBar，迷你播放器+胶囊悬浮于根 Box 底部（Surface extraLarge + card 85% + shadowElevation 8），5 个 Canvas 线条图标（选中 accent+放大 1.15、无色块），设置/排行/歌单三页列表底部避让 104dp。<br>v98（2026-10-24 装机反馈瘦身）：胶囊总高锁定 56dp、圆角改 RoundedCornerShape(percent = 50) 真胶囊、背景改黑 50%/白 70% 毛玻璃（0.70f 写法避开 39 的 scrim 锚点）、阴影 4dp。 |
 | 34 | `34_player_immersive.sh` | 播放页沉浸式迭代（已退役）<br>v1–v65 全部成果（含五组件抽离与纯化）已固化进 35 号基线；2026-10-22 build.yml 调用步已删除，文件保留备查。 |
 | 35 | `35_player_baseline.sh` | **播放页基线原稿（现行唯一所有者）**<br>base64 全量写入播放页 7 文件：LxPlayerActivity.kt（1724 行）+ PlayerControls/PlayerTopBar/PlayerProgressBar/PlayerCover/PlayerLyricPreview + LxIcons.kt；内容与开发基线同步；build.yml 末位运行。今后改播放页先改基线再重生本脚本载荷。 |
 
