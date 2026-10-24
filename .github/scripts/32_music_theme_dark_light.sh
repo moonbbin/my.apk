@@ -8646,3 +8646,382 @@ else:
     print("OK 32 v123 Manager 按源过滤 + 队列链取交集已接")
 PYEOF123
 echo "=== 32 v123 完成 ==="
+
+# === 32 v124: 悬浮黑胶挂件 + 液态控制台（废长条迷你播放器，导航胶囊不动） ===
+python3 << 'PYEOF124'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v124]" in s:
+    print("跳过（32 v124 已应用）")
+else:
+    def rep(old, new, tag, cnt=1):
+        global s
+        assert s.count(old) == cnt, "v124 锚点: " + tag + " 数=" + str(s.count(old))
+        s = s.replace(old, new, cnt)
+
+    # 1) imports
+    rep("import androidx.compose.foundation.shape.CircleShape",
+        """import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.core.Animatable // [32v124]
+import androidx.compose.animation.core.LinearEasing // [32v124]
+import androidx.compose.animation.core.tween // [32v124]
+import androidx.compose.foundation.gestures.detectDragGestures // [32v124]
+import androidx.compose.ui.draw.shadow // [32v124]
+import androidx.compose.ui.geometry.Offset // [32v124]
+import androidx.compose.ui.geometry.Rect // [32v124]
+import androidx.compose.ui.graphics.Path // [32v124]
+import androidx.compose.ui.graphics.StrokeCap // [32v124]
+import androidx.compose.ui.input.pointer.pointerInput // [32v124]
+import androidx.compose.ui.layout.boundsInWindow // [32v124]
+import androidx.compose.ui.layout.onGloballyPositioned // [32v124]
+import androidx.compose.ui.platform.LocalConfiguration // [32v124]
+import androidx.compose.ui.platform.LocalDensity // [32v124]
+import androidx.compose.ui.unit.IntOffset // [32v124]
+import androidx.compose.ui.unit.IntSize // [32v124]
+import androidx.compose.ui.unit.LayoutDirection // [32v124]
+import androidx.compose.ui.window.Popup // [32v124]
+import androidx.compose.ui.window.PopupPositionProvider // [32v124]
+import androidx.compose.ui.window.PopupProperties // [32v124]
+import kotlin.math.roundToInt // [32v124]""",
+        "imports")
+
+    # 2) 状态：miniPlayerDismissed -> 黑胶三态（同旧模式：新歌开始自动恢复）
+    rep("""            // 手动关闭状态：点 X 后隐藏，直到下一首歌开始
+            var miniPlayerDismissed by remember { mutableStateOf(false) }
+            LaunchedEffect(playerTitle) {
+                if (playerTitle.isNotEmpty()) miniPlayerDismissed = false
+            }""",
+        """            // [32v124] 黑胶挂件三态：点控制台 X 后隐藏，直到下一首歌开始（同旧迷你条模式）
+            var vinylDismissed by remember { mutableStateOf(false) }
+            var showVinylConsole by remember { mutableStateOf(false) }
+            var vinylBounds by remember { mutableStateOf<Rect?>(null) }
+            LaunchedEffect(playerTitle) {
+                if (playerTitle.isNotEmpty()) vinylDismissed = false
+                if (playerTitle.isEmpty()) showVinylConsole = false
+            }""",
+        "黑胶三态")
+
+    # 3) 呼叫点：删长条迷你播放器 + 间距，导航胶囊原地不动
+    rep("""                if (playerTitle.isNotEmpty() && !miniPlayerDismissed) {
+                    MiniPlayerBar(
+                        title = playerTitle,
+                        artist = playerArtist,
+                        picUrl = playerPic,
+                        isPlaying = playerIsPlaying,
+                        progress = if (playerDur > 0) (playerPos.toFloat() / playerDur.toFloat()).coerceIn(0f, 1f) else 0f,
+                        onTogglePlay = { LxPlayerManager.togglePlayPause() },
+                        onClose = {
+                            LxPlayerManager.stop()
+                            miniPlayerDismissed = true
+                        },
+                        onExpand = {
+                            val intent = Intent(context, LxPlayerActivity::class.java).apply {
+                                putExtra("title", playerTitle)
+                                putExtra("artist", playerArtist)
+                                putExtra("picUrl", playerPic)
+                            }
+                            context.startActivity(intent)
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+""",
+        "",
+        "删迷你条呼叫点")
+
+    # 4) 宿主：Column 之后、459 Box 之内最后绘制（最顶层，非 Haze 源内）
+    rep("""                    } // [32v102] hazeBlur Box 结束
+                }
+            }
+        }
+""",
+        """                    } // [32v102] hazeBlur Box 结束
+                }
+            }
+            // [32v124] 悬浮黑胶挂件 + 液态控制台（长条迷你播放器已废，导航胶囊不动）
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val density = LocalDensity.current
+                val maxWpx = with(density) { maxWidth.toPx() }
+                val maxHpx = with(density) { maxHeight.toPx() }
+                val sizePx = with(density) { 48.dp.toPx() }
+                val gapPx = with(density) { 12.dp.toPx() }.toInt()
+                var vinylOffset by remember { mutableStateOf<Offset?>(null) }
+                val vinylPos = vinylOffset ?: Offset(
+                    maxWpx - sizePx - with(density) { 16.dp.toPx() },
+                    maxHpx - sizePx - with(density) { 104.dp.toPx() }
+                )
+                if (playerTitle.isNotEmpty() && !vinylDismissed) {
+                    VinylWidget(
+                        picUrl = playerPic,
+                        isPlaying = playerIsPlaying,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .offset { IntOffset(vinylPos.x.roundToInt(), vinylPos.y.roundToInt()) }
+                            .onGloballyPositioned { vinylBounds = it.boundsInWindow() }
+                            .pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDragStart = { showVinylConsole = false },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        vinylOffset = Offset(
+                                            (vinylPos.x + dragAmount.x).coerceIn(0f, maxWpx - sizePx),
+                                            (vinylPos.y + dragAmount.y).coerceIn(0f, maxHpx - sizePx)
+                                        )
+                                    }
+                                )
+                            },
+                        onClick = { showVinylConsole = true }
+                    )
+                }
+                vinylBounds?.let { bounds ->
+                    if (showVinylConsole) {
+                        Popup(
+                            onDismissRequest = { showVinylConsole = false },
+                            properties = PopupProperties(dismissOnClickOutside = true, focusable = true),
+                            popupPositionProvider = VinylConsolePositionProvider(bounds, gapPx)
+                        ) {
+                            VinylConsole(
+                                picUrl = playerPic,
+                                isPlaying = playerIsPlaying,
+                                progress = if (playerDur > 0) (playerPos.toFloat() / playerDur.toFloat()).coerceIn(0f, 1f) else 0f,
+                                onPrev = { LxPlayerManager.playPreviousInQueue() },
+                                onTogglePlay = { LxPlayerManager.togglePlayPause() },
+                                onClose = {
+                                    showVinylConsole = false
+                                    vinylDismissed = true
+                                    LxPlayerManager.pause()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+""",
+        "黑胶宿主")
+
+    # 5) MiniPlayerBar 函数整体替换为黑胶三件套（函数起止以注释锚点定位）
+    start_mark = "/**\n * 迷你播放器（spotufi 风格：深色圆角条 + 封面 + 进度线）\n */"
+    end_mark = "/** 点歌：设置播放队列并打开播放器（逻辑与原来一致） */"
+    assert s.count(start_mark) == 1, "v124 MiniPlayerBar 起始锚点数=" + str(s.count(start_mark))
+    assert s.count(end_mark) == 1, "v124 playSongs 锚点数=" + str(s.count(end_mark))
+    si = s.index(start_mark)
+    ei = s.index(end_mark)
+    old_fn = s[si:ei]
+    assert "fun MiniPlayerBar(" in old_fn and "底部进度线" in old_fn, "v124 MiniPlayerBar 范围校验失败"
+    new_code = '''// [32v124] 悬浮黑胶挂件：48dp 圆形封面 + 匀速旋转（Animatable，暂停留角）
+// 注意：rememberInfiniteTransition 无暂停 API，做不到暂停留角，故用 Animatable + LaunchedEffect
+@Composable
+private fun VinylWidget(
+    picUrl: String,
+    isPlaying: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val rotation = remember { Animatable(0f) }
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) {
+            while (true) {
+                rotation.animateTo(
+                    rotation.value + 360f,
+                    tween(durationMillis = 15000, easing = LinearEasing)
+                )
+            }
+        }
+    }
+    Box(
+        modifier = modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+            .background(musicColors().card)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        if (picUrl.isNotEmpty()) {
+            AsyncImage(
+                model = picUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize().clip(CircleShape)
+                    .graphicsLayer { rotationZ = rotation.value },
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Text(
+                text = "♪",
+                color = musicColors().textPrimary.copy(alpha = 0.6f),
+                modifier = Modifier.graphicsLayer { rotationZ = rotation.value }
+            )
+        }
+    }
+}
+
+// [32v124] 液态控制台：card 0.85 + extraLarge + 白高光边 + shadow 16
+@Composable
+private fun VinylConsole(
+    picUrl: String,
+    isPlaying: Boolean,
+    progress: Float,
+    onPrev: () -> Unit,
+    onTogglePlay: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val screenW = LocalConfiguration.current.screenWidthDp.dp
+    val cardW = minOf(300.dp, screenW - 32.dp)
+    Surface(
+        modifier = Modifier.width(cardW).shadow(16.dp, MaterialTheme.shapes.extraLarge),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = musicColors().card.copy(alpha = 0.85f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f))
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Text(
+                    text = "正在播放",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = musicColors().textSecondary
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            if (picUrl.isNotEmpty()) {
+                AsyncImage(
+                    model = picUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(16.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(16.dp))
+                        .background(musicColors().cardSecondary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "♪",
+                        style = MaterialTheme.typography.displayMedium,
+                        color = musicColors().textPrimary.copy(alpha = 0.6f)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(musicColors().divider)) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(2.dp)
+                        .background(musicColors().accent)
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier.size(48.dp).clickable(onClick = onPrev),
+                    contentAlignment = Alignment.Center
+                ) {
+                    VinylPrevIcon(tint = musicColors().textPrimary)
+                }
+                Box(
+                    modifier = Modifier.size(64.dp).clip(CircleShape).background(Color.White)
+                        .clickable(onClick = onTogglePlay),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isPlaying) VinylPauseIcon(tint = Color.Black) else VinylPlayIcon(tint = Color.Black)
+                }
+                Box(
+                    modifier = Modifier.size(48.dp).clickable(onClick = onClose),
+                    contentAlignment = Alignment.Center
+                ) {
+                    VinylCloseIcon(tint = musicColors().textPrimary)
+                }
+            }
+        }
+    }
+}
+
+// [32v124] 弹窗定位：以挂件实测 bounds 为锚（不用 Popup 自带 anchorBounds，避免语义歧义），
+// 上方够放则放上方，否则放下方，横向夹紧屏内
+private class VinylConsolePositionProvider(
+    private val anchor: Rect,
+    private val gapPx: Int,
+) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: Rect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): IntOffset {
+        val x = (anchor.center.x - popupContentSize.width / 2f)
+            .coerceIn(0f, (windowSize.width - popupContentSize.width).coerceAtLeast(0).toFloat())
+        val aboveY = anchor.top - popupContentSize.height - gapPx
+        val belowY = anchor.bottom + gapPx
+        val y = if (aboveY >= 0) aboveY
+            else belowY.coerceAtMost((windowSize.height - popupContentSize.height).coerceAtLeast(0).toFloat())
+        return IntOffset(x.toInt(), y.toInt())
+    }
+}
+
+// [32v124] 手搓图标：2dp 圆头线条，复杂图标降级为基础几何
+@Composable
+private fun VinylPrevIcon(tint: Color) {
+    Canvas(modifier = Modifier.size(28.dp)) {
+        val sw = 2.dp.toPx()
+        drawLine(
+            color = tint,
+            start = Offset(7.dp.toPx(), 7.dp.toPx()),
+            end = Offset(7.dp.toPx(), 21.dp.toPx()),
+            strokeWidth = sw, cap = StrokeCap.Round
+        )
+        val tri = Path().apply {
+            moveTo(24.dp.toPx(), 7.dp.toPx())
+            lineTo(11.dp.toPx(), 14.dp.toPx())
+            lineTo(24.dp.toPx(), 21.dp.toPx())
+            close()
+        }
+        drawPath(tri, tint)
+    }
+}
+
+@Composable
+private fun VinylPlayIcon(tint: Color) {
+    Canvas(modifier = Modifier.size(28.dp)) {
+        val tri = Path().apply {
+            moveTo(11.dp.toPx(), 7.dp.toPx())
+            lineTo(22.dp.toPx(), 14.dp.toPx())
+            lineTo(11.dp.toPx(), 21.dp.toPx())
+            close()
+        }
+        drawPath(tri, tint)
+    }
+}
+
+@Composable
+private fun VinylPauseIcon(tint: Color) {
+    Canvas(modifier = Modifier.size(28.dp)) {
+        val sw = 2.dp.toPx()
+        drawLine(tint, Offset(10.dp.toPx(), 7.dp.toPx()), Offset(10.dp.toPx(), 21.dp.toPx()), sw, StrokeCap.Round)
+        drawLine(tint, Offset(18.dp.toPx(), 7.dp.toPx()), Offset(18.dp.toPx(), 21.dp.toPx()), sw, StrokeCap.Round)
+    }
+}
+
+@Composable
+private fun VinylCloseIcon(tint: Color) {
+    Canvas(modifier = Modifier.size(24.dp)) {
+        val sw = 2.dp.toPx()
+        drawLine(tint, Offset(6.dp.toPx(), 6.dp.toPx()), Offset(18.dp.toPx(), 18.dp.toPx()), sw, StrokeCap.Round)
+        drawLine(tint, Offset(18.dp.toPx(), 6.dp.toPx()), Offset(6.dp.toPx(), 18.dp.toPx()), sw, StrokeCap.Round)
+    }
+}
+
+'''
+    s = s[:si] + new_code + s[ei:]
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v124 黑胶挂件 + 液态控制台已接")
+PYEOF124
+echo "=== 32 v124 完成 ==="
