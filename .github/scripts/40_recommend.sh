@@ -267,6 +267,7 @@ fun RecommendScreen(
     playerArtist: String,
     playerIsPlaying: Boolean,
     onPlay: (List<RSong>, Int) -> Unit,
+    onPlayOnly: (List<RSong>, Int) -> Unit, // [40fin] 按钮播歌不进页
     onTogglePlay: () -> Unit
 ) {
     val context = LocalContext.current
@@ -332,7 +333,7 @@ fun RecommendScreen(
                 isPlaying = playing && playerIsPlaying,
                 parallax = parallax, // [40mag]
                 onClick = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPlay(songs, idx) }, // [40final] 切歌极微弱震动
-                onTogglePlay = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); if (playing) onTogglePlay() else onPlay(songs, idx) } // [40final]
+                onTogglePlay = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); if (playing) onTogglePlay() else onPlayOnly(songs, idx) } // [40fin] 按钮播歌不进页
             )
         }
         if (loadingMore) {
@@ -389,6 +390,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke // [40mag]
 import androidx.compose.ui.graphics.Shadow // [40feed]
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign // [40fin] 落款右对齐
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp // [40feed]
@@ -414,16 +416,12 @@ fun FeedCard(
     onTogglePlay: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column( // [40rb] 外层只装卡片 + 倒影，卡片本体不动（padding 上移一层，卡宽不变）
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-    ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
             .height(200.dp) // [40compact] 240 -> 200
-            .shadow(24.dp, RoundedCornerShape(20.dp), ambientColor = Color.Black.copy(alpha = 0.5f)) // [40rb] 弥散阴影，须在 clip 之前
+            .shadow(elevation = 24.dp, shape = RoundedCornerShape(20.dp), ambientColor = Color.Black.copy(alpha = 0.6f), spotColor = Color.Black) // [40fin] 高级弥散阴影，须在 clip 之前
             .clip(RoundedCornerShape(20.dp))
             .background(musicColors().card) // [40card2] 移到 clip 之后，底色也被裁圆
             .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp)) // [40rb] 极细白边
@@ -435,7 +433,7 @@ fun FeedCard(
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxWidth().height(240.dp) // [40mag] 图比卡高 40dp，留位移余量
                 .align(Alignment.Center) // [40mag] 居中，上下各余 20dp
-                .graphicsLayer { scaleX = 1.1f; scaleY = 1.1f; translationY = parallax * 20.dp.toPx() } // [40rs] 底层放大 1.1，边缘与 Fit 图融合
+                .graphicsLayer { scaleX = 1.1f; scaleY = 1.1f; translationY = parallax * 20.dp.toPx(); alpha = 0.7f } // [40fin] 底层 0.7f，与 Fit 图融合
                 .blur(25.dp)
         )
         AsyncImage( // [40rb] 顶层完整图
@@ -458,8 +456,10 @@ fun FeedCard(
                     )
                 )
         )
-        Row( // [40mag] 去胶囊：细线 + 极小眉标文字，无背景无边框
-            modifier = Modifier.align(Alignment.TopStart).padding(top = 16.dp, start = 16.dp).fillMaxWidth(), // [40final] 12 -> 16
+        Row( // [40fin] 极淡黑胶囊底，压 poster 原文字
+            modifier = Modifier.align(Alignment.TopStart).padding(top = 16.dp, start = 16.dp)
+                .clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.2f))
+                .padding(horizontal = 10.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (isPlaying) { // [40final] 正在播放：标签左侧律动条
@@ -487,8 +487,8 @@ fun FeedCard(
             Text(
                 item.song.title,
                 color = Color.White,
-                style = MaterialTheme.typography.titleLarge.copy(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 4f)), // [40final] headlineSmall -> titleLarge，阴影保留
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.headlineSmall.copy(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 4f)), // [40fin] 标题放大极粗，弱阴影保留
+                fontWeight = FontWeight.Black, // [40fin]
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis // [40final] 去 rotate，水平放置
             )
@@ -497,7 +497,9 @@ fun FeedCard(
                 color = Color.White.copy(alpha = 0.6f),
                 style = MaterialTheme.typography.bodySmall, // [40final] bodyMedium -> bodySmall
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis // [40rs] 删 fillMaxWidth 与 textAlign.End，左对齐自然排布
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(), // [40fin] 右对齐落款
+                textAlign = TextAlign.End // [40fin]
             )
         }
         Box(
@@ -543,23 +545,6 @@ fun FeedCard(
             )
         }
     }
-    // [40rb] 倒影：卡片正下方 16dp
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(16.dp)
-            .clip(RoundedCornerShape(20.dp))
-    ) {
-        AsyncImage(
-            model = item.song.picUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-                .graphicsLayer { scaleY = -1f; alpha = 0.25f }
-                .blur(12.dp)
-        )
-    }
-}
 }
 EOF40FEED
 python3 << 'PYEOF40'
@@ -616,5 +601,46 @@ if '[40rec]' not in c:
     print('OK [40rec] 推荐 Tab 接线完成')
 else:
     print('SKIP [40rec] 已应用')
+if '[40fin]' not in c:
+    c = rep(c, '                        onPlay = { songs, i -> playSongs(context, songs, i) },',
+        '                        onPlay = { songs, i -> playSongs(context, songs, i) },\n                        onPlayOnly = { songs, i -> playSongsOnly(songs, i) }, // [40fin] 按钮播歌不进页', '40fin 呼叫点')
+    c = rep(c, '''    context.startActivity(intent)
+}
+
+/**
+ * 通用歌曲行（spotufi 歌曲列表风格）''',
+        '''    context.startActivity(intent)
+}
+
+/** 按钮播歌：只起播，不打开播放页（与 playSongs 区别仅在不 startActivity） */
+fun playSongsOnly(
+    songs: List<LxMusicSearchApi.SongInfo>,
+    index: Int
+) {
+    if (songs.isEmpty() || index !in songs.indices) return
+    val mapped = try {
+        songs.map { s ->
+            mapOf(
+                "songId" to s.id,
+                "title" to s.title,
+                "artist" to s.artist,
+                "platform" to s.platform,
+                "hash" to s.hash,
+                "albumAudioId" to s.albumAudioId,
+                "picUrl" to s.picUrl,
+                "quality" to s.quality
+            )
+        }
+    } catch (e: Exception) { return }
+    LxPlayerManager.setQueue(mapped, index)
+    LxPlayerManager.resolveAndPlay(mapped[index])
+}
+
+/**
+ * 通用歌曲行（spotufi 歌曲列表风格）''', '40fin playSongsOnly')
+    save(MH, c)
+    print('OK [40fin] 按钮播歌不进页')
+else:
+    print('SKIP [40fin] 已应用')
 PYEOF40
 echo "=== 40 rec 完成 ==="
