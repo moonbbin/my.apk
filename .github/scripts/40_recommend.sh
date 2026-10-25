@@ -105,6 +105,26 @@ private fun heardKeys(context: Context): Set<String> {
     return out
 }
 
+private fun historyKeys(context: Context): Set<String> { // [40dyn] 仅历史（不含收藏），用于新歌计数
+    val out = mutableSetOf<String>()
+    val arr = historyArray(context)
+    for (i in 0 until arr.length()) {
+        val o = arr.optJSONObject(i) ?: continue
+        out += songKey(o.optString("title"), o.optString("artist"))
+    }
+    return out
+}
+
+fun shouldRefresh(context: Context): Boolean { // [40dyn] 增量刷新节流：新歌≥3 首且距上次建池 >1 小时
+    val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    val lastBuild = prefs.getLong("rec_build_ms", 0L)
+    if (lastBuild == 0L) return false // 首建无快照，不触发，避免首跑双建
+    if (System.currentTimeMillis() - lastBuild <= 3600000L) return false // 未满 1 小时
+    val snap = try { JSONArray(prefs.getString("rec_build_heard_json", "[]")) } catch (_: Exception) { JSONArray() }
+    val snapSet = (0 until snap.length()).map { snap.optString(it) }.toSet()
+    return historyKeys(context).count { it !in snapSet } >= 3 // 新歌满 3 首
+}
+
 private fun topPlatform(context: Context): String {
     val counts = LinkedHashMap<String, Int>()
     val arr = historyArray(context)
@@ -165,7 +185,7 @@ private fun readExcluded(prefs: android.content.SharedPreferences): Set<String> 
     return out
 }
 
-private fun savePool(prefs: android.content.SharedPreferences, today: String, pool: List<RecommendItem>) {
+private fun savePool(prefs: android.content.SharedPreferences, today: String, pool: List<RecommendItem>, histKeys: Set<String>) { // [40dyn] 建池快照
     val arr = JSONArray()
     for (item in pool) arr.put(songToJson(item.song, item.reason, item.score))
     prefs.edit().putString("rec_pool_date", today + "_v3").putString("rec_pool_json", arr.toString()).putString("rec_reason_ver", "mag1").apply() // [40rs] rec_pool_date 加 _v3，旧池强制重建
@@ -180,13 +200,16 @@ private fun savePool(prefs: android.content.SharedPreferences, today: String, po
     for (item in pool) keys.put(songKey(item.song.title, item.song.artist))
     kept.put(JSONObject().apply { put("d", today); put("t", now); put("keys", keys) })
     prefs.edit().putString("rec_excluded_json", kept.toString()).apply()
+    val hk = JSONArray()
+    for (k in histKeys) hk.put(k)
+    prefs.edit().putLong("rec_build_ms", now).putString("rec_build_heard_json", hk.toString()).apply() // [40dyn] 增量刷新快照
 }
 
-suspend fun buildRecommendPool(context: Context): List<RecommendItem> {
+suspend fun buildRecommendPool(context: Context, force: Boolean = false): List<RecommendItem> { // [40dyn]
     recommendDeviceId(context)
     val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-    if (prefs.getString("rec_pool_date", "") == today + "_v3" && prefs.getString("rec_reason_ver", "") == "mag1") { // [40rs] rec_pool_date 加 _v3，旧池强制重建
+    if (!force && prefs.getString("rec_pool_date", "") == today + "_v3" && prefs.getString("rec_reason_ver", "") == "mag1") { // [40dyn] force 绕过缓存，_v3 不变
         val cached = try {
             val arr = JSONArray(prefs.getString("rec_pool_json", "[]"))
             (0 until arr.length()).map { songFromJson(arr.getJSONObject(it)) }
@@ -194,14 +217,27 @@ suspend fun buildRecommendPool(context: Context): List<RecommendItem> {
         if (cached.isNotEmpty()) return cached
     }
     val heard = heardKeys(context)
+    val histKeys = historyKeys(context) // [40dyn]
     val favArtists = favoriteArtists(context)
     val favNorm = favArtists.map { norm(it) }.toSet()
     val topPlat = topPlatform(context)
     val artists = weightedTopArtists(context).ifEmpty { favArtists.take(6) }
+    val latestArtist = try { // [40dyn] 刚听歌手：time 时间戳最大那条
+        val arr = historyArray(context)
+        var bestT = 0L; var bestA = ""
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val t = o.optLong("time", 0L)
+            val a = o.optString("artist").trim()
+            if (t > bestT && a.isNotEmpty() && a != "未知歌手") { bestT = t; bestA = a }
+        }
+        bestA
+    } catch (_: Exception) { "" }
     fun scoreOf(s: RSong, base: Int): Int {
         var sc = base
         if (norm(s.artist) in favNorm) sc += 50
         if (topPlat.isNotEmpty() && s.platform == topPlat) sc += 20
+        if (latestArtist.isNotEmpty() && norm(s.artist) == norm(latestArtist)) sc += 200 // [40dyn] 刚听歌手权重最高
         return sc
     }
     fun matchArtist(list: List<RSong>, a: String) = list.filter {
@@ -216,7 +252,7 @@ suspend fun buildRecommendPool(context: Context): List<RecommendItem> {
                 .take(15).forEach { pool += RecommendItem(it, listOf("为你精选", "耳畔惊喜", "深夜专属").random()) } // [40rs] 兜底池换血，猜你喜欢归零
         }
         val final = pool.distinctBy { songKey(it.song.title, it.song.artist) }.shuffled()
-        savePool(prefs, today, final)
+        savePool(prefs, today, final, histKeys)
         return final
     }
 
@@ -230,6 +266,10 @@ suspend fun buildRecommendPool(context: Context): List<RecommendItem> {
         val matched = matchArtist(list, a)
         matched.take(10).forEach { s -> scored += RecommendItem(s, "因为你在听 $a", scoreOf(s, rankWeight[idx])) } // [40final]
         matched.drop(10).take(20).forEach { s -> tail += RecommendItem(s, "因为你在听 $a", scoreOf(s, 25)) } // [40final]
+    }
+    if (latestArtist.isNotEmpty() && mainArtists.none { norm(it) == norm(latestArtist) }) { // [40dyn] 刚听歌手不在 Top3 时另搜一次补进主池
+        val list = try { LxMusicSearchApi.searchFull(latestArtist) } catch (_: Exception) { emptyList() }
+        matchArtist(list, latestArtist).take(10).forEach { s -> scored += RecommendItem(s, "因为你在听 $latestArtist", scoreOf(s, 0)) }
     }
     for (a in expArtists) {
         val list = try { LxMusicSearchApi.searchFull(a) } catch (_: Exception) { emptyList() }
@@ -257,7 +297,7 @@ suspend fun buildRecommendPool(context: Context): List<RecommendItem> {
     val excluded = readExcluded(prefs)
     val filtered = pool.filter { songKey(it.song.title, it.song.artist) !in excluded }
     val final = if (filtered.size >= 10) filtered else pool
-    savePool(prefs, today, final)
+    savePool(prefs, today, final, histKeys)
     return final
 }
 
@@ -277,11 +317,16 @@ fun RecommendScreen(
     var visible by remember { mutableStateOf<List<RecommendItem>>(emptyList()) }
     var loadingMore by remember { mutableStateOf(false) }
     var loadingFirst by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) {
-        val pool = buildRecommendPool(context)
-        fullPool = pool
-        visible = pool.take(20)
+    LaunchedEffect(Unit) { // [40dyn] 先上缓存，后台刷新、无缝替换
+        val cached = buildRecommendPool(context, force = false)
+        fullPool = cached
+        visible = cached.take(20)
         loadingFirst = false
+        if (shouldRefresh(context)) { // 新歌≥3 且距上次建池 >1h
+            val fresh = buildRecommendPool(context, force = true)
+            fullPool = fresh
+            visible = fresh.take(20) // 旧列表全程在线，直接替换，零转圈零白屏
+        }
     }
     LaunchedEffect(listState) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }.collect { last ->
@@ -408,6 +453,21 @@ private fun platformName(code: String): String = when (code) {
 }
 
 @Composable
+// [40dyn] 时间感知兜底文案：只映射兜底三文案，歌手/探索理由原样；优先级：深夜 > 周末 > 晨间 > 原文案
+private fun timeAwareReason(reason: String): String {
+    if (reason != "为你精选" && reason != "耳畔惊喜" && reason != "深夜专属") return reason
+    val cal = java.util.Calendar.getInstance()
+    val hour = cal.get(java.util.Calendar.HOUR_OF_DAY)
+    val dow = cal.get(java.util.Calendar.DAY_OF_WEEK)
+    val isWeekend = dow == java.util.Calendar.SATURDAY || dow == java.util.Calendar.SUNDAY
+    return when {
+        hour >= 23 || hour < 5 -> "深夜专属"
+        isWeekend -> "周末私藏"
+        hour in 6..9 -> "晨间唤醒"
+        else -> reason
+    }
+}
+
 fun FeedCard(
     item: RecommendItem,
     isPlaying: Boolean,
@@ -473,7 +533,7 @@ fun FeedCard(
             Box(Modifier.size(width = 16.dp, height = 1.dp).background(Color.White.copy(alpha = 0.8f)))
             Spacer(Modifier.width(6.dp))
             Text(
-                platformName(item.song.platform) + "精选 · " + item.reason, // [40rs] 去 "— " 前缀，只留画的细线
+                platformName(item.song.platform) + "精选 · " + timeAwareReason(item.reason), // [40dyn] 时间感知兜底文案
                 color = Color.White, // [40final] 0.85f -> 纯白
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 1.sp), // [40mag]
                 maxLines = 1,
