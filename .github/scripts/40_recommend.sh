@@ -276,19 +276,6 @@ fun RecommendScreen(
     var visible by remember { mutableStateOf<List<RecommendItem>>(emptyList()) }
     var loadingMore by remember { mutableStateOf(false) }
     var loadingFirst by remember { mutableStateOf(true) }
-    var scrollTopRequest by remember { mutableStateOf(false) } // [40pin] 点卡触发的回顶信号
-    // [40pin] 置顶：只动 UI 层显示顺序，visible/fullPool 原数据不动
-    val playingKey = if (playerTitle.isNotEmpty()) playerTitle + "|" + playerArtist else null
-    val displayList = remember(visible, playingKey) {
-        if (playingKey == null) visible
-        else visible.sortedByDescending { it.song.title + "|" + it.song.artist == playingKey }
-    }
-    LaunchedEffect(scrollTopRequest) { // [40pin] 点卡播放后滑回顶部；自动切歌不经过此信号
-        if (scrollTopRequest) {
-            listState.animateScrollToItem(0)
-            scrollTopRequest = false
-        }
-    }
     LaunchedEffect(Unit) {
         val pool = buildRecommendPool(context)
         fullPool = pool
@@ -331,10 +318,10 @@ fun RecommendScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp), // [40card] 卡间留白
         contentPadding = PaddingValues(bottom = 160.dp) // [40feed] 120 -> 160 终极避让
     ) {
-        items(displayList, key = { it.song.title + "|" + it.song.artist + "|" + it.song.platform }) { item -> // [40pin] 显示顺序
+        items(visible, key = { it.song.title + "|" + it.song.artist + "|" + it.song.platform }) { item ->
             val playing = playerTitle == item.song.title && playerArtist == item.song.artist
-            val songs = displayList.map { it.song } // [40pin] 必须用显示顺序，否则点第 1 张会播错歌
-            val idx = displayList.indexOf(item) // [40pin] 显示序号，正好对上 layoutInfo 布局序号，视差计算不用改
+            val songs = visible.map { it.song }
+            val idx = visible.indexOf(item)
             // [40mag] 视差系数：-0.5（视口顶）~ +0.5（视口底），居中为 0
             val info = listState.layoutInfo.visibleItemsInfo.find { it.index == idx }
             val vpH = listState.layoutInfo.viewportSize.height
@@ -344,8 +331,8 @@ fun RecommendScreen(
                 item = item,
                 isPlaying = playing && playerIsPlaying,
                 parallax = parallax, // [40mag]
-                onClick = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); scrollTopRequest = true; onPlay(songs, idx) }, // [40pin] 点卡回顶
-                onTogglePlay = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); if (playing) onTogglePlay() else { scrollTopRequest = true; onPlay(songs, idx) } } // [40pin] 钮上点播放同样回顶，点暂停不回顶
+                onClick = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPlay(songs, idx) }, // [40final] 切歌极微弱震动
+                onTogglePlay = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); if (playing) onTogglePlay() else onPlay(songs, idx) } // [40final]
             )
         }
         if (loadingMore) {
@@ -374,9 +361,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row // [40mag]
 import androidx.compose.foundation.layout.Spacer // [40mag]
-import androidx.compose.foundation.layout.fillMaxHeight // [40merge] 新增
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight // [40rb] 新增
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -389,9 +376,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur // [40merge] 新增
+import androidx.compose.ui.draw.blur // [40rb] 新增
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow // [40merge] 新增
+import androidx.compose.ui.draw.shadow // [40rb] 新增
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -428,154 +415,154 @@ fun FeedCard(
     onTogglePlay: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column( // [40merge] 根改 Column，装卡片 + 倒影（40float 移植）
+    Column( // [40rb] 外层只装卡片 + 倒影，卡片本体不动（padding 上移一层，卡宽不变）
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
     ) {
-        Box(
-            modifier = Modifier
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(200.dp) // [40compact] 240 -> 200
+            .shadow(24.dp, RoundedCornerShape(20.dp), ambientColor = Color.Black.copy(alpha = 0.5f)) // [40rb] 弥散阴影，须在 clip 之前
+            .clip(RoundedCornerShape(20.dp))
+            .background(musicColors().card) // [40card2] 移到 clip 之后，底色也被裁圆
+            .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp)) // [40rb] 极细白边
+            .clickable { onClick() }
+    ) {
+        AsyncImage( // [40rb] 底层模糊图
+            model = item.song.picUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxWidth().height(240.dp) // [40mag] 图比卡高 40dp，留位移余量
+                .align(Alignment.Center) // [40mag] 居中，上下各余 20dp
+                .graphicsLayer { translationY = parallax * 20.dp.toPx() } // [40mag] ±10dp 视差，不露边
+                .blur(25.dp)
+        )
+        AsyncImage( // [40rb] 顶层完整图
+            model = item.song.picUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxWidth().height(240.dp)
+                .align(Alignment.Center)
+                .graphicsLayer { translationY = parallax * 20.dp.toPx() }
+        )
+        // [40rb] 暗化层已删（全屏暗化禁用）
+        Box( // [40rb] 渐变只占底部 40%
+            modifier = Modifier.align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .height(200.dp)
-                .shadow(24.dp, RoundedCornerShape(20.dp), ambientColor = Color.Black.copy(alpha = 0.5f)) // [40merge] 弥散阴影，须在 clip 之前
+                .fillMaxHeight(0.4f)
                 .clip(RoundedCornerShape(20.dp))
-                .background(musicColors().card)
-                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp)) // [40merge] 极细白边
-                .clickable { onClick() }
-        ) {
-            AsyncImage( // [40merge] 底层模糊图（40float 移植，视差保留）
-                model = item.song.picUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxWidth().height(240.dp)
-                    .align(Alignment.Center)
-                    .graphicsLayer { translationY = parallax * 20.dp.toPx() }
-                    .blur(25.dp)
-            )
-            AsyncImage( // [40merge] 顶层完整图（40float 移植，视差保留）
-                model = item.song.picUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxWidth().height(240.dp)
-                    .align(Alignment.Center)
-                    .graphicsLayer { translationY = parallax * 20.dp.toPx() }
-            )
-            // [40merge] 暗化层已删（40float 去暗化；原 40mag 黑 0.3f，非 0.4f）
-            Box( // [40merge] 渐变只占底部 40%（40float 移植）
-                modifier = Modifier.align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.4f)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
-                        )
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
                     )
+                )
+        )
+        Row( // [40mag] 去胶囊：细线 + 极小眉标文字，无背景无边框
+            modifier = Modifier.align(Alignment.TopStart).padding(top = 16.dp, start = 16.dp).fillMaxWidth(), // [40final] 12 -> 16
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (isPlaying) { // [40final] 正在播放：标签左侧律动条
+                val t = rememberInfiniteTransition(label = "recBars")
+                for (i in 0 until 3) {
+                    val h by t.animateFloat(4f, 12f, infiniteRepeatable(tween(500, delayMillis = i * 150), RepeatMode.Reverse), label = "bar$i")
+                    Box(Modifier.padding(end = 2.dp).size(width = 3.dp, height = h.dp).clip(RoundedCornerShape(2.dp)).background(musicColors().accent))
+                }
+                Spacer(Modifier.width(8.dp))
+            }
+            Box(Modifier.size(width = 16.dp, height = 1.dp).background(Color.White.copy(alpha = 0.8f)))
+            Spacer(Modifier.width(6.dp))
+            Text(
+                "— " + platformName(item.song.platform) + "精选 · " + item.reason, // [40final] 平台映射，如：— 网易云精选 · 宝藏发现
+                color = Color.White, // [40final] 0.85f -> 纯白
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 1.sp), // [40mag]
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            Row( // [40mag] 去胶囊：细线 + 极小眉标文字，无背景无边框
-                modifier = Modifier.align(Alignment.TopStart).padding(top = 16.dp, start = 16.dp).fillMaxWidth(), // [40final] 12 -> 16
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (isPlaying) { // [40final] 正在播放：标签左侧律动条
-                    val t = rememberInfiniteTransition(label = "recBars")
-                    for (i in 0 until 3) {
-                        val h by t.animateFloat(4f, 12f, infiniteRepeatable(tween(500, delayMillis = i * 150), RepeatMode.Reverse), label = "bar$i")
-                        Box(Modifier.padding(end = 2.dp).size(width = 3.dp, height = h.dp).clip(RoundedCornerShape(2.dp)).background(musicColors().accent))
-                    }
-                    Spacer(Modifier.width(8.dp))
+        }
+        Column(
+            modifier = Modifier.align(Alignment.BottomStart)
+                .padding(start = 12.dp, bottom = 12.dp, end = 56.dp) // [40compact] 16/16/76 -> 12/12/56
+        ) {
+            Text(
+                item.song.title,
+                color = Color.White,
+                style = MaterialTheme.typography.titleLarge.copy(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 4f)), // [40final] headlineSmall -> titleLarge，阴影保留
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis // [40final] 去 rotate，水平放置
+            )
+            Text(
+                "— " + item.song.artist.ifEmpty { "未知歌手" }, // [40final] 落款格式
+                color = Color.White.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.bodySmall, // [40final] bodyMedium -> bodySmall
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(), // [40mag] 右对齐需先占满宽
+                textAlign = TextAlign.End // [40mag] 紧贴歌名右下角
+            )
+        }
+        Box(
+            modifier = Modifier.align(Alignment.BottomEnd)
+                .padding(end = 12.dp, bottom = 12.dp) // [40compact] 16/16 -> 12/12
+                .size(40.dp) // [40compact] 48 -> 40
+                .clip(CircleShape)
+                .border(1.dp, Color.White.copy(alpha = 0.6f), CircleShape) // [40mag] 极细白圈，无底色
+                .clickable { onTogglePlay() },
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(Modifier.size(18.dp)) { // [40compact] 22 -> 18，等比缩
+                val sw = 1.5.dp.toPx() // [40mag] 2 -> 1.5 细线
+                val cap = StrokeCap.Round
+                val white = Color.White
+                if (isPlaying) {
+                    drawLine(white, Offset(6.dp.toPx(), 3.dp.toPx()), Offset(6.dp.toPx(), 15.dp.toPx()), sw, cap)
+                    drawLine(white, Offset(12.dp.toPx(), 3.dp.toPx()), Offset(12.dp.toPx(), 15.dp.toPx()), sw, cap)
+                } else {
+                    drawPath(
+                        Path().apply {
+                            moveTo(6.dp.toPx(), 3.dp.toPx())
+                            lineTo(14.dp.toPx(), 9.dp.toPx())
+                            lineTo(6.dp.toPx(), 15.dp.toPx())
+                            close()
+                        },
+                        white, style = Stroke(width = sw) // [40mag] 单线三角，描边不填充
+                    )
                 }
-                Box(Modifier.size(width = 16.dp, height = 1.dp).background(Color.White.copy(alpha = 0.8f)))
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    "— " + platformName(item.song.platform) + "精选 · " + item.reason, // [40final] 平台映射，如：— 网易云精选 · 宝藏发现
-                    color = Color.White, // [40final] 0.85f -> 纯白
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 1.sp), // [40mag]
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Column(
-                modifier = Modifier.align(Alignment.BottomStart)
-                    .padding(start = 12.dp, bottom = 12.dp, end = 56.dp) // [40compact] 16/16/76 -> 12/12/56
-            ) {
-                Text(
-                    item.song.title,
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleLarge.copy(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 4f)), // [40final] headlineSmall -> titleLarge，阴影保留
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis // [40final] 去 rotate，水平放置
-                )
-                Text(
-                    "— " + item.song.artist.ifEmpty { "未知歌手" }, // [40final] 落款格式
-                    color = Color.White.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.bodySmall, // [40final] bodyMedium -> bodySmall
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth(), // [40mag] 右对齐需先占满宽
-                    textAlign = TextAlign.End // [40mag] 紧贴歌名右下角
-                )
-            }
-            Box(
-                modifier = Modifier.align(Alignment.BottomEnd)
-                    .padding(end = 12.dp, bottom = 12.dp) // [40compact] 16/16 -> 12/12
-                    .size(40.dp) // [40compact] 48 -> 40
-                    .clip(CircleShape)
-                    .border(1.dp, Color.White.copy(alpha = 0.6f), CircleShape) // [40mag] 极细白圈，无底色
-                    .clickable { onTogglePlay() },
-                contentAlignment = Alignment.Center
-            ) {
-                Canvas(Modifier.size(18.dp)) { // [40compact] 22 -> 18，等比缩
-                    val sw = 1.5.dp.toPx() // [40mag] 2 -> 1.5 细线
-                    val cap = StrokeCap.Round
-                    val white = Color.White
-                    if (isPlaying) {
-                        drawLine(white, Offset(6.dp.toPx(), 3.dp.toPx()), Offset(6.dp.toPx(), 15.dp.toPx()), sw, cap)
-                        drawLine(white, Offset(12.dp.toPx(), 3.dp.toPx()), Offset(12.dp.toPx(), 15.dp.toPx()), sw, cap)
-                    } else {
-                        drawPath(
-                            Path().apply {
-                                moveTo(6.dp.toPx(), 3.dp.toPx())
-                                lineTo(14.dp.toPx(), 9.dp.toPx())
-                                lineTo(6.dp.toPx(), 15.dp.toPx())
-                                close()
-                            },
-                            white, style = Stroke(width = sw) // [40mag] 单线三角，描边不填充
-                        )
-                    }
-                }
-            }
-            if (isPlaying) {
-                val t = rememberInfiniteTransition(label = "recGlow")
-                val alpha by t.animateFloat(
-                    initialValue = 0.9f,
-                    targetValue = 0.25f,
-                    animationSpec = infiniteRepeatable(tween(1000), RepeatMode.Reverse),
-                    label = "recGlowA"
-                )
-                Box(
-                    Modifier.matchParentSize()
-                        .border(2.dp, musicColors().accent.copy(alpha = alpha), RoundedCornerShape(20.dp)) // [40card] 16 -> 20，跟卡角对齐
-                )
             }
         }
-        // [40merge] 倒影：卡片正下方 16dp（40float 移植）
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(16.dp)
-                .clip(RoundedCornerShape(20.dp))
-        ) {
-            AsyncImage(
-                model = item.song.picUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-                    .graphicsLayer { scaleY = -1f; alpha = 0.25f }
-                    .blur(12.dp)
+        if (isPlaying) {
+            val t = rememberInfiniteTransition(label = "recGlow")
+            val alpha by t.animateFloat(
+                initialValue = 0.9f,
+                targetValue = 0.25f,
+                animationSpec = infiniteRepeatable(tween(1000), RepeatMode.Reverse),
+                label = "recGlowA"
+            )
+            Box(
+                Modifier.matchParentSize()
+                    .border(2.dp, musicColors().accent.copy(alpha = alpha), RoundedCornerShape(20.dp)) // [40card] 16 -> 20，跟卡角对齐
             )
         }
     }
+    // [40rb] 倒影：卡片正下方 16dp
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(16.dp)
+            .clip(RoundedCornerShape(20.dp))
+    ) {
+        AsyncImage(
+            model = item.song.picUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+                .graphicsLayer { scaleY = -1f; alpha = 0.25f }
+                .blur(12.dp)
+        )
+    }
+}
 }
 EOF40FEED
 python3 << 'PYEOF40'
