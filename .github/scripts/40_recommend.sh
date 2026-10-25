@@ -7,6 +7,7 @@ cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendS
 package com.github.tvbox.osc.ui.music.recommend
 
 import android.content.Context
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior // [40final]
 import androidx.compose.foundation.layout.Arrangement // [40card] 新增
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues // [40card] 新增
@@ -27,7 +28,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType // [40final]
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback // [40final]
 import androidx.compose.ui.unit.dp
 import com.github.tvbox.osc.ui.activity.LxMusicSearchApi
 import com.github.tvbox.osc.ui.activity.musicColors
@@ -165,7 +168,7 @@ private fun readExcluded(prefs: android.content.SharedPreferences): Set<String> 
 private fun savePool(prefs: android.content.SharedPreferences, today: String, pool: List<RecommendItem>) {
     val arr = JSONArray()
     for (item in pool) arr.put(songToJson(item.song, item.reason, item.score))
-    prefs.edit().putString("rec_pool_date", today).putString("rec_pool_json", arr.toString()).putString("rec_reason_ver", "mag1").apply() // [40mag]
+    prefs.edit().putString("rec_pool_date", today + "_v2").putString("rec_pool_json", arr.toString()).putString("rec_reason_ver", "mag1").apply() // [40final] rec_pool_date 加 _v2
     val now = System.currentTimeMillis()
     val old = try { JSONArray(prefs.getString("rec_excluded_json", "[]")) } catch (_: Exception) { JSONArray() }
     val kept = JSONArray()
@@ -183,7 +186,7 @@ suspend fun buildRecommendPool(context: Context): List<RecommendItem> {
     recommendDeviceId(context)
     val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-    if (prefs.getString("rec_pool_date", "") == today && prefs.getString("rec_reason_ver", "") == "mag1") { // [40mag] 文案版本，旧池强制重建
+    if (prefs.getString("rec_pool_date", "") == today + "_v2" && prefs.getString("rec_reason_ver", "") == "mag1") { // [40final] rec_pool_date 加 _v2，旧池强制重建
         val cached = try {
             val arr = JSONArray(prefs.getString("rec_pool_json", "[]"))
             (0 until arr.length()).map { songFromJson(arr.getJSONObject(it)) }
@@ -210,7 +213,7 @@ suspend fun buildRecommendPool(context: Context): List<RecommendItem> {
         for (kw in listOf("华语流行", "抖音爆火", "怀旧经典")) {
             val list = try { LxMusicSearchApi.searchFull(kw) } catch (_: Exception) { emptyList() }
             list.filter { songKey(it.title, it.artist) !in heard }
-                .take(15).forEach { pool += RecommendItem(it, "热门推荐 · $kw") }
+                .take(15).forEach { pool += RecommendItem(it, listOf("今日必听", "为你精选", "宝藏发现", "猜你喜欢").random()) } // [40final] 兜底每项独立随机
         }
         val final = pool.distinctBy { songKey(it.song.title, it.song.artist) }.shuffled()
         savePool(prefs, today, final)
@@ -225,18 +228,18 @@ suspend fun buildRecommendPool(context: Context): List<RecommendItem> {
     for ((idx, a) in mainArtists.withIndex()) {
         val list = try { LxMusicSearchApi.searchFull(a) } catch (_: Exception) { emptyList() }
         val matched = matchArtist(list, a)
-        matched.take(10).forEach { s -> scored += RecommendItem(s, "与 $a 相似", scoreOf(s, rankWeight[idx])) }
-        matched.drop(10).take(20).forEach { s -> tail += RecommendItem(s, "与 $a 相似", scoreOf(s, 25)) }
+        matched.take(10).forEach { s -> scored += RecommendItem(s, "因为你在听 $a", scoreOf(s, rankWeight[idx])) } // [40final]
+        matched.drop(10).take(20).forEach { s -> tail += RecommendItem(s, "因为你在听 $a", scoreOf(s, 25)) } // [40final]
     }
     for (a in expArtists) {
         val list = try { LxMusicSearchApi.searchFull(a) } catch (_: Exception) { emptyList() }
-        matchArtist(list, a).take(10).forEach { s -> tail += RecommendItem(s, "与 $a 相似", scoreOf(s, 25)) }
+        matchArtist(list, a).take(10).forEach { s -> tail += RecommendItem(s, "因为你在听 $a", scoreOf(s, 25)) } // [40final]
     }
     val explore = mutableListOf<RecommendItem>()
     for (kw in listOf("华语流行", "抖音爆火", "怀旧经典")) {
         val list = try { LxMusicSearchApi.searchFull(kw) } catch (_: Exception) { emptyList() }
         list.filter { songKey(it.title, it.artist) !in heard }
-            .take(5).forEach { explore += RecommendItem(it, "探索 · $kw") }
+            .take(5).forEach { explore += RecommendItem(it, "探索新风格 · $kw") } // [40final]
     }
     val seen = mutableSetOf<String>()
     val main = interleave(scored.sortedByDescending { it.score }
@@ -267,6 +270,7 @@ fun RecommendScreen(
     onTogglePlay: () -> Unit
 ) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current // [40final]
     val listState = rememberLazyListState()
     var fullPool by remember { mutableStateOf<List<RecommendItem>>(emptyList()) }
     var visible by remember { mutableStateOf<List<RecommendItem>>(emptyList()) }
@@ -289,6 +293,14 @@ fun RecommendScreen(
             loadingMore = false
         }
     }
+    // [40final] 滚动换卡极微弱震动（跳过初始值）
+    LaunchedEffect(listState) {
+        var prev = -1
+        snapshotFlow { listState.firstVisibleItemIndex }.collect { idx ->
+            if (prev != -1 && idx != prev) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            prev = idx
+        }
+    }
     if (loadingFirst) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
@@ -301,6 +313,7 @@ fun RecommendScreen(
     }
     LazyColumn(
         state = listState,
+        flingBehavior = rememberSnapFlingBehavior(listState), // [40final] 滑动吸附
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp), // [40card] 卡间留白
         contentPadding = PaddingValues(bottom = 160.dp) // [40feed] 120 -> 160 终极避让
@@ -318,8 +331,8 @@ fun RecommendScreen(
                 item = item,
                 isPlaying = playing && playerIsPlaying,
                 parallax = parallax, // [40mag]
-                onClick = { onPlay(songs, idx) },
-                onTogglePlay = { if (playing) onTogglePlay() else onPlay(songs, idx) }
+                onClick = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPlay(songs, idx) }, // [40final] 切歌极微弱震动
+                onTogglePlay = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); if (playing) onTogglePlay() else onPlay(songs, idx) } // [40final]
             )
         }
         if (loadingMore) {
@@ -363,7 +376,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate // [40mag]
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -380,6 +392,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp // [40feed]
 import coil.compose.AsyncImage
 import com.github.tvbox.osc.ui.activity.musicColors
+
+// [40final] 平台码 -> 中文名，未知码 fallback 显示原码
+private fun platformName(code: String): String = when (code) {
+    "wy" -> "网易云"
+    "tx", "qq" -> "QQ音乐"
+    "kg" -> "酷狗"
+    "kw" -> "酷我"
+    "mg" -> "咪咕"
+    else -> code
+}
 
 @Composable
 fun FeedCard(
@@ -420,14 +442,22 @@ fun FeedCard(
             )
         )
         Row( // [40mag] 去胶囊：细线 + 极小眉标文字，无背景无边框
-            modifier = Modifier.align(Alignment.TopStart).padding(12.dp).fillMaxWidth(),
+            modifier = Modifier.align(Alignment.TopStart).padding(top = 16.dp, start = 16.dp).fillMaxWidth(), // [40final] 12 -> 16
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (isPlaying) { // [40final] 正在播放：标签左侧律动条
+                val t = rememberInfiniteTransition(label = "recBars")
+                for (i in 0 until 3) {
+                    val h by t.animateFloat(4f, 12f, infiniteRepeatable(tween(500, delayMillis = i * 150), RepeatMode.Reverse), label = "bar$i")
+                    Box(Modifier.padding(end = 2.dp).size(width = 3.dp, height = h.dp).clip(RoundedCornerShape(2.dp)).background(musicColors().accent))
+                }
+                Spacer(Modifier.width(8.dp))
+            }
             Box(Modifier.size(width = 16.dp, height = 1.dp).background(Color.White.copy(alpha = 0.8f)))
             Spacer(Modifier.width(6.dp))
             Text(
-                item.reason,
-                color = Color.White.copy(alpha = 0.85f),
+                "— " + platformName(item.song.platform) + "精选 · " + item.reason, // [40final] 平台映射，如：— 网易云精选 · 宝藏发现
+                color = Color.White, // [40final] 0.85f -> 纯白
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 1.sp), // [40mag]
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -440,16 +470,15 @@ fun FeedCard(
             Text(
                 item.song.title,
                 color = Color.White,
-                style = MaterialTheme.typography.headlineSmall.copy(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 4f)), // [40mag] titleMedium -> headlineSmall 超大，阴影保留
+                style = MaterialTheme.typography.titleLarge.copy(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 4f)), // [40final] headlineSmall -> titleLarge，阴影保留
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.rotate(-2f) // [40mag] 海报式微倾
+                overflow = TextOverflow.Ellipsis // [40final] 去 rotate，水平放置
             )
             Text(
-                item.song.artist.ifEmpty { "未知歌手" },
+                "— " + item.song.artist.ifEmpty { "未知歌手" }, // [40final] 落款格式
                 color = Color.White.copy(alpha = 0.6f),
-                style = MaterialTheme.typography.bodyMedium, // [40mag] labelMedium -> bodyMedium
+                style = MaterialTheme.typography.bodySmall, // [40final] bodyMedium -> bodySmall
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth(), // [40mag] 右对齐需先占满宽
