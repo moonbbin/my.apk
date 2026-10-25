@@ -7,7 +7,6 @@ cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendS
 package com.github.tvbox.osc.ui.music.recommend
 
 import android.content.Context
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior // [40final]
 import androidx.compose.foundation.layout.Arrangement // [40card] 新增
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues // [40card] 新增
@@ -28,9 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType // [40final]
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback // [40final]
 import androidx.compose.ui.unit.dp
 import com.github.tvbox.osc.ui.activity.LxMusicSearchApi
 import com.github.tvbox.osc.ui.activity.musicColors
@@ -168,7 +165,7 @@ private fun readExcluded(prefs: android.content.SharedPreferences): Set<String> 
 private fun savePool(prefs: android.content.SharedPreferences, today: String, pool: List<RecommendItem>) {
     val arr = JSONArray()
     for (item in pool) arr.put(songToJson(item.song, item.reason, item.score))
-    prefs.edit().putString("rec_pool_date", today + "_v2").putString("rec_pool_json", arr.toString()).putString("rec_reason_ver", "mag1").apply() // [40final] rec_pool_date 加 _v2
+    prefs.edit().putString("rec_pool_date", today).putString("rec_pool_json", arr.toString()).apply()
     val now = System.currentTimeMillis()
     val old = try { JSONArray(prefs.getString("rec_excluded_json", "[]")) } catch (_: Exception) { JSONArray() }
     val kept = JSONArray()
@@ -186,7 +183,7 @@ suspend fun buildRecommendPool(context: Context): List<RecommendItem> {
     recommendDeviceId(context)
     val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-    if (prefs.getString("rec_pool_date", "") == today + "_v2" && prefs.getString("rec_reason_ver", "") == "mag1") { // [40final] rec_pool_date 加 _v2，旧池强制重建
+    if (prefs.getString("rec_pool_date", "") == today) {
         val cached = try {
             val arr = JSONArray(prefs.getString("rec_pool_json", "[]"))
             (0 until arr.length()).map { songFromJson(arr.getJSONObject(it)) }
@@ -213,7 +210,7 @@ suspend fun buildRecommendPool(context: Context): List<RecommendItem> {
         for (kw in listOf("华语流行", "抖音爆火", "怀旧经典")) {
             val list = try { LxMusicSearchApi.searchFull(kw) } catch (_: Exception) { emptyList() }
             list.filter { songKey(it.title, it.artist) !in heard }
-                .take(15).forEach { pool += RecommendItem(it, listOf("今日必听", "为你精选", "宝藏发现", "猜你喜欢").random()) } // [40final] 兜底每项独立随机
+                .take(15).forEach { pool += RecommendItem(it, "热门推荐 · $kw") }
         }
         val final = pool.distinctBy { songKey(it.song.title, it.song.artist) }.shuffled()
         savePool(prefs, today, final)
@@ -228,18 +225,18 @@ suspend fun buildRecommendPool(context: Context): List<RecommendItem> {
     for ((idx, a) in mainArtists.withIndex()) {
         val list = try { LxMusicSearchApi.searchFull(a) } catch (_: Exception) { emptyList() }
         val matched = matchArtist(list, a)
-        matched.take(10).forEach { s -> scored += RecommendItem(s, "因为你在听 $a", scoreOf(s, rankWeight[idx])) } // [40final]
-        matched.drop(10).take(20).forEach { s -> tail += RecommendItem(s, "因为你在听 $a", scoreOf(s, 25)) } // [40final]
+        matched.take(10).forEach { s -> scored += RecommendItem(s, "因为你常听 $a", scoreOf(s, rankWeight[idx])) }
+        matched.drop(10).take(20).forEach { s -> tail += RecommendItem(s, "深挖 · $a", scoreOf(s, 25)) }
     }
     for (a in expArtists) {
         val list = try { LxMusicSearchApi.searchFull(a) } catch (_: Exception) { emptyList() }
-        matchArtist(list, a).take(10).forEach { s -> tail += RecommendItem(s, "因为你在听 $a", scoreOf(s, 25)) } // [40final]
+        matchArtist(list, a).take(10).forEach { s -> tail += RecommendItem(s, "因为你常听 $a", scoreOf(s, 25)) }
     }
     val explore = mutableListOf<RecommendItem>()
     for (kw in listOf("华语流行", "抖音爆火", "怀旧经典")) {
         val list = try { LxMusicSearchApi.searchFull(kw) } catch (_: Exception) { emptyList() }
         list.filter { songKey(it.title, it.artist) !in heard }
-            .take(5).forEach { explore += RecommendItem(it, "探索新风格 · $kw") } // [40final]
+            .take(5).forEach { explore += RecommendItem(it, "探索 · $kw") }
     }
     val seen = mutableSetOf<String>()
     val main = interleave(scored.sortedByDescending { it.score }
@@ -270,7 +267,6 @@ fun RecommendScreen(
     onTogglePlay: () -> Unit
 ) {
     val context = LocalContext.current
-    val haptic = LocalHapticFeedback.current // [40final]
     val listState = rememberLazyListState()
     var fullPool by remember { mutableStateOf<List<RecommendItem>>(emptyList()) }
     var visible by remember { mutableStateOf<List<RecommendItem>>(emptyList()) }
@@ -293,14 +289,6 @@ fun RecommendScreen(
             loadingMore = false
         }
     }
-    // [40final] 滚动换卡极微弱震动（跳过初始值）
-    LaunchedEffect(listState) {
-        var prev = -1
-        snapshotFlow { listState.firstVisibleItemIndex }.collect { idx ->
-            if (prev != -1 && idx != prev) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            prev = idx
-        }
-    }
     if (loadingFirst) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
@@ -313,26 +301,19 @@ fun RecommendScreen(
     }
     LazyColumn(
         state = listState,
-        flingBehavior = rememberSnapFlingBehavior(listState), // [40final] 滑动吸附
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp), // [40card] 卡间留白
-        contentPadding = PaddingValues(bottom = 160.dp) // [40feed] 120 -> 160 终极避让
+        contentPadding = PaddingValues(bottom = 160.dp) // [40float] 120 -> 160，给最后一张卡的倒影+阴影留空间
     ) {
         items(visible, key = { it.song.title + "|" + it.song.artist + "|" + it.song.platform }) { item ->
             val playing = playerTitle == item.song.title && playerArtist == item.song.artist
             val songs = visible.map { it.song }
             val idx = visible.indexOf(item)
-            // [40mag] 视差系数：-0.5（视口顶）~ +0.5（视口底），居中为 0
-            val info = listState.layoutInfo.visibleItemsInfo.find { it.index == idx }
-            val vpH = listState.layoutInfo.viewportSize.height
-            val parallax = if (info != null && vpH > 0)
-                (info.offset + info.size / 2 - vpH / 2).toFloat() / vpH else 0f
             FeedCard(
                 item = item,
                 isPlaying = playing && playerIsPlaying,
-                parallax = parallax, // [40mag]
-                onClick = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPlay(songs, idx) }, // [40final] 切歌极微弱震动
-                onTogglePlay = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); if (playing) onTogglePlay() else onPlay(songs, idx) } // [40final]
+                onClick = { onPlay(songs, idx) },
+                onTogglePlay = { if (playing) onTogglePlay() else onPlay(songs, idx) }
             )
         }
         if (loadingMore) {
@@ -353,177 +334,184 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row // [40mag]
-import androidx.compose.foundation.layout.Spacer // [40mag]
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width // [40mag]
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer // [40mag]
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke // [40mag]
-import androidx.compose.ui.graphics.Shadow // [40feed]
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp // [40feed]
 import coil.compose.AsyncImage
 import com.github.tvbox.osc.ui.activity.musicColors
-
-// [40final] 平台码 -> 中文名，未知码 fallback 显示原码
-private fun platformName(code: String): String = when (code) {
-    "wy" -> "网易云"
-    "tx", "qq" -> "QQ音乐"
-    "kg" -> "酷狗"
-    "kw" -> "酷我"
-    "mg" -> "咪咕"
-    else -> code
-}
 
 @Composable
 fun FeedCard(
     item: RecommendItem,
     isPlaying: Boolean,
-    parallax: Float = 0f, // [40mag] 视差系数 -0.5~0.5
     onClick: () -> Unit,
     onTogglePlay: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(
+    Column( // [40float] 根改 Column，装卡片 + 倒影
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .height(200.dp) // [40compact] 240 -> 200
-            .clip(RoundedCornerShape(20.dp))
-            .background(musicColors().card) // [40card2] 移到 clip 之后，底色也被裁圆
-            .clickable { onClick() }
     ) {
-        AsyncImage(
-            model = item.song.picUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxWidth().height(240.dp) // [40mag] 图比卡高 40dp，留位移余量
-                .align(Alignment.Center) // [40mag] 居中，上下各余 20dp
-                .clip(RoundedCornerShape(20.dp)) // [40polish] 强制自身圆角，不依赖父级裁剪
-                .graphicsLayer { translationY = parallax * 20.dp.toPx() } // [40mag] ±10dp 视差，不露边
-        )
         Box(
-            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)).background(Color.Black.copy(alpha = 0.3f)) // [40mag] 暗化层，压高饱和封面
-        )
-        Box(
-            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)).background( // [40card2] 内层裁剪，clip 须在 background 之前
-                Brush.verticalGradient(
-                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)),
-                    startY = 0f,
-                    endY = Float.POSITIVE_INFINITY
-                )
-            )
-        )
-        Row( // [40mag] 去胶囊：细线 + 极小眉标文字，无背景无边框
-            modifier = Modifier.align(Alignment.TopStart).padding(top = 16.dp, start = 16.dp).fillMaxWidth(), // [40final] 12 -> 16
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .shadow(24.dp, RoundedCornerShape(20.dp), ambientColor = Color.Black.copy(alpha = 0.5f)) // [40float] 弥散阴影，须在 clip 之前
+                .clip(RoundedCornerShape(20.dp))
+                .background(musicColors().card)
+                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp)) // [40float] 极细白边
+                .clickable { onClick() }
         ) {
-            if (isPlaying) { // [40final] 正在播放：标签左侧律动条
-                val t = rememberInfiniteTransition(label = "recBars")
-                for (i in 0 until 3) {
-                    val h by t.animateFloat(4f, 12f, infiniteRepeatable(tween(500, delayMillis = i * 150), RepeatMode.Reverse), label = "bar$i")
-                    Box(Modifier.padding(end = 2.dp).size(width = 3.dp, height = h.dp).clip(RoundedCornerShape(2.dp)).background(musicColors().accent))
-                }
-                Spacer(Modifier.width(8.dp))
-            }
-            Box(Modifier.size(width = 16.dp, height = 1.dp).background(Color.White.copy(alpha = 0.8f)))
-            Spacer(Modifier.width(6.dp))
-            Text(
-                platformName(item.song.platform) + "精选 · " + item.reason, // [40polish] 去 "— " 前缀，只留 Row 里画的 1dp 细线
-                color = Color.White, // [40final] 0.85f -> 纯白
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 1.sp), // [40mag]
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+            // 底层模糊图：Crop 填满，填补两侧
+            AsyncImage(
+                model = item.song.picUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)).blur(25.dp) // [40float] 底层模糊，无暗化
             )
-        }
-        Column(
-            modifier = Modifier.align(Alignment.BottomStart)
-                .padding(start = 12.dp, bottom = 12.dp, end = 56.dp) // [40compact] 16/16/76 -> 12/12/56
-        ) {
-            Text(
-                item.song.title,
-                color = Color.White,
-                style = MaterialTheme.typography.headlineSmall.copy(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 4f)), // [40polish] titleLarge -> headlineSmall 回 24sp，阴影保留
-                fontWeight = FontWeight.Black, // [40polish] Bold -> Black 极粗
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis // [40final] 去 rotate，水平放置
+            // 顶层原图：Fit 居中，海报完整
+            AsyncImage(
+                model = item.song.picUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)) // [40float] 顶层完整图
             )
-            Spacer(Modifier.height(2.dp)) // [40polish] 歌名与歌手间距 2dp
-            Text(
-                "— " + item.song.artist.ifEmpty { "未知歌手" }, // [40final] 落款格式
-                color = Color.White.copy(alpha = 0.6f),
-                style = MaterialTheme.typography.bodySmall, // [40final] bodyMedium -> bodySmall
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis // [40polish] 删 fillMaxWidth 与 textAlign.End，自然左对齐，靠 Column 端距截断
-            )
-        }
-        Box(
-            modifier = Modifier.align(Alignment.BottomEnd)
-                .padding(end = 12.dp, bottom = 12.dp) // [40compact] 16/16 -> 12/12
-                .size(40.dp) // [40compact] 48 -> 40
-                .clip(CircleShape)
-                .border(1.dp, Color.White.copy(alpha = 0.6f), CircleShape) // [40mag] 极细白圈，无底色
-                .clickable { onTogglePlay() },
-            contentAlignment = Alignment.Center
-        ) {
-            Canvas(Modifier.size(18.dp)) { // [40compact] 22 -> 18，等比缩
-                val sw = 1.5.dp.toPx() // [40mag] 2 -> 1.5 细线
-                val cap = StrokeCap.Round
-                val white = Color.White
-                if (isPlaying) {
-                    drawLine(white, Offset(6.dp.toPx(), 3.dp.toPx()), Offset(6.dp.toPx(), 15.dp.toPx()), sw, cap)
-                    drawLine(white, Offset(12.dp.toPx(), 3.dp.toPx()), Offset(12.dp.toPx(), 15.dp.toPx()), sw, cap)
-                } else {
-                    drawPath(
-                        Path().apply {
-                            moveTo(6.dp.toPx(), 3.dp.toPx())
-                            lineTo(14.dp.toPx(), 9.dp.toPx())
-                            lineTo(6.dp.toPx(), 15.dp.toPx())
-                            close()
-                        },
-                        white, style = Stroke(width = sw) // [40mag] 单线三角，描边不填充
-                    )
-                }
-            }
-        }
-        if (isPlaying) {
-            val t = rememberInfiniteTransition(label = "recGlow")
-            val alpha by t.animateFloat(
-                initialValue = 0.9f,
-                targetValue = 0.25f,
-                animationSpec = infiniteRepeatable(tween(1000), RepeatMode.Reverse),
-                label = "recGlowA"
-            )
+            // 底部 40% 渐变：上半 60% 绝对清晰
             Box(
-                Modifier.matchParentSize()
-                    .border(2.dp, musicColors().accent.copy(alpha = alpha), RoundedCornerShape(20.dp)) // [40card] 16 -> 20，跟卡角对齐
+                modifier = Modifier.align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.4f) // [40float] 只占底部 40%
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
+                        )
+                    )
+            )
+            Surface(
+                color = Color.White.copy(alpha = 0.2f),
+                border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.3f)),
+                shape = RoundedCornerShape(percent = 50),
+                modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
+            ) {
+                Text(
+                    item.reason,
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                )
+            }
+            Column(
+                modifier = Modifier.align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = 12.dp, end = 56.dp)
+            ) {
+                Text(
+                    item.song.title,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    item.song.artist.ifEmpty { "未知歌手" },
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Box(
+                modifier = Modifier.align(Alignment.BottomEnd)
+                    .padding(end = 12.dp, bottom = 12.dp)
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .border(0.5.dp, Color.Black.copy(alpha = 0.15f), CircleShape)
+                    .clickable { onTogglePlay() },
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(Modifier.size(18.dp)) {
+                    val sw = 2.dp.toPx()
+                    val cap = StrokeCap.Round
+                    val black = Color.Black
+                    if (isPlaying) {
+                        drawLine(black, Offset(6.dp.toPx(), 3.dp.toPx()), Offset(6.dp.toPx(), 15.dp.toPx()), sw, cap)
+                        drawLine(black, Offset(12.dp.toPx(), 3.dp.toPx()), Offset(12.dp.toPx(), 15.dp.toPx()), sw, cap)
+                    } else {
+                        drawPath(
+                            Path().apply {
+                                moveTo(6.dp.toPx(), 3.dp.toPx())
+                                lineTo(14.dp.toPx(), 9.dp.toPx())
+                                lineTo(6.dp.toPx(), 15.dp.toPx())
+                                close()
+                            },
+                            black
+                        )
+                    }
+                }
+            }
+            if (isPlaying) {
+                val t = rememberInfiniteTransition(label = "recGlow")
+                val alpha by t.animateFloat(
+                    initialValue = 0.9f,
+                    targetValue = 0.25f,
+                    animationSpec = infiniteRepeatable(tween(1000), RepeatMode.Reverse),
+                    label = "recGlowA"
+                )
+                Box(
+                    Modifier.matchParentSize()
+                        .border(2.dp, musicColors().accent.copy(alpha = alpha), RoundedCornerShape(20.dp))
+                )
+            }
+        }
+        // 倒影：卡片正下方 16dp，同图翻转 + 淡 + 模糊
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(16.dp) // [40float] 倒影
+                .clip(RoundedCornerShape(20.dp))
+        ) {
+            AsyncImage(
+                model = item.song.picUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+                    .graphicsLayer { scaleY = -1f; alpha = 0.25f }
+                    .blur(12.dp)
             )
         }
     }
