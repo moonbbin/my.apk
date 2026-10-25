@@ -9795,3 +9795,27 @@ else:
     print("OK 32 v131 positionInRoot 相减已接")
 PYEOF131
 echo "=== 32 v131 完成 ==="
+
+# === 32 v132: 构建红修复——positionInRoot 同为未 import 的扩展函数（CI 600:105 + 641:67 实证） ===
+# 真机制（两处实证，不猜）：①官方文档现版把 positionInRoot 列于 Extension functions（与 positionInParent 同栏），
+#   扩展函数必须单独 import，文件只引了 onGloballyPositioned，从未引 positionInRoot；②本工程先例：v126–v129
+#   四次绿构建里 boundsInWindow() 同为该包扩展函数，因引了 import 才编译通过——同一模式。
+#   v131 称其为“自 1.0 即有的成员函数”是错的（现版已改为扩展函数），本次只补一行 import，不动其他代码。
+python3 << 'PYEOF132'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v132]" in s:
+    print("跳过（32 v132 已应用）")
+else:
+    old = "import androidx.compose.ui.layout.onGloballyPositioned // [32v124]"
+    assert s.count(old) == 1, "v132 锚点数=" + str(s.count(old))
+    s = s.replace(old, old + "\nimport androidx.compose.ui.layout.positionInRoot // [32v132] 扩展函数须单独 import", 1)
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v132 positionInRoot import 已补")
+PYEOF132
+echo "=== 32 v132 完成 ==="
