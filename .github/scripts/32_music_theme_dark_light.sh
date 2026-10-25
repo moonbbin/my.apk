@@ -10261,3 +10261,127 @@ fun FeedbackIconButton(
     print("OK 32 v139 控制台反馈按钮已接")
 PYEOF139
 echo "=== 32 v139 完成 ==="
+
+# === 32 v140: 控制台呼吸灯 + 歌手行开关 + 动态间距（用户 2026-10-25 确认） ===
+# 呼吸灯：8dp 圆点 accent 色，rememberInfiniteTransition（alpha 1.0→0.2、scale 1.0→0.8，tween 1000 + Reverse）；
+# transition 常驻、只门控取值（播时取动画值、停时固定 0.5f/1f）——无暂停 API（MH:879 注释），相位不重建。
+# 歌手行：签名加 showArtist: Boolean = false（呼叫点全具名，零改动、默认隐藏、代码全保留）；
+# 行内 text 改 artist.ifEmpty { "未知歌手" }（通知栏/播放页同一口径）、字号 bodyMedium→bodySmall；
+# 间距：封面→歌名 12dp 不动；showArtist 时 4dp + 歌手 + 12dp（用户新写 12dp，代码原值 8dp，已按 12 落），
+# 隐藏时歌名→进度条直接 16dp；时间→按钮 16dp→20dp；进度条→时间 4dp 不动。
+# 不动：封面 0.6f、进度条、时间行、底部三个 FeedbackIconButton。
+python3 << 'PYEOF140'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v140]" in s:
+    print("跳过（32 v140 已应用）")
+else:
+    a0 = "import androidx.compose.animation.core.tween // [32v124]"
+    assert s.count(a0) == 1, "v140 import 锚点数=" + str(s.count(a0))
+    s = s.replace(a0, a0 + "\nimport androidx.compose.animation.core.infiniteRepeatable // [32v140]\nimport androidx.compose.animation.core.rememberInfiniteTransition // [32v140]\nimport androidx.compose.animation.core.RepeatMode // [32v140]", 1)
+    a1 = """    locked: Boolean, // [32v139]
+    progress: Float,"""
+    assert s.count(a1) == 1, "v140 签名锚点数=" + str(s.count(a1))
+    s = s.replace(a1, """    locked: Boolean, // [32v139]
+    showArtist: Boolean = false, // [32v140] 默认隐藏，代码保留；呼叫点全具名故零改动
+    progress: Float,""", 1)
+    a2 = "        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp)) {"
+    assert s.count(a2) == 1, "v140 Column 锚点数=" + str(s.count(a2))
+    s = s.replace(a2, """        // [32v140] 呼吸灯：transition 常驻、只门控取值（无暂停 API，相位不重建）
+        val breath = rememberInfiniteTransition(label = "breath")
+        val breathAlpha by breath.animateFloat(
+            initialValue = 1f, targetValue = 0.2f,
+            animationSpec = infiniteRepeatable(animation = tween(1000), repeatMode = RepeatMode.Reverse),
+            label = "breathAlpha"
+        )
+        val breathScale by breath.animateFloat(
+            initialValue = 1f, targetValue = 0.8f,
+            animationSpec = infiniteRepeatable(animation = tween(1000), repeatMode = RepeatMode.Reverse),
+            label = "breathScale"
+        )
+        val dotAlpha = if (isPlaying) breathAlpha else 0.5f
+        val dotScale = if (isPlaying) breathScale else 1f
+""" + a2, 1)
+    a3 = """            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "正在播放",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = musicColors().textSecondary
+                )
+                IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
+                    VinylCloseIcon(tint = musicColors().textPrimary)
+                }
+            }"""
+    assert s.count(a3) == 1, "v140 顶行锚点数=" + str(s.count(a3))
+    s = s.replace(a3, """            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) { // [32v140] 呼吸灯 + 正在播放同行
+                    Box(
+                        modifier = Modifier.size(8.dp)
+                            .graphicsLayer { alpha = dotAlpha; scaleX = dotScale; scaleY = dotScale }
+                            .clip(CircleShape)
+                            .background(musicColors().accent)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "正在播放",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = musicColors().textSecondary
+                    )
+                }
+                IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
+                    VinylCloseIcon(tint = musicColors().textPrimary)
+                }
+            }""", 1)
+    a4 = """            Spacer(modifier = Modifier.height(4.dp))
+            Text( // [32v138] 歌手
+                text = artist,
+                style = MaterialTheme.typography.bodyMedium,
+                color = musicColors().textSecondary,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))"""
+    assert s.count(a4) == 1, "v140 歌手行锚点数=" + str(s.count(a4))
+    s = s.replace(a4, """            if (showArtist) { // [32v140] 默认 false：代码保留、不显示
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = artist.ifEmpty { "未知歌手" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = musicColors().textSecondary,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            } else {
+                Spacer(modifier = Modifier.height(16.dp))
+            }""", 1)
+    a5 = """            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,"""
+    assert s.count(a5) == 1, "v140 底距锚点数=" + str(s.count(a5))
+    s = s.replace(a5, """            Spacer(modifier = Modifier.height(20.dp)) // [32v140] 时间→按钮：16→20
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,""", 1)
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v140 呼吸灯+歌手开关+间距已接")
+PYEOF140
+echo "=== 32 v140 完成 ==="
