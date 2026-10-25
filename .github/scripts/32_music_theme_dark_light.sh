@@ -9918,3 +9918,54 @@ else:
     print("OK 32 v135 日志抽屉满高已改")
 PYEOF135
 echo "=== 32 v135 完成 ==="
+
+# === 32 v136: 排行榜序号与搜索页彻底统一（用户 2026-10-25 确认方案） ===
+# 现状 RankItem：全部统一 bodyMedium 14sp + textSecondary×0.6，无前 3 名区分，序号列 28dp 靠右。
+# 改为与搜索页 HotSearchItem 完全一致的三档：1 名 accent/Black/22sp、2-3 名 textPrimary/Bold/20sp、
+# 4+ 名 textSecondary 实色（无 alpha）、Normal/16sp；序号列统一 32dp 居中；补 sp import（本文件此前未用 sp）。
+python3 << 'PYEOF136'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v136]" in s:
+    print("跳过（32 v136 已应用）")
+else:
+    a0 = "import androidx.compose.ui.unit.dp"
+    assert s.count(a0) == 1, "v136 sp import 锚点数=" + str(s.count(a0))
+    s = s.replace(a0, a0 + "\nimport androidx.compose.ui.unit.sp // [32v136]", 1)
+    a1 = """        Box(
+            modifier = Modifier.width(28.dp),
+            contentAlignment = Alignment.CenterEnd,
+        ) {"""
+    assert s.count(a1) == 1, "v136 序号列锚点数=" + str(s.count(a1))
+    s = s.replace(a1, """        Box(
+            modifier = Modifier.width(32.dp), // [32v136] 与搜索页统一：32dp 居中
+            contentAlignment = Alignment.Center,
+        ) {""", 1)
+    a2 = """            Text(
+                text = rank.toString(),
+                style = MaterialTheme.typography.bodyMedium, // 精修：14sp
+                color = musicColors().textSecondary.copy(alpha = 0.6f),
+            )"""
+    assert s.count(a2) == 1, "v136 序号 Text 锚点数=" + str(s.count(a2))
+    s = s.replace(a2, """            Text(
+                text = rank.toString(),
+                style = when (rank) { // [32v136] 与搜索页 HotSearchItem 完全一致的三档
+                    1 -> MaterialTheme.typography.bodyLarge.copy(fontSize = 22.sp, fontWeight = FontWeight.Black)
+                    2, 3 -> MaterialTheme.typography.bodyLarge.copy(fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    else -> MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, fontWeight = FontWeight.Normal)
+                },
+                color = when (rank) {
+                    1 -> musicColors().accent
+                    2, 3 -> musicColors().textPrimary
+                    else -> musicColors().textSecondary
+                },
+            )""", 1)
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v136 排行榜序号已统一")
+PYEOF136
+echo "=== 32 v136 完成 ==="

@@ -321,3 +321,32 @@ else:
     print("OK 33 pill 搜索页底部避让完成")
 PYEOF33PILL
 echo "=== 33 pill 完成 ==="
+
+# === 33 rank: 搜索页序号 4+ 名去隐身（用户 2026-10-25 确认方案） ===
+# 现状 HotSearchItem 4+ 名：textHint（TextTertiary 最淡 token）×alpha 0.6，双重隐身，壁纸上几乎看不清。
+# 改为 textSecondary 实色（无 alpha），与排行榜 RankItem 统一后的 when 块完全一致；
+# 前 3 名（accent/Black/22sp、textPrimary/Bold/20sp）与字号三档、32dp 居中列本来就符合统一标准，不动。
+# 注意：本节必须在 33 全量覆盖之后跑（附在脚本末尾），32 改 SearchScreen 会被 33 全量覆盖。
+python3 << 'PYEOF33RANK'
+import os
+cand = ["avbox/app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchScreen.kt",
+        "app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchScreen.kt"]
+p = None
+for c in cand:
+    q = c
+    while not os.path.exists(q) and os.getcwd() != "/":
+        os.chdir("..")
+    if os.path.exists(q):
+        p = q; break
+assert p, "33rank 找不到 SearchScreen.kt"
+s = open(p, encoding="utf-8").read()
+if "[33rank]" in s:
+    print("跳过（33 rank 已应用）")
+else:
+    old = "else -> musicColors().textHint.copy(alpha = 0.6f)"
+    assert s.count(old) == 1, "33rank 锚点数=" + str(s.count(old))
+    s = s.replace(old, "else -> musicColors().textSecondary // [33rank] 去隐身：实色，不带 alpha", 1)
+    open(p, "w", encoding="utf-8").write(s)
+    print("OK 33 rank 搜索页序号 4+ 名已改实色")
+PYEOF33RANK
+echo "=== 33 rank 完成 ==="
