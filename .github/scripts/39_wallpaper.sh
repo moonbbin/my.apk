@@ -1147,6 +1147,81 @@ if '[39fb]' not in a:
 else:
     print('SKIP [39fb] 已应用')
 
+PA = BASE + 'ui/activity/LxPlayerActivity.kt'
+a = load(PA)
+if '[39rescue]' not in a:
+    a = rep(a, 'import kotlinx.coroutines.withContext',
+        'import kotlinx.coroutines.withContext\nimport kotlinx.coroutines.runBlocking // [39rescue]', '39rescue import')
+    a = rep(a, '    private fun doResolveAndPlay(songId: String, platform: String, title: String, artist: String, hash: String = "", albumAudioId: String = "") {',
+        '''    // [39rescue] 跨平台搜救：单平台全档位失败后，用同名歌曲换平台再解析一次（仅一次，allowRescue=false 防死循环）
+    private fun tryCrossPlatformRescue(title: String, artist: String, failedSource: String) {
+        Thread {
+            val results = try {
+                runBlocking { LxMusicSearchApi.searchFull(title) }
+            } catch (_: Exception) {
+                emptyList()
+            }
+            val norm = { s: String -> s.filterNot { it.isWhitespace() }.lowercase() }
+            val nt = norm(title)
+            val na = norm(artist)
+            val artistMatch = { a: String ->
+                val x = norm(a)
+                x.contains(na) || na.contains(x)
+            }
+            val refDur = results.firstOrNull { r ->
+                r.platform == "wy" && norm(r.title) == nt && artistMatch(r.artist)
+            }?.duration?.takeIf { it > 0 }
+            val found = listOf("kg", "tx", "kw").firstNotNullOfOrNull { p ->
+                if (p == failedSource) null
+                else results.firstOrNull { r ->
+                    r.platform == p && norm(r.title) == nt && artistMatch(r.artist) &&
+                        (refDur == null || r.duration <= 0 || kotlin.math.abs(r.duration - refDur) <= 3)
+                }
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (LxPlayerManager.currentTitle.value != title) return@runOnUiThread
+                if (found != null) {
+                    doResolveAndPlay(found.id, found.platform, title, artist, allowRescue = false)
+                } else {
+                    LxPlayerManager.setLoading(false)
+                    LxPlayerManager.setError("获取播放地址失败（已尝试所有音质与平台）")
+                }
+            }
+        }.start()
+    }
+
+    private fun doResolveAndPlay(songId: String, platform: String, title: String, artist: String, hash: String = "", albumAudioId: String = "", allowRescue: Boolean = true) {''', '39rescue 搜救函数+签名')
+    a = rep(a, 'tryResolveWithRetry(platform, musicInfo, title, artist, retryCount = 0)',
+        'tryResolveWithRetry(platform, musicInfo, title, artist, retryCount = 0, allowRescue = allowRescue) // [39rescue]', '39rescue 透传')
+    a = rep(a, '''        retryCount: Int
+    ) {''',
+        '''        retryCount: Int,
+        allowRescue: Boolean = true // [39rescue]
+    ) {''', '39rescue 试解析签名')
+    a = rep(a, 'tryResolveWithRetry(sourceId, musicInfo, title, artist, retryCount + 1)',
+        'tryResolveWithRetry(sourceId, musicInfo, title, artist, retryCount + 1, allowRescue) // [39rescue]', '39rescue 递归透传')
+    a = rep(a, '''                android.util.Log.e("LxPlayer", "所有音质档位均失败")
+                runOnUiThread {
+                    LxPlayerManager.setLoading(false)
+                    LxPlayerManager.setError("获取播放地址失败（已尝试所有音质）")
+                }
+                return''',
+        '''                android.util.Log.e("LxPlayer", "所有音质档位均失败")
+                if (allowRescue) { // [39rescue] 跨平台搜救：搜救期间 loading 不关、报错先不发
+                    tryCrossPlatformRescue(title, artist, sourceId)
+                } else {
+                    runOnUiThread {
+                        LxPlayerManager.setLoading(false)
+                        LxPlayerManager.setError("获取播放地址失败（已尝试所有音质与平台）")
+                    }
+                }
+                return''', '39rescue 耗尽拦截')
+    save(PA, a)
+    print('OK [39rescue] 点歌链跨平台搜救已接')
+else:
+    print('SKIP [39rescue] 已应用')
+
 print('[39] 全部补丁完成')
 PYEOF39
 echo "=== 39 wp5 完成 ==="
