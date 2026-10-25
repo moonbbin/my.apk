@@ -86,6 +86,8 @@ jobs:
         run: bash .github/scripts/38_eq_dsp.sh
       - name: 39_wallpaper
         run: bash .github/scripts/39_wallpaper.sh
+      - name: 40_recommend
+        run: bash .github/scripts/40_recommend.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
