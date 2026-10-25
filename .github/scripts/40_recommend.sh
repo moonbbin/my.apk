@@ -276,6 +276,19 @@ fun RecommendScreen(
     var visible by remember { mutableStateOf<List<RecommendItem>>(emptyList()) }
     var loadingMore by remember { mutableStateOf(false) }
     var loadingFirst by remember { mutableStateOf(true) }
+    var scrollTopRequest by remember { mutableStateOf(false) } // [40pin] 点卡触发的回顶信号
+    // [40pin] 置顶：只动 UI 层显示顺序，visible/fullPool 原数据不动
+    val playingKey = if (playerTitle.isNotEmpty()) playerTitle + "|" + playerArtist else null
+    val displayList = remember(visible, playingKey) {
+        if (playingKey == null) visible
+        else visible.sortedByDescending { it.song.title + "|" + it.song.artist == playingKey }
+    }
+    LaunchedEffect(scrollTopRequest) { // [40pin] 点卡播放后滑回顶部；自动切歌不经过此信号
+        if (scrollTopRequest) {
+            listState.animateScrollToItem(0)
+            scrollTopRequest = false
+        }
+    }
     LaunchedEffect(Unit) {
         val pool = buildRecommendPool(context)
         fullPool = pool
@@ -318,10 +331,10 @@ fun RecommendScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp), // [40card] 卡间留白
         contentPadding = PaddingValues(bottom = 160.dp) // [40feed] 120 -> 160 终极避让
     ) {
-        items(visible, key = { it.song.title + "|" + it.song.artist + "|" + it.song.platform }) { item ->
+        items(displayList, key = { it.song.title + "|" + it.song.artist + "|" + it.song.platform }) { item -> // [40pin] 显示顺序
             val playing = playerTitle == item.song.title && playerArtist == item.song.artist
-            val songs = visible.map { it.song }
-            val idx = visible.indexOf(item)
+            val songs = displayList.map { it.song } // [40pin] 必须用显示顺序，否则点第 1 张会播错歌
+            val idx = displayList.indexOf(item) // [40pin] 显示序号，正好对上 layoutInfo 布局序号，视差计算不用改
             // [40mag] 视差系数：-0.5（视口顶）~ +0.5（视口底），居中为 0
             val info = listState.layoutInfo.visibleItemsInfo.find { it.index == idx }
             val vpH = listState.layoutInfo.viewportSize.height
@@ -331,8 +344,8 @@ fun RecommendScreen(
                 item = item,
                 isPlaying = playing && playerIsPlaying,
                 parallax = parallax, // [40mag]
-                onClick = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPlay(songs, idx) }, // [40final] 切歌极微弱震动
-                onTogglePlay = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); if (playing) onTogglePlay() else onPlay(songs, idx) } // [40final]
+                onClick = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); scrollTopRequest = true; onPlay(songs, idx) }, // [40pin] 点卡回顶
+                onTogglePlay = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); if (playing) onTogglePlay() else { scrollTopRequest = true; onPlay(songs, idx) } } // [40pin] 钮上点播放同样回顶，点暂停不回顶
             )
         }
         if (loadingMore) {
