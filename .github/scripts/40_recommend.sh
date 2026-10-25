@@ -165,7 +165,7 @@ private fun readExcluded(prefs: android.content.SharedPreferences): Set<String> 
 private fun savePool(prefs: android.content.SharedPreferences, today: String, pool: List<RecommendItem>) {
     val arr = JSONArray()
     for (item in pool) arr.put(songToJson(item.song, item.reason, item.score))
-    prefs.edit().putString("rec_pool_date", today).putString("rec_pool_json", arr.toString()).apply()
+    prefs.edit().putString("rec_pool_date", today).putString("rec_pool_json", arr.toString()).putString("rec_reason_ver", "mag1").apply() // [40mag]
     val now = System.currentTimeMillis()
     val old = try { JSONArray(prefs.getString("rec_excluded_json", "[]")) } catch (_: Exception) { JSONArray() }
     val kept = JSONArray()
@@ -183,7 +183,7 @@ suspend fun buildRecommendPool(context: Context): List<RecommendItem> {
     recommendDeviceId(context)
     val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-    if (prefs.getString("rec_pool_date", "") == today) {
+    if (prefs.getString("rec_pool_date", "") == today && prefs.getString("rec_reason_ver", "") == "mag1") { // [40mag] 文案版本，旧池强制重建
         val cached = try {
             val arr = JSONArray(prefs.getString("rec_pool_json", "[]"))
             (0 until arr.length()).map { songFromJson(arr.getJSONObject(it)) }
@@ -225,12 +225,12 @@ suspend fun buildRecommendPool(context: Context): List<RecommendItem> {
     for ((idx, a) in mainArtists.withIndex()) {
         val list = try { LxMusicSearchApi.searchFull(a) } catch (_: Exception) { emptyList() }
         val matched = matchArtist(list, a)
-        matched.take(10).forEach { s -> scored += RecommendItem(s, "因为你常听 $a", scoreOf(s, rankWeight[idx])) }
-        matched.drop(10).take(20).forEach { s -> tail += RecommendItem(s, "深挖 · $a", scoreOf(s, 25)) }
+        matched.take(10).forEach { s -> scored += RecommendItem(s, "与 $a 相似", scoreOf(s, rankWeight[idx])) }
+        matched.drop(10).take(20).forEach { s -> tail += RecommendItem(s, "与 $a 相似", scoreOf(s, 25)) }
     }
     for (a in expArtists) {
         val list = try { LxMusicSearchApi.searchFull(a) } catch (_: Exception) { emptyList() }
-        matchArtist(list, a).take(10).forEach { s -> tail += RecommendItem(s, "因为你常听 $a", scoreOf(s, 25)) }
+        matchArtist(list, a).take(10).forEach { s -> tail += RecommendItem(s, "与 $a 相似", scoreOf(s, 25)) }
     }
     val explore = mutableListOf<RecommendItem>()
     for (kw in listOf("华语流行", "抖音爆火", "怀旧经典")) {
@@ -309,9 +309,15 @@ fun RecommendScreen(
             val playing = playerTitle == item.song.title && playerArtist == item.song.artist
             val songs = visible.map { it.song }
             val idx = visible.indexOf(item)
+            // [40mag] 视差系数：-0.5（视口顶）~ +0.5（视口底），居中为 0
+            val info = listState.layoutInfo.visibleItemsInfo.find { it.index == idx }
+            val vpH = listState.layoutInfo.viewportSize.height
+            val parallax = if (info != null && vpH > 0)
+                (info.offset + info.size / 2 - vpH / 2).toFloat() / vpH else 0f
             FeedCard(
                 item = item,
                 isPlaying = playing && playerIsPlaying,
+                parallax = parallax, // [40mag]
                 onClick = { onPlay(songs, idx) },
                 onTogglePlay = { if (playing) onTogglePlay() else onPlay(songs, idx) }
             )
@@ -334,36 +340,41 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke // [40card]
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row // [40mag]
+import androidx.compose.foundation.layout.Spacer // [40mag]
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width // [40mag]
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate // [40mag]
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer // [40mag]
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke // [40mag]
 import androidx.compose.ui.graphics.Shadow // [40feed]
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign // [40mag]
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp // [40feed]
@@ -374,6 +385,7 @@ import com.github.tvbox.osc.ui.activity.musicColors
 fun FeedCard(
     item: RecommendItem,
     isPlaying: Boolean,
+    parallax: Float = 0f, // [40mag] 视差系数 -0.5~0.5
     onClick: () -> Unit,
     onTogglePlay: () -> Unit,
     modifier: Modifier = Modifier
@@ -391,7 +403,12 @@ fun FeedCard(
             model = item.song.picUrl,
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)) // [40card2] 内层裁剪
+            modifier = Modifier.fillMaxWidth().height(240.dp) // [40mag] 图比卡高 40dp，留位移余量
+                .align(Alignment.Center) // [40mag] 居中，上下各余 20dp
+                .graphicsLayer { translationY = parallax * 20.dp.toPx() } // [40mag] ±10dp 视差，不露边
+        )
+        Box(
+            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)).background(Color.Black.copy(alpha = 0.3f)) // [40mag] 暗化层，压高饱和封面
         )
         Box(
             modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)).background( // [40card2] 内层裁剪，clip 须在 background 之前
@@ -402,17 +419,18 @@ fun FeedCard(
                 )
             )
         )
-        Surface(
-            color = Color.Black.copy(alpha = 0.4f), // [40feed] 白 0.2f -> 黑 0.4f
-            border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.3f)), // [40card] 极细白边
-            shape = RoundedCornerShape(percent = 50),
-            modifier = Modifier.align(Alignment.TopStart).padding(12.dp) // [40compact] 16 -> 12
+        Row( // [40mag] 去胶囊：细线 + 极小眉标文字，无背景无边框
+            modifier = Modifier.align(Alignment.TopStart).padding(12.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            Box(Modifier.size(width = 16.dp, height = 1.dp).background(Color.White.copy(alpha = 0.8f)))
+            Spacer(Modifier.width(6.dp))
             Text(
                 item.reason,
-                color = Color.White,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), // [40feed]
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp) // [40compact] 10/5 -> 8/3
+                color = Color.White.copy(alpha = 0.85f),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 1.sp), // [40mag]
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
         Column(
@@ -422,17 +440,20 @@ fun FeedCard(
             Text(
                 item.song.title,
                 color = Color.White,
-                style = MaterialTheme.typography.titleMedium.copy(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 4f)), // [40feed] 加阴影
+                style = MaterialTheme.typography.headlineSmall.copy(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 4f)), // [40mag] titleMedium -> headlineSmall 超大，阴影保留
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.rotate(-2f) // [40mag] 海报式微倾
             )
             Text(
-                "· " + item.song.artist.ifEmpty { "未知歌手" }, // [40feed]
-                color = Color.White.copy(alpha = 0.6f), // [40feed]
-                style = MaterialTheme.typography.labelMedium, // [40feed] bodySmall -> labelMedium
+                item.song.artist.ifEmpty { "未知歌手" },
+                color = Color.White.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.bodyMedium, // [40mag] labelMedium -> bodyMedium
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(), // [40mag] 右对齐需先占满宽
+                textAlign = TextAlign.End // [40mag] 紧贴歌名右下角
             )
         }
         Box(
@@ -440,18 +461,17 @@ fun FeedCard(
                 .padding(end = 12.dp, bottom = 12.dp) // [40compact] 16/16 -> 12/12
                 .size(40.dp) // [40compact] 48 -> 40
                 .clip(CircleShape)
-                .background(if (isPlaying) musicColors().accent else Color.White) // [40feed] 播放中切 accent
-                .border(0.5.dp, Color.Black.copy(alpha = 0.15f), CircleShape) // [40card] 极细黑边
+                .border(1.dp, Color.White.copy(alpha = 0.6f), CircleShape) // [40mag] 极细白圈，无底色
                 .clickable { onTogglePlay() },
             contentAlignment = Alignment.Center
         ) {
             Canvas(Modifier.size(18.dp)) { // [40compact] 22 -> 18，等比缩
-                val sw = 2.dp.toPx()
+                val sw = 1.5.dp.toPx() // [40mag] 2 -> 1.5 细线
                 val cap = StrokeCap.Round
-                val black = Color.Black
+                val white = Color.White
                 if (isPlaying) {
-                    drawLine(black, Offset(6.dp.toPx(), 3.dp.toPx()), Offset(6.dp.toPx(), 15.dp.toPx()), sw, cap)
-                    drawLine(black, Offset(12.dp.toPx(), 3.dp.toPx()), Offset(12.dp.toPx(), 15.dp.toPx()), sw, cap)
+                    drawLine(white, Offset(6.dp.toPx(), 3.dp.toPx()), Offset(6.dp.toPx(), 15.dp.toPx()), sw, cap)
+                    drawLine(white, Offset(12.dp.toPx(), 3.dp.toPx()), Offset(12.dp.toPx(), 15.dp.toPx()), sw, cap)
                 } else {
                     drawPath(
                         Path().apply {
@@ -460,7 +480,7 @@ fun FeedCard(
                             lineTo(6.dp.toPx(), 15.dp.toPx())
                             close()
                         },
-                        black
+                        white, style = Stroke(width = sw) // [40mag] 单线三角，描边不填充
                     )
                 }
             }
