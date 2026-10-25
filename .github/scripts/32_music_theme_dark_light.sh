@@ -9999,3 +9999,134 @@ else:
     print("OK 32 v137 日志抽屉贴底已改")
 PYEOF137
 echo "=== 32 v137 完成 ==="
+
+# === 32 v138: 控制台补歌名/歌手/时间 + 进度 tick（用户 2026-10-25 确认方案） ===
+# 真因（已查实）：进度条接线本身是真实数据（宿主传 playerPos/playerDur 比例），缺的是 tick——
+# updatePosition() 全仓唯一调用点在播放页（while(true)+delay(100)），MH 宿主从不刷 position，故条不动。
+# 改动：①VinylConsole 签名加 title/artist/posMs/durMs；②封面 0.7f→0.6f（两处）；
+# ③封面下加歌名（titleMedium/Bold/textPrimary）+ 歌手（bodyMedium/textSecondary），居中、单行省略；
+# ④进度条下加时间行（labelSmall/textSecondary，当前/总时长 SpaceBetween）；
+# ⑤宿主传新参数；⑥宿主补 tick（播放中每 500ms 刷 position，时间按秒变故 500ms 足够）；
+# ⑦MH 内加 formatTimeConsole（PlayerProgressBar.formatTime 为 private 限本文件，不可见）；
+# ⑧补 TextAlign import（delay import 已有）。
+python3 << 'PYEOF138'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v138]" in s:
+    print("跳过（32 v138 已应用）")
+else:
+    a0 = "import androidx.compose.ui.text.style.TextOverflow"
+    assert s.count(a0) == 1, "v138 TextAlign import 锚点数=" + str(s.count(a0))
+    s = s.replace(a0, a0 + "\nimport androidx.compose.ui.text.style.TextAlign // [32v138]", 1)
+    a1 = "// [32v124] 液态控制台：card 0.85 + extraLarge + 白高光边 + shadow 16"
+    assert s.count(a1) == 1, "v138 helper 锚点数=" + str(s.count(a1))
+    s = s.replace(a1, """// [32v138] 控制台时间格式化：与 PlayerProgressBar.formatTime 同款 mm:ss（彼为 private 限本文件，MH 不可见）
+private fun formatTimeConsole(ms: Long): String {
+    val totalSeconds = ms / 1000
+    return String.format("%02d:%02d", totalSeconds / 60, totalSeconds % 60)
+}
+
+""" + a1, 1)
+    a2 = """private fun VinylConsole(
+    picUrl: String,
+    isPlaying: Boolean,
+    progress: Float,"""
+    assert s.count(a2) == 1, "v138 签名锚点数=" + str(s.count(a2))
+    s = s.replace(a2, """private fun VinylConsole(
+    picUrl: String,
+    title: String, // [32v138]
+    artist: String, // [32v138]
+    isPlaying: Boolean,
+    progress: Float,
+    posMs: Long, // [32v138]
+    durMs: Long, // [32v138]""", 1)
+    a3 = "modifier = Modifier.fillMaxWidth(0.7f).align(Alignment.CenterHorizontally).aspectRatio(1f).clip(RoundedCornerShape(16.dp)).clickable(onClick = onCoverClick),"
+    assert s.count(a3) == 1, "v138 有图封面锚点数=" + str(s.count(a3))
+    s = s.replace(a3, "modifier = Modifier.fillMaxWidth(0.6f).align(Alignment.CenterHorizontally).aspectRatio(1f).clip(RoundedCornerShape(16.dp)).clickable(onClick = onCoverClick),", 1)
+    a4 = "modifier = Modifier.fillMaxWidth(0.7f).align(Alignment.CenterHorizontally).aspectRatio(1f).clip(RoundedCornerShape(16.dp)).clickable(onClick = onCoverClick)"
+    assert s.count(a4) == 1, "v138 无图封面锚点数=" + str(s.count(a4))
+    s = s.replace(a4, "modifier = Modifier.fillMaxWidth(0.6f).align(Alignment.CenterHorizontally).aspectRatio(1f).clip(RoundedCornerShape(16.dp)).clickable(onClick = onCoverClick)", 1)
+    a5 = """            Spacer(modifier = Modifier.height(8.dp))
+            Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(musicColors().divider)) {"""
+    assert s.count(a5) == 1, "v138 歌名锚点数=" + str(s.count(a5))
+    s = s.replace(a5, """            Spacer(modifier = Modifier.height(12.dp))
+            Text( // [32v138] 歌名
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = musicColors().textPrimary,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text( // [32v138] 歌手
+                text = artist,
+                style = MaterialTheme.typography.bodyMedium,
+                color = musicColors().textSecondary,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(musicColors().divider)) {""", 1)
+    a6 = """            Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(musicColors().divider)) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(2.dp)
+                        .background(musicColors().accent)
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))"""
+    assert s.count(a6) == 1, "v138 时间行锚点数=" + str(s.count(a6))
+    s = s.replace(a6, """            Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(musicColors().divider)) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(2.dp)
+                        .background(musicColors().accent)
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Row( // [32v138] 时间行
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(text = formatTimeConsole(posMs), style = MaterialTheme.typography.labelSmall, color = musicColors().textSecondary)
+                Text(text = formatTimeConsole(durMs), style = MaterialTheme.typography.labelSmall, color = musicColors().textSecondary)
+            }
+            Spacer(modifier = Modifier.height(16.dp))""", 1)
+    a7 = """                        picUrl = playerPic,
+                        isPlaying = playerIsPlaying,
+                        progress = if (playerDur > 0) (playerPos.toFloat() / playerDur.toFloat()).coerceIn(0f, 1f) else 0f,"""
+    assert s.count(a7) == 1, "v138 宿主传参锚点数=" + str(s.count(a7))
+    s = s.replace(a7, """                        picUrl = playerPic,
+                        title = playerTitle, // [32v138]
+                        artist = playerArtist, // [32v138]
+                        isPlaying = playerIsPlaying,
+                        progress = if (playerDur > 0) (playerPos.toFloat() / playerDur.toFloat()).coerceIn(0f, 1f) else 0f,
+                        posMs = playerPos, // [32v138]
+                        durMs = playerDur, // [32v138]""", 1)
+    a8 = """            LaunchedEffect(playerTitle) {
+                if (playerTitle.isNotEmpty()) vinylDismissed = false
+                if (playerTitle.isEmpty()) showVinylConsole = false
+            }"""
+    assert s.count(a8) == 1, "v138 tick 锚点数=" + str(s.count(a8))
+    s = s.replace(a8, a8 + """
+            // [32v138] 控制台进度 tick：播放页同款拉取，播放中每 500ms 刷一次 position（否则控制台进度条不动）
+            LaunchedEffect(Unit) {
+                while (true) {
+                    if (LxPlayerManager.isPlaying.value) {
+                        LxPlayerManager.updatePosition()
+                    }
+                    delay(500L)
+                }
+            }""", 1)
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v138 控制台信息+进度已接")
+PYEOF138
+echo "=== 32 v138 完成 ==="
