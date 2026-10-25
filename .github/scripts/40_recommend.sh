@@ -7,7 +7,9 @@ cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendS
 package com.github.tvbox.osc.ui.music.recommend
 
 import android.content.Context
+import androidx.compose.foundation.layout.Arrangement // [40card] 新增
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues // [40card] 新增
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -297,7 +299,12 @@ fun RecommendScreen(
         }
         return
     }
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp), // [40card] 卡间留白
+        contentPadding = PaddingValues(bottom = 120.dp) // [40card] 底部避让悬浮胶囊
+    ) {
         items(visible, key = { it.song.title + "|" + it.song.artist + "|" + it.song.platform }) { item ->
             val playing = playerTitle == item.song.title && playerArtist == item.song.artist
             val songs = visible.map { it.song }
@@ -327,6 +334,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke // [40card]
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -372,9 +380,9 @@ fun FeedCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .height(320.dp)
+            .height(280.dp) // [40card] 320 -> 280
             .background(musicColors().card)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(20.dp)) // [40card] 16 -> 20
             .clickable { onClick() }
     ) {
         AsyncImage(
@@ -393,7 +401,8 @@ fun FeedCard(
             )
         )
         Surface(
-            color = Color.Black.copy(alpha = 0.65f),
+            color = Color.White.copy(alpha = 0.2f), // [40card] 黑 0.65 -> 白 0.2f
+            border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.3f)), // [40card] 极细白边
             shape = RoundedCornerShape(percent = 50),
             modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
         ) {
@@ -427,25 +436,26 @@ fun FeedCard(
         Box(
             modifier = Modifier.align(Alignment.BottomEnd)
                 .padding(end = 16.dp, bottom = 16.dp)
-                .size(56.dp)
+                .size(48.dp) // [40card] 56 -> 48
                 .clip(CircleShape)
                 .background(Color.White)
+                .border(0.5.dp, Color.Black.copy(alpha = 0.15f), CircleShape) // [40card] 极细黑边
                 .clickable { onTogglePlay() },
             contentAlignment = Alignment.Center
         ) {
-            Canvas(Modifier.size(26.dp)) {
+            Canvas(Modifier.size(22.dp)) { // [40card] 26 -> 22，随钮等比缩
                 val sw = 2.dp.toPx()
                 val cap = StrokeCap.Round
                 val black = Color.Black
                 if (isPlaying) {
-                    drawLine(black, Offset(8.dp.toPx(), 4.dp.toPx()), Offset(8.dp.toPx(), 22.dp.toPx()), sw, cap)
-                    drawLine(black, Offset(18.dp.toPx(), 4.dp.toPx()), Offset(18.dp.toPx(), 22.dp.toPx()), sw, cap)
+                    drawLine(black, Offset(7.dp.toPx(), 3.dp.toPx()), Offset(7.dp.toPx(), 19.dp.toPx()), sw, cap)
+                    drawLine(black, Offset(15.dp.toPx(), 3.dp.toPx()), Offset(15.dp.toPx(), 19.dp.toPx()), sw, cap)
                 } else {
                     drawPath(
                         Path().apply {
-                            moveTo(9.dp.toPx(), 4.dp.toPx())
-                            lineTo(21.dp.toPx(), 13.dp.toPx())
-                            lineTo(9.dp.toPx(), 22.dp.toPx())
+                            moveTo(7.dp.toPx(), 3.dp.toPx())
+                            lineTo(17.dp.toPx(), 11.dp.toPx())
+                            lineTo(7.dp.toPx(), 19.dp.toPx())
                             close()
                         },
                         black
@@ -463,7 +473,7 @@ fun FeedCard(
             )
             Box(
                 Modifier.matchParentSize()
-                    .border(2.dp, musicColors().accent.copy(alpha = alpha), RoundedCornerShape(16.dp))
+                    .border(2.dp, musicColors().accent.copy(alpha = alpha), RoundedCornerShape(20.dp)) // [40card] 16 -> 20，跟卡角对齐
             )
         }
     }
