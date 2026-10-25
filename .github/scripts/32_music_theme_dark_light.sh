@@ -9819,3 +9819,49 @@ else:
     print("OK 32 v132 positionInRoot import 已补")
 PYEOF132
 echo "=== 32 v132 完成 ==="
+
+# === 32 v133: 控制台封面点按进播放页（用户 2026-10-25 确认方案） ===
+# 根因：v124 删 MiniPlayerBar 时 onExpand 接线未迁移，VinylConsole 封面从无 clickable。
+# 接线照搬旧 onExpand（title/artist/picUrl 三键，不传 songId/platform/url，不改队列）；
+# 播放页 onCreate 全是 ?: "" 兜底 + managerActive 分支，控制台只在有当前歌时渲染，故必走“显示当前播放”分支；
+# 先关控制台再 startActivity，免得从播放页返回还面对开着的控制台；挂件点按语义（开控制台）不动。
+python3 << 'PYEOF133'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v133]" in s:
+    print("跳过（32 v133 已应用）")
+else:
+    a1 = "    onClose: () -> Unit,\n) {"
+    assert s.count(a1) == 1, "v133 签名锚点数=" + str(s.count(a1))
+    s = s.replace(a1, "    onClose: () -> Unit,\n    onCoverClick: () -> Unit, // [32v133] 封面点按进播放页\n) {", 1)
+    a2 = "aspectRatio(1f).clip(RoundedCornerShape(16.dp)),"
+    assert s.count(a2) == 1, "v133 有图封面锚点数=" + str(s.count(a2))
+    s = s.replace(a2, "aspectRatio(1f).clip(RoundedCornerShape(16.dp)).clickable(onClick = onCoverClick),", 1)
+    a3 = "aspectRatio(1f).clip(RoundedCornerShape(16.dp))\n                        .background(musicColors().cardSecondary),"
+    assert s.count(a3) == 1, "v133 无图封面锚点数=" + str(s.count(a3))
+    s = s.replace(a3, "aspectRatio(1f).clip(RoundedCornerShape(16.dp)).clickable(onClick = onCoverClick)\n                        .background(musicColors().cardSecondary),", 1)
+    a4 = """                        onClose = {
+                            showVinylConsole = false
+                            vinylDismissed = true
+                            LxPlayerManager.pause()
+                        }"""
+    assert s.count(a4) == 1, "v133 宿主锚点数=" + str(s.count(a4))
+    s = s.replace(a4, a4 + """
+                        onCoverClick = { // [32v133] 照搬旧迷你条 onExpand，先关控制台再进播放页
+                            showVinylConsole = false
+                            val intent = Intent(context, LxPlayerActivity::class.java).apply {
+                                putExtra("title", playerTitle)
+                                putExtra("artist", playerArtist)
+                                putExtra("picUrl", playerPic)
+                            }
+                            context.startActivity(intent)
+                        }""", 1)
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v133 封面点按接线已接")
+PYEOF133
+echo "=== 32 v133 完成 ==="
