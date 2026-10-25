@@ -9969,3 +9969,33 @@ else:
     print("OK 32 v136 排行榜序号已统一")
 PYEOF136
 echo "=== 32 v136 完成 ==="
+
+# === 32 v137: 日志抽屉死死贴底（用户 2026-10-25 确认贴底方案） ===
+# 查实：呼叫点裸调、无外层包裹；Sheet 自身无 padding/margin；全函数唯一底部留白是内层 Column 的 bottom 24dp；
+# 高度 0.8f 已是 80% 不动；skipPartiallyExpanded=true（v135）按用户建议保留。
+# 改动三处：①Sheet modifier 补 fillMaxWidth()；②内层 Column 去掉 bottom 24dp、加 navigationBarsPadding()
+# （内容避系统小白条，卡片背景仍延到底边）；③补 navigationBarsPadding import。
+python3 << 'PYEOF137'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v137]" in s:
+    print("跳过（32 v137 已应用）")
+else:
+    a0 = "import androidx.compose.foundation.layout.padding"
+    assert s.count(a0) == 1, "v137 import 锚点数=" + str(s.count(a0))
+    s = s.replace(a0, a0 + "\nimport androidx.compose.foundation.layout.navigationBarsPadding // [32v137]", 1)
+    a1 = "        modifier = Modifier.fillMaxHeight(0.8f)"
+    assert s.count(a1) == 1, "v137 Sheet 锚点数=" + str(s.count(a1))
+    s = s.replace(a1, "        modifier = Modifier.fillMaxWidth().fillMaxHeight(0.8f) // [32v137] 贴底满宽，高度 80% 不变", 1)
+    a2 = "            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(bottom = 24.dp)"
+    assert s.count(a2) == 1, "v137 Column 锚点数=" + str(s.count(a2))
+    s = s.replace(a2, "            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).navigationBarsPadding() // [32v137] 去底边距，内容避小白条、背景延到底边", 1)
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v137 日志抽屉贴底已改")
+PYEOF137
+echo "=== 32 v137 完成 ==="
