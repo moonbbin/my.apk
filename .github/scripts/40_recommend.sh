@@ -380,7 +380,7 @@ fun FeedCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .height(240.dp) // [40card2] 280 -> 240
+            .height(200.dp) // [40compact] 240 -> 200
             .clip(RoundedCornerShape(20.dp))
             .background(musicColors().card) // [40card2] 移到 clip 之后，底色也被裁圆
             .clickable { onClick() }
@@ -404,23 +404,23 @@ fun FeedCard(
             color = Color.White.copy(alpha = 0.2f), // [40card] 黑 0.65 -> 白 0.2f
             border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.3f)), // [40card] 极细白边
             shape = RoundedCornerShape(percent = 50),
-            modifier = Modifier.align(Alignment.TopStart).padding(16.dp) // [40card2] 12 -> 16
+            modifier = Modifier.align(Alignment.TopStart).padding(12.dp) // [40compact] 16 -> 12
         ) {
             Text(
                 item.reason,
                 color = Color.White,
                 style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp) // [40compact] 10/5 -> 8/3
             )
         }
         Column(
             modifier = Modifier.align(Alignment.BottomStart)
-                .padding(start = 16.dp, bottom = 16.dp, end = 76.dp)
+                .padding(start = 12.dp, bottom = 12.dp, end = 56.dp) // [40compact] 16/16/76 -> 12/12/56
         ) {
             Text(
                 item.song.title,
                 color = Color.White,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium, // [40compact] titleLarge -> titleMedium
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -428,34 +428,34 @@ fun FeedCard(
             Text(
                 item.song.artist.ifEmpty { "未知歌手" },
                 color = Color.White.copy(alpha = 0.7f),
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall, // [40compact] bodyMedium -> bodySmall
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
         Box(
             modifier = Modifier.align(Alignment.BottomEnd)
-                .padding(end = 16.dp, bottom = 16.dp)
-                .size(48.dp) // [40card] 56 -> 48
+                .padding(end = 12.dp, bottom = 12.dp) // [40compact] 16/16 -> 12/12
+                .size(40.dp) // [40compact] 48 -> 40
                 .clip(CircleShape)
                 .background(Color.White)
                 .border(0.5.dp, Color.Black.copy(alpha = 0.15f), CircleShape) // [40card] 极细黑边
                 .clickable { onTogglePlay() },
             contentAlignment = Alignment.Center
         ) {
-            Canvas(Modifier.size(22.dp)) { // [40card] 26 -> 22，随钮等比缩
+            Canvas(Modifier.size(18.dp)) { // [40compact] 22 -> 18，等比缩
                 val sw = 2.dp.toPx()
                 val cap = StrokeCap.Round
                 val black = Color.Black
                 if (isPlaying) {
-                    drawLine(black, Offset(7.dp.toPx(), 3.dp.toPx()), Offset(7.dp.toPx(), 19.dp.toPx()), sw, cap)
-                    drawLine(black, Offset(15.dp.toPx(), 3.dp.toPx()), Offset(15.dp.toPx(), 19.dp.toPx()), sw, cap)
+                    drawLine(black, Offset(6.dp.toPx(), 3.dp.toPx()), Offset(6.dp.toPx(), 15.dp.toPx()), sw, cap)
+                    drawLine(black, Offset(12.dp.toPx(), 3.dp.toPx()), Offset(12.dp.toPx(), 15.dp.toPx()), sw, cap)
                 } else {
                     drawPath(
                         Path().apply {
-                            moveTo(7.dp.toPx(), 3.dp.toPx())
-                            lineTo(17.dp.toPx(), 11.dp.toPx())
-                            lineTo(7.dp.toPx(), 19.dp.toPx())
+                            moveTo(6.dp.toPx(), 3.dp.toPx())
+                            lineTo(14.dp.toPx(), 9.dp.toPx())
+                            lineTo(6.dp.toPx(), 15.dp.toPx())
                             close()
                         },
                         black
