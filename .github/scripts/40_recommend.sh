@@ -380,19 +380,19 @@ fun FeedCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .height(280.dp) // [40card] 320 -> 280
-            .background(musicColors().card)
-            .clip(RoundedCornerShape(20.dp)) // [40card] 16 -> 20
+            .height(240.dp) // [40card2] 280 -> 240
+            .clip(RoundedCornerShape(20.dp))
+            .background(musicColors().card) // [40card2] 移到 clip 之后，底色也被裁圆
             .clickable { onClick() }
     ) {
         AsyncImage(
             model = item.song.picUrl,
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)) // [40card2] 内层裁剪
         )
         Box(
-            modifier = Modifier.fillMaxSize().background(
+            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)).background( // [40card2] 内层裁剪，clip 须在 background 之前
                 Brush.verticalGradient(
                     colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)),
                     startY = 0f,
@@ -404,7 +404,7 @@ fun FeedCard(
             color = Color.White.copy(alpha = 0.2f), // [40card] 黑 0.65 -> 白 0.2f
             border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.3f)), // [40card] 极细白边
             shape = RoundedCornerShape(percent = 50),
-            modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
+            modifier = Modifier.align(Alignment.TopStart).padding(16.dp) // [40card2] 12 -> 16
         ) {
             Text(
                 item.reason,
