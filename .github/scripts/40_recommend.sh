@@ -386,7 +386,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke // [40mag]
 import androidx.compose.ui.graphics.Shadow // [40feed]
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign // [40mag]
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp // [40feed]
@@ -427,6 +426,7 @@ fun FeedCard(
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxWidth().height(240.dp) // [40mag] 图比卡高 40dp，留位移余量
                 .align(Alignment.Center) // [40mag] 居中，上下各余 20dp
+                .clip(RoundedCornerShape(20.dp)) // [40polish] 强制自身圆角，不依赖父级裁剪
                 .graphicsLayer { translationY = parallax * 20.dp.toPx() } // [40mag] ±10dp 视差，不露边
         )
         Box(
@@ -456,7 +456,7 @@ fun FeedCard(
             Box(Modifier.size(width = 16.dp, height = 1.dp).background(Color.White.copy(alpha = 0.8f)))
             Spacer(Modifier.width(6.dp))
             Text(
-                "— " + platformName(item.song.platform) + "精选 · " + item.reason, // [40final] 平台映射，如：— 网易云精选 · 宝藏发现
+                platformName(item.song.platform) + "精选 · " + item.reason, // [40polish] 去 "— " 前缀，只留 Row 里画的 1dp 细线
                 color = Color.White, // [40final] 0.85f -> 纯白
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 1.sp), // [40mag]
                 maxLines = 1,
@@ -470,19 +470,18 @@ fun FeedCard(
             Text(
                 item.song.title,
                 color = Color.White,
-                style = MaterialTheme.typography.titleLarge.copy(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 4f)), // [40final] headlineSmall -> titleLarge，阴影保留
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.headlineSmall.copy(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 4f)), // [40polish] titleLarge -> headlineSmall 回 24sp，阴影保留
+                fontWeight = FontWeight.Black, // [40polish] Bold -> Black 极粗
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis // [40final] 去 rotate，水平放置
             )
+            Spacer(Modifier.height(2.dp)) // [40polish] 歌名与歌手间距 2dp
             Text(
                 "— " + item.song.artist.ifEmpty { "未知歌手" }, // [40final] 落款格式
                 color = Color.White.copy(alpha = 0.6f),
                 style = MaterialTheme.typography.bodySmall, // [40final] bodyMedium -> bodySmall
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(), // [40mag] 右对齐需先占满宽
-                textAlign = TextAlign.End // [40mag] 紧贴歌名右下角
+                overflow = TextOverflow.Ellipsis // [40polish] 删 fillMaxWidth 与 textAlign.End，自然左对齐，靠 Column 端距截断
             )
         }
         Box(
