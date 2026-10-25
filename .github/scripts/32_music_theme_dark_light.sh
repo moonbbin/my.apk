@@ -9865,3 +9865,31 @@ else:
     print("OK 32 v133 封面点按接线已接")
 PYEOF133
 echo "=== 32 v133 完成 ==="
+
+# === 32 v134: 构建红修复——v133 宿主漏逗号（CI 644/656 四错同根） ===
+# 实证：CI 四错（644:21 缺 onCoverClick 实参；656:25 onCoverClick 在 () -> Unit 接收器上未解析；
+# 656:38 两处语法错）与 ci_sim 生成文件逐行对上：onClose 原是最后一个实参，其块尾 `}` 后本无逗号，
+# v133 在其后追加 onCoverClick 时未补逗号，致使 `} onCoverClick = {` 被解析为对 lambda 的成员访问而非具名实参。
+# 签名处无此问题（onClose 参数行原有尾逗号）。修复=只补这一个逗号，不动其他代码。
+python3 << 'PYEOF134'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v134]" in s:
+    print("跳过（32 v134 已应用）")
+else:
+    a = """                            LxPlayerManager.pause()
+                        }
+                        onCoverClick = { // [32v133]"""
+    assert s.count(a) == 1, "v134 锚点数=" + str(s.count(a))
+    s = s.replace(a, """                            LxPlayerManager.pause()
+                        }, // [32v134] v133 漏逗号补上：onClose 原为末实参
+                        onCoverClick = { // [32v133]""", 1)
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v134 宿主逗号已补")
+PYEOF134
+echo "=== 32 v134 完成 ==="
