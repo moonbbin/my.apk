@@ -188,7 +188,7 @@ private fun readExcluded(prefs: android.content.SharedPreferences): Set<String> 
 private fun savePool(prefs: android.content.SharedPreferences, today: String, pool: List<RecommendItem>, histKeys: Set<String>) { // [40dyn] 建池快照
     val arr = JSONArray()
     for (item in pool) arr.put(songToJson(item.song, item.reason, item.score))
-    prefs.edit().putString("rec_pool_date", today + "_v3").putString("rec_pool_json", arr.toString()).putString("rec_reason_ver", "mag1").apply() // [40rs] rec_pool_date 加 _v3，旧池强制重建
+    prefs.edit().putString("rec_pool_date", today + "_v4").putString("rec_pool_json", arr.toString()).putString("rec_reason_ver", "mag1").apply() // [40tag] rec_pool_date 加 _v4，旧池强制重建
     val now = System.currentTimeMillis()
     val old = try { JSONArray(prefs.getString("rec_excluded_json", "[]")) } catch (_: Exception) { JSONArray() }
     val kept = JSONArray()
@@ -209,7 +209,7 @@ suspend fun buildRecommendPool(context: Context, force: Boolean = false): List<R
     recommendDeviceId(context)
     val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-    if (!force && prefs.getString("rec_pool_date", "") == today + "_v3" && prefs.getString("rec_reason_ver", "") == "mag1") { // [40dyn] force 绕过缓存，_v3 不变
+    if (!force && prefs.getString("rec_pool_date", "") == today + "_v4" && prefs.getString("rec_reason_ver", "") == "mag1") { // [40tag] force 绕过缓存，_v4 强制重建
         val cached = try {
             val arr = JSONArray(prefs.getString("rec_pool_json", "[]"))
             (0 until arr.length()).map { songFromJson(arr.getJSONObject(it)) }
@@ -249,7 +249,7 @@ suspend fun buildRecommendPool(context: Context, force: Boolean = false): List<R
         for (kw in listOf("华语流行", "抖音爆火", "怀旧经典")) {
             val list = try { LxMusicSearchApi.searchFull(kw) } catch (_: Exception) { emptyList() }
             list.filter { songKey(it.title, it.artist) !in heard }
-                .take(15).forEach { pool += RecommendItem(it, listOf("为你精选", "耳畔惊喜", "深夜专属").random()) } // [40rs] 兜底池换血，猜你喜欢归零
+                .take(15).forEach { pool += RecommendItem(it, listOf("为你精选", "耳畔惊喜").random()) } // [40tag] 兜底池去深夜专属，防与前缀撞词
         }
         val final = pool.distinctBy { songKey(it.song.title, it.song.artist) }.shuffled()
         savePool(prefs, today, final, histKeys)
@@ -279,7 +279,7 @@ suspend fun buildRecommendPool(context: Context, force: Boolean = false): List<R
     for (kw in listOf("华语流行", "抖音爆火", "怀旧经典")) {
         val list = try { LxMusicSearchApi.searchFull(kw) } catch (_: Exception) { emptyList() }
         list.filter { songKey(it.title, it.artist) !in heard }
-            .take(5).forEach { explore += RecommendItem(it, listOf("宝藏发现 · $kw", "今日必听 · $kw").random()) } // [40rs] 探索位两格式独立随机
+            .take(5).forEach { explore += RecommendItem(it, listOf("热门推荐", "宝藏发现", "华语经典", "猜你喜欢", "耳畔惊喜", "心动旋律", "私人珍藏").random()) } // [40tag] 探索位 7 词裸随机
     }
     val seen = mutableSetOf<String>()
     val main = interleave(scored.sortedByDescending { it.score }
@@ -452,18 +452,18 @@ private fun platformName(code: String): String = when (code) {
     else -> code
 }
 
-// [40dyn] 时间感知兜底文案：只映射兜底三文案，歌手/探索理由原样；优先级：深夜 > 周末 > 晨间 > 原文案
-private fun timeAwareReason(reason: String): String {
-    if (reason != "为你精选" && reason != "耳畔惊喜" && reason != "深夜专属") return reason
+// [40tag] 时间前缀：深夜 > 周末 > 晨间/午后 > 无前缀；旧时间映射退役
+private fun timePrefix(): String {
     val cal = java.util.Calendar.getInstance()
     val hour = cal.get(java.util.Calendar.HOUR_OF_DAY)
     val dow = cal.get(java.util.Calendar.DAY_OF_WEEK)
     val isWeekend = dow == java.util.Calendar.SATURDAY || dow == java.util.Calendar.SUNDAY
     return when {
-        hour >= 23 || hour < 5 -> "深夜专属"
-        isWeekend -> "周末私藏"
-        hour in 6..9 -> "晨间唤醒"
-        else -> reason
+        hour >= 22 || hour < 4 -> "深夜专属 · " // 22:00-04:00，04:00 整起退出；周六深夜仍显示深夜专属
+        isWeekend -> "周末私藏 · "
+        hour in 5..8 -> "晨间唤醒 · " // 05:00-09:00，09:00 整起退出
+        hour in 12..13 -> "午后慵懒 · " // 12:00-14:00，14:00 整起退出
+        else -> ""
     }
 }
 
@@ -533,7 +533,7 @@ fun FeedCard(
             Box(Modifier.size(width = 16.dp, height = 1.dp).background(Color.White.copy(alpha = 0.8f)))
             Spacer(Modifier.width(6.dp))
             Text(
-                platformName(item.song.platform) + "精选 · " + timeAwareReason(item.reason), // [40dyn] 时间感知兜底文案
+                timePrefix() + platformName(item.song.platform) + "精选 · " + item.reason, // [40tag] 时间前缀 + 平台精选 + 动态理由
                 color = Color.White, // [40final] 0.85f -> 纯白
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 1.sp), // [40mag]
                 maxLines = 1,
