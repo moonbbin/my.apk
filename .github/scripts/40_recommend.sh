@@ -303,7 +303,7 @@ fun RecommendScreen(
         state = listState,
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp), // [40card] 卡间留白
-        contentPadding = PaddingValues(bottom = 120.dp) // [40card] 底部避让悬浮胶囊
+        contentPadding = PaddingValues(bottom = 160.dp) // [40feed] 120 -> 160 终极避让
     ) {
         items(visible, key = { it.song.title + "|" + it.song.artist + "|" + it.song.platform }) { item ->
             val playing = playerTitle == item.song.title && playerArtist == item.song.artist
@@ -361,10 +361,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Shadow // [40feed]
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp // [40feed]
 import coil.compose.AsyncImage
 import com.github.tvbox.osc.ui.activity.musicColors
 
@@ -401,7 +403,7 @@ fun FeedCard(
             )
         )
         Surface(
-            color = Color.White.copy(alpha = 0.2f), // [40card] 黑 0.65 -> 白 0.2f
+            color = Color.Black.copy(alpha = 0.4f), // [40feed] 白 0.2f -> 黑 0.4f
             border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.3f)), // [40card] 极细白边
             shape = RoundedCornerShape(percent = 50),
             modifier = Modifier.align(Alignment.TopStart).padding(12.dp) // [40compact] 16 -> 12
@@ -409,7 +411,7 @@ fun FeedCard(
             Text(
                 item.reason,
                 color = Color.White,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), // [40feed]
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp) // [40compact] 10/5 -> 8/3
             )
         }
@@ -420,15 +422,15 @@ fun FeedCard(
             Text(
                 item.song.title,
                 color = Color.White,
-                style = MaterialTheme.typography.titleMedium, // [40compact] titleLarge -> titleMedium
+                style = MaterialTheme.typography.titleMedium.copy(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 4f)), // [40feed] 加阴影
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                item.song.artist.ifEmpty { "未知歌手" },
-                color = Color.White.copy(alpha = 0.7f),
-                style = MaterialTheme.typography.bodySmall, // [40compact] bodyMedium -> bodySmall
+                "· " + item.song.artist.ifEmpty { "未知歌手" }, // [40feed]
+                color = Color.White.copy(alpha = 0.6f), // [40feed]
+                style = MaterialTheme.typography.labelMedium, // [40feed] bodySmall -> labelMedium
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -438,7 +440,7 @@ fun FeedCard(
                 .padding(end = 12.dp, bottom = 12.dp) // [40compact] 16/16 -> 12/12
                 .size(40.dp) // [40compact] 48 -> 40
                 .clip(CircleShape)
-                .background(Color.White)
+                .background(if (isPlaying) musicColors().accent else Color.White) // [40feed] 播放中切 accent
                 .border(0.5.dp, Color.Black.copy(alpha = 0.15f), CircleShape) // [40card] 极细黑边
                 .clickable { onTogglePlay() },
             contentAlignment = Alignment.Center
