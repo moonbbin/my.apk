@@ -2564,3 +2564,89 @@ open(P, "w", encoding="utf-8").write(s)
 print("OK 21 v42 评论链已加")
 PYEOF21V42
 echo "=== 21 v42 完成 ==="
+
+# === 21 v43: 切歌锁 isChangingTrack（控制台+播放页按钮统一反馈，用户 2026-10-25 确认） ===
+# 设计：锁只锁“用户点上/下一首”的解析过程，不锁 togglePlayPause（瞬时操作、无复位事件会卡锁）。
+# 置位：playNext/Previous 真推进 index 后、发起解析前；返回 false 的路（队空/队首/队尾）不置位，异常回滚时复位。
+# 复位：STATE_READY（真正出声）/ onPlayerError / setError(non-null) / 30 秒超时兜底（对齐引擎 warmup 上限）。
+# 不复用 _isLoading：STATE_BUFFERING 时它也为真（1143 行），复用会在卡歌时锁死跳歌。
+# 自然播完自动切歌不走 playNext/Previous（STATE_ENDED 内联逻辑），故不置位，合乎“只锁点击”的范围。
+python3 << 'PYEOF21V43'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[21v43]" in s:
+    print("跳过（21 v43 已应用）"); sys.exit(0)
+old = """    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading"""
+assert s.count(old) == 1, "v43 isLoading 声明锚点数=" + str(s.count(old))
+s = s.replace(old, old + """
+    // [21v43] 切歌锁：控制台+播放页两边同看它；置位只在 playNext/Previous 真推进后，复位见 STATE_READY/onPlayerError/setError/超时
+    private val _isChangingTrack = MutableStateFlow(false)
+    val isChangingTrack: StateFlow<Boolean> = _isChangingTrack
+    private val changingTrackTimeout = Runnable { _isChangingTrack.value = false }
+    private fun setChangingTrack(value: Boolean) {
+        if (value) {
+            _isChangingTrack.value = true
+            mainHandler.removeCallbacks(changingTrackTimeout)
+            mainHandler.postDelayed(changingTrackTimeout, 30_000L)
+        } else {
+            _isChangingTrack.value = false
+            mainHandler.removeCallbacks(changingTrackTimeout)
+        }
+    }""", 1)
+old = """            onResolveQueueSong?.invoke(song) ?: resolveAndPlay(song)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "上一首失败", e)
+            queueIndex = oldIndex
+            false"""
+assert s.count(old) == 1, "v43 上一首锚点数=" + str(s.count(old))
+s = s.replace(old, """            setChangingTrack(true) // [21v43]
+            onResolveQueueSong?.invoke(song) ?: resolveAndPlay(song)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "上一首失败", e)
+            queueIndex = oldIndex
+            setChangingTrack(false) // [21v43]
+            false""", 1)
+old = """            onResolveQueueSong?.invoke(song) ?: resolveAndPlay(song)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "下一首失败", e)
+            queueIndex = oldIndex
+            false"""
+assert s.count(old) == 1, "v43 下一首锚点数=" + str(s.count(old))
+s = s.replace(old, """            setChangingTrack(true) // [21v43]
+            onResolveQueueSong?.invoke(song) ?: resolveAndPlay(song)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "下一首失败", e)
+            queueIndex = oldIndex
+            setChangingTrack(false) // [21v43]
+            false""", 1)
+old = """                            Player.STATE_READY -> {
+                                _isLoading.value = false
+                                _duration.value = duration.coerceAtLeast(0L)
+                            }"""
+assert s.count(old) == 1, "v43 STATE_READY 锚点数=" + str(s.count(old))
+s = s.replace(old, """                            Player.STATE_READY -> {
+                                _isLoading.value = false
+                                setChangingTrack(false) // [21v43] 真正出声才算切歌成功
+                                _duration.value = duration.coerceAtLeast(0L)
+                            }""", 1)
+old = """                        _isLoading.value = false
+                        val code = error.errorCode"""
+assert s.count(old) == 1, "v43 onPlayerError 锚点数=" + str(s.count(old))
+s = s.replace(old, """                        _isLoading.value = false
+                        setChangingTrack(false) // [21v43] 报错先解旧锁，后续自动切歌会重新置位
+                        val code = error.errorCode""", 1)
+old = "if (msg != null) { _isLoading.value = false; _isProbing.value = false } // [21v30]"
+assert s.count(old) == 1, "v43 setError 锚点数=" + str(s.count(old))
+s = s.replace(old, "if (msg != null) { _isLoading.value = false; _isProbing.value = false; setChangingTrack(false) } // [21v30] [21v43]", 1)
+open(P, "w", encoding="utf-8").write(s)
+print("OK 21 v43 切歌锁已加")
+PYEOF21V43
+echo "=== 21 v43 完成 ==="

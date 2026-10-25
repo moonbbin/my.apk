@@ -10130,3 +10130,134 @@ private fun formatTimeConsole(ms: Long): String {
     print("OK 32 v138 控制台信息+进度已接")
 PYEOF138
 echo "=== 32 v138 完成 ==="
+
+# === 32 v139: 控制台三键改用 FeedbackIconButton + 切歌锁接线（用户 2026-10-25 确认） ===
+# 新文件 ui/activity/FeedbackIconButton.kt（与 MH、PlayerControls 同包，两边用它都不用 import）：
+# 按下震动 LongPress + 缩放 0.85f（interactionSource + animateFloatAsState），enabled=false 时不发震动、不响应。
+# 控制台：签名加 locked；宿主传 isChangingTrack；三键改用组件；锁定时 prev/next 图标 alpha 0.35f 且不可点，
+# 中心键换黑转圈（白底、与现有黑图标一致）且不可点；X 关闭键不动（随时可关）。
+python3 << 'PYEOF139'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v139]" in s:
+    print("跳过（32 v139 已应用）")
+else:
+    F = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/FeedbackIconButton.kt"
+    comp = '''package com.github.tvbox.osc.ui.activity
+
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.Dp
+
+// [32v139] 统一按压反馈按钮：控制台 + 播放页共用（同包、无需 import）
+// 按下：震动（LongPress）+ 缩放 0.85f；enabled=false 时不发震动、不响应；去涟漪（要涟漪删 indication 一行）
+@Composable
+fun FeedbackIconButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    size: Dp,
+    containerColor: Color? = null,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.85f else 1f, label = "feedbackPress")
+    val haptic = LocalHapticFeedback.current
+    LaunchedEffect(pressed) {
+        if (pressed) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+    }
+    Box(
+        modifier = Modifier.size(size)
+            .then(if (containerColor != null) Modifier.clip(CircleShape).background(containerColor) else Modifier)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clickable(interactionSource = interactionSource, indication = null, enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+        content = content,
+    )
+}
+'''
+    if not (os.path.exists(F) and "[32v139]" in open(F, encoding="utf-8").read()):
+        open(F, "w", encoding="utf-8").write(comp)
+    a1 = "val playerDur by LxPlayerManager.duration.collectAsState()"
+    assert s.count(a1) == 1, "v139 宿主状态锚点数=" + str(s.count(a1))
+    s = s.replace(a1, a1 + "\n            val playerChanging by LxPlayerManager.isChangingTrack.collectAsState() // [32v139]", 1)
+    a2 = """    isPlaying: Boolean,
+    progress: Float,"""
+    assert s.count(a2) == 1, "v139 签名锚点数=" + str(s.count(a2))
+    s = s.replace(a2, """    isPlaying: Boolean,
+    locked: Boolean, // [32v139]
+    progress: Float,""", 1)
+    a3 = """                        artist = playerArtist, // [32v138]
+                        isPlaying = playerIsPlaying,"""
+    assert s.count(a3) == 1, "v139 呼叫点锚点数=" + str(s.count(a3))
+    s = s.replace(a3, a3 + "\n                        locked = playerChanging, // [32v139]", 1)
+    a4 = """                Box(
+                    modifier = Modifier.size(40.dp).clickable(onClick = onPrev),
+                    contentAlignment = Alignment.Center
+                ) {
+                    VinylPrevIcon(tint = musicColors().textPrimary)
+                }
+                Box(
+                    modifier = Modifier.size(56.dp).clip(CircleShape).background(Color.White)
+                        .clickable(onClick = onTogglePlay),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isPlaying) VinylPauseIcon(tint = Color.Black) else VinylPlayIcon(tint = Color.Black)
+                }
+                Box(
+                    modifier = Modifier.size(40.dp).clickable(onClick = onNext),
+                    contentAlignment = Alignment.Center
+                ) {
+                    VinylNextIcon(tint = musicColors().textPrimary)
+                }"""
+    assert s.count(a4) == 1, "v139 底行锚点数=" + str(s.count(a4))
+    s = s.replace(a4, """                FeedbackIconButton( // [32v139]
+                    onClick = onPrev,
+                    enabled = !locked,
+                    size = 40.dp,
+                ) {
+                    VinylPrevIcon(tint = if (locked) musicColors().textPrimary.copy(alpha = 0.35f) else musicColors().textPrimary)
+                }
+                FeedbackIconButton( // [32v139]
+                    onClick = onTogglePlay,
+                    enabled = !locked,
+                    size = 56.dp,
+                    containerColor = Color.White,
+                ) {
+                    if (locked) CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                    else if (isPlaying) VinylPauseIcon(tint = Color.Black) else VinylPlayIcon(tint = Color.Black)
+                }
+                FeedbackIconButton( // [32v139]
+                    onClick = onNext,
+                    enabled = !locked,
+                    size = 40.dp,
+                ) {
+                    VinylNextIcon(tint = if (locked) musicColors().textPrimary.copy(alpha = 0.35f) else musicColors().textPrimary)
+                }""", 1)
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v139 控制台反馈按钮已接")
+PYEOF139
+echo "=== 32 v139 完成 ==="

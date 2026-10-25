@@ -1070,6 +1070,83 @@ if '[39intersect]' not in a:
 else:
     print('SKIP [39intersect] 已应用')
 
+# ============ 9) 播放页三键改用 FeedbackIconButton + 切歌锁（用户 2026-10-25 确认，PlayerControls 属 35 基线故放 39） ============
+PC = BASE + 'ui/activity/PlayerControls.kt'
+c = load(PC)
+if '[39fb]' not in c:
+    c = rep(c, '    isLoading: Boolean,\n    sleepRemaining: Long,',
+        '    isLoading: Boolean,\n    isChangingTrack: Boolean, // [39fb]\n    sleepRemaining: Long,', '39fb 签名')
+    c = rep(c, '''        IconButton(
+            onClick = { onPrevious() },
+            modifier = Modifier.size(44.dp)
+        ) {
+            PlayerSkipPrevIcon(tint = primaryTextColor, modifier = Modifier.size(28.dp)) // [34v45]
+        }''',
+        '''        FeedbackIconButton( // [39fb]
+            onClick = { onPrevious() },
+            enabled = !isChangingTrack,
+            size = 44.dp,
+        ) {
+            PlayerSkipPrevIcon(tint = if (isChangingTrack) primaryTextColor.copy(alpha = 0.35f) else primaryTextColor, modifier = Modifier.size(28.dp)) // [34v45]
+        }''', '39fb 上一首')
+    c = rep(c, '''        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(musicColors().accent) // [34v12]
+                .clickable { onPlayPauseClick() },
+            contentAlignment = Alignment.Center
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(color = musicColors().card, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+            } else {
+                if (isPlaying) PlayerPauseIcon(tint = Color.White, modifier = Modifier.size(30.dp)) // [34v55]
+                else PlayerPlayIcon(tint = Color.White, modifier = Modifier.size(30.dp)) // [34v55]
+            }
+        }''',
+        '''        FeedbackIconButton( // [39fb]
+            onClick = { onPlayPauseClick() },
+            enabled = !isChangingTrack,
+            size = 56.dp,
+            containerColor = musicColors().accent, // [34v12]
+        ) {
+            if (isLoading || isChangingTrack) {
+                CircularProgressIndicator(color = musicColors().card, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+            } else {
+                if (isPlaying) PlayerPauseIcon(tint = Color.White, modifier = Modifier.size(30.dp)) // [34v55]
+                else PlayerPlayIcon(tint = Color.White, modifier = Modifier.size(30.dp)) // [34v55]
+            }
+        }''', '39fb 播放暂停')
+    c = rep(c, '''        IconButton(
+            onClick = { onNext() },
+            modifier = Modifier.size(44.dp)
+        ) {
+            PlayerSkipNextIcon(tint = primaryTextColor, modifier = Modifier.size(28.dp)) // [34v45]
+        }''',
+        '''        FeedbackIconButton( // [39fb]
+            onClick = { onNext() },
+            enabled = !isChangingTrack,
+            size = 44.dp,
+        ) {
+            PlayerSkipNextIcon(tint = if (isChangingTrack) primaryTextColor.copy(alpha = 0.35f) else primaryTextColor, modifier = Modifier.size(28.dp)) // [34v45]
+        }''', '39fb 下一首')
+    save(PC, c)
+    print('OK [39fb] 播放页反馈按钮已接')
+else:
+    print('SKIP [39fb] 已应用')
+
+PA = BASE + 'ui/activity/LxPlayerActivity.kt'
+a = load(PA)
+if '[39fb]' not in a:
+    a = rep(a, '    val isLoading by LxPlayerManager.isLoading.collectAsState()',
+        '    val isLoading by LxPlayerManager.isLoading.collectAsState()\n    val isChangingTrack by LxPlayerManager.isChangingTrack.collectAsState() // [39fb]', '39fb 状态收集')
+    a = rep(a, '            PlayerControlBar(\n                isPlaying = isPlaying,\n                isLoading = isLoading,',
+        '            PlayerControlBar(\n                isPlaying = isPlaying,\n                isLoading = isLoading,\n                isChangingTrack = isChangingTrack, // [39fb]', '39fb 呼叫点')
+    save(PA, a)
+    print('OK [39fb] 播放页锁传参已接')
+else:
+    print('SKIP [39fb] 已应用')
+
 print('[39] 全部补丁完成')
 PYEOF39
 echo "=== 39 wp5 完成 ==="
