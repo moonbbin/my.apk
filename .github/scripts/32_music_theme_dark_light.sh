@@ -9893,3 +9893,28 @@ else:
     print("OK 32 v134 宿主逗号已补")
 PYEOF134
 echo "=== 32 v134 完成 ==="
+
+# === 32 v135: 运行日志抽屉滑动 Bug——A 方案（用户 2026-10-25 确认） ===
+# 根因：RuntimeLogSheet 用默认 rememberModalBottomSheetState()（skipPartiallyExpanded=false，三档），
+# 打开先落半展开档，手指上下拖先让抽屉在半展开↔全展开之间跟手移动而非滚列表，半展开时顶部标题/按钮被裁。
+# 修复=只改一行：skipPartiallyExpanded=true，打开即 80% 满高（fillMaxHeight(0.8f) 不变），
+# 内部 LazyColumn+weight(1f) 与顶部清空/复制按钮原样不动；同工程先例：播放页 CommentsSheet 亦如此。
+# 残留（已向用户说明）：列表滑到顶继续下拉仍会关闭抽屉（Material3 标准行为，点遮罩/返回也可关）。
+python3 << 'PYEOF135'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v135]" in s:
+    print("跳过（32 v135 已应用）")
+else:
+    a = "    val sheetState = rememberModalBottomSheetState()\n    val logLines by LxRuntimeLog.logs.collectAsState()"
+    assert s.count(a) == 1, "v135 锚点数=" + str(s.count(a))
+    s = s.replace(a, "    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true) // [32v135] 抽屉满高，取消半展开档\n    val logLines by LxRuntimeLog.logs.collectAsState()", 1)
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v135 日志抽屉满高已改")
+PYEOF135
+echo "=== 32 v135 完成 ==="
