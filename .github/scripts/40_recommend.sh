@@ -168,7 +168,7 @@ private fun readExcluded(prefs: android.content.SharedPreferences): Set<String> 
 private fun savePool(prefs: android.content.SharedPreferences, today: String, pool: List<RecommendItem>) {
     val arr = JSONArray()
     for (item in pool) arr.put(songToJson(item.song, item.reason, item.score))
-    prefs.edit().putString("rec_pool_date", today + "_v2").putString("rec_pool_json", arr.toString()).putString("rec_reason_ver", "mag1").apply() // [40final] rec_pool_date 加 _v2
+    prefs.edit().putString("rec_pool_date", today + "_v3").putString("rec_pool_json", arr.toString()).putString("rec_reason_ver", "mag1").apply() // [40rs] rec_pool_date 加 _v3，旧池强制重建
     val now = System.currentTimeMillis()
     val old = try { JSONArray(prefs.getString("rec_excluded_json", "[]")) } catch (_: Exception) { JSONArray() }
     val kept = JSONArray()
@@ -186,7 +186,7 @@ suspend fun buildRecommendPool(context: Context): List<RecommendItem> {
     recommendDeviceId(context)
     val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-    if (prefs.getString("rec_pool_date", "") == today + "_v2" && prefs.getString("rec_reason_ver", "") == "mag1") { // [40final] rec_pool_date 加 _v2，旧池强制重建
+    if (prefs.getString("rec_pool_date", "") == today + "_v3" && prefs.getString("rec_reason_ver", "") == "mag1") { // [40rs] rec_pool_date 加 _v3，旧池强制重建
         val cached = try {
             val arr = JSONArray(prefs.getString("rec_pool_json", "[]"))
             (0 until arr.length()).map { songFromJson(arr.getJSONObject(it)) }
@@ -213,7 +213,7 @@ suspend fun buildRecommendPool(context: Context): List<RecommendItem> {
         for (kw in listOf("华语流行", "抖音爆火", "怀旧经典")) {
             val list = try { LxMusicSearchApi.searchFull(kw) } catch (_: Exception) { emptyList() }
             list.filter { songKey(it.title, it.artist) !in heard }
-                .take(15).forEach { pool += RecommendItem(it, listOf("今日必听", "为你精选", "宝藏发现", "猜你喜欢").random()) } // [40final] 兜底每项独立随机
+                .take(15).forEach { pool += RecommendItem(it, listOf("为你精选", "耳畔惊喜", "深夜专属").random()) } // [40rs] 兜底池换血，猜你喜欢归零
         }
         val final = pool.distinctBy { songKey(it.song.title, it.song.artist) }.shuffled()
         savePool(prefs, today, final)
@@ -239,7 +239,7 @@ suspend fun buildRecommendPool(context: Context): List<RecommendItem> {
     for (kw in listOf("华语流行", "抖音爆火", "怀旧经典")) {
         val list = try { LxMusicSearchApi.searchFull(kw) } catch (_: Exception) { emptyList() }
         list.filter { songKey(it.title, it.artist) !in heard }
-            .take(5).forEach { explore += RecommendItem(it, "探索新风格 · $kw") } // [40final]
+            .take(5).forEach { explore += RecommendItem(it, listOf("宝藏发现 · $kw", "今日必听 · $kw").random()) } // [40rs] 探索位两格式独立随机
     }
     val seen = mutableSetOf<String>()
     val main = interleave(scored.sortedByDescending { it.score }
@@ -389,7 +389,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke // [40mag]
 import androidx.compose.ui.graphics.Shadow // [40feed]
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign // [40mag]
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp // [40feed]
@@ -436,7 +435,7 @@ fun FeedCard(
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxWidth().height(240.dp) // [40mag] 图比卡高 40dp，留位移余量
                 .align(Alignment.Center) // [40mag] 居中，上下各余 20dp
-                .graphicsLayer { translationY = parallax * 20.dp.toPx() } // [40mag] ±10dp 视差，不露边
+                .graphicsLayer { scaleX = 1.1f; scaleY = 1.1f; translationY = parallax * 20.dp.toPx() } // [40rs] 底层放大 1.1，边缘与 Fit 图融合
                 .blur(25.dp)
         )
         AsyncImage( // [40rb] 顶层完整图
@@ -474,7 +473,7 @@ fun FeedCard(
             Box(Modifier.size(width = 16.dp, height = 1.dp).background(Color.White.copy(alpha = 0.8f)))
             Spacer(Modifier.width(6.dp))
             Text(
-                "— " + platformName(item.song.platform) + "精选 · " + item.reason, // [40final] 平台映射，如：— 网易云精选 · 宝藏发现
+                platformName(item.song.platform) + "精选 · " + item.reason, // [40rs] 去 "— " 前缀，只留画的细线
                 color = Color.White, // [40final] 0.85f -> 纯白
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 1.sp), // [40mag]
                 maxLines = 1,
@@ -498,9 +497,7 @@ fun FeedCard(
                 color = Color.White.copy(alpha = 0.6f),
                 style = MaterialTheme.typography.bodySmall, // [40final] bodyMedium -> bodySmall
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(), // [40mag] 右对齐需先占满宽
-                textAlign = TextAlign.End // [40mag] 紧贴歌名右下角
+                overflow = TextOverflow.Ellipsis // [40rs] 删 fillMaxWidth 与 textAlign.End，左对齐自然排布
             )
         }
         Box(
