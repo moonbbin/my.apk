@@ -10385,3 +10385,32 @@ else:
     print("OK 32 v140 呼吸灯+歌手开关+间距已接")
 PYEOF140
 echo "=== 32 v140 完成 ==="
+
+# === 32 v141: 构建红修复（CI 实证，v140 漏 import） ===
+# CI 报错（用户截图，真实日志）：MusicHomeActivity.kt:962:35 / 967:35
+# "Unresolved reference 'animateFloat' on receiver of type 'InfiniteTransition'"，
+# 外加 964/969 两处 "Cannot infer type for type parameter 'T'"。
+# 根因：animateFloat 是 InfiniteTransition 的扩展函数（非成员），与 v131/v132 的 positionInRoot 同类坑；
+# v140 只引了 rememberInfiniteTransition/infiniteRepeatable/RepeatMode，漏了 animateFloat。
+# 实证：同工程已绿的 Skeleton.kt（ui/components）第 5 行就引了 androidx.compose.animation.core.animateFloat，
+# 且以 transition.animateFloat(...) 同款写法调用。T 推断报错是级联——animateFloat 未解析则无期望类型
+# InfiniteRepeatableSpec<Float> 可供 tween 推断 T，补 import 后六错同消。本次只补一行 import，不动其他代码。
+python3 << 'PYEOF141'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v141]" in s:
+    print("跳过（32 v141 已应用）")
+else:
+    assert "import androidx.compose.animation.core.animateFloat" not in s, "v141 animateFloat import 已存在"
+    a0 = "import androidx.compose.animation.core.RepeatMode // [32v140]"
+    assert s.count(a0) == 1, "v141 锚点数=" + str(s.count(a0))
+    s = s.replace(a0, a0 + "\nimport androidx.compose.animation.core.animateFloat // [32v141]", 1)
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v141 animateFloat import 已补")
+PYEOF141
+echo "=== 32 v141 完成 ==="
