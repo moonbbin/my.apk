@@ -452,7 +452,6 @@ private fun platformName(code: String): String = when (code) {
     else -> code
 }
 
-@Composable
 // [40dyn] 时间感知兜底文案：只映射兜底三文案，歌手/探索理由原样；优先级：深夜 > 周末 > 晨间 > 原文案
 private fun timeAwareReason(reason: String): String {
     if (reason != "为你精选" && reason != "耳畔惊喜" && reason != "深夜专属") return reason
@@ -468,6 +467,7 @@ private fun timeAwareReason(reason: String): String {
     }
 }
 
+@Composable // [40dynfix] 注解归位 FeedCard
 fun FeedCard(
     item: RecommendItem,
     isPlaying: Boolean,
