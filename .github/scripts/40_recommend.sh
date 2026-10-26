@@ -34,6 +34,32 @@ import androidx.compose.ui.platform.LocalHapticFeedback // [40final]
 import androidx.compose.ui.unit.dp
 import com.github.tvbox.osc.ui.activity.LxMusicSearchApi
 import com.github.tvbox.osc.ui.activity.musicColors
+import androidx.compose.animation.core.RepeatMode // [40feel]
+import androidx.compose.animation.core.animateFloat // [40feel]
+import androidx.compose.animation.core.infiniteRepeatable // [40feel]
+import androidx.compose.animation.core.rememberInfiniteTransition // [40feel]
+import androidx.compose.animation.core.tween // [40feel]
+import androidx.compose.foundation.Canvas // [40feel]
+import androidx.compose.foundation.background // [40feel]
+import androidx.compose.foundation.clickable // [40feel]
+import androidx.compose.foundation.layout.Column // [40feel]
+import androidx.compose.foundation.layout.Spacer // [40feel]
+import androidx.compose.foundation.layout.height // [40feel]
+import androidx.compose.foundation.layout.size // [40feel]
+import androidx.compose.foundation.rememberScrollState // [40feel]
+import androidx.compose.foundation.shape.RoundedCornerShape // [40feel]
+import androidx.compose.foundation.verticalScroll // [40feel]
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox // [40feel]
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState // [40feel]
+import androidx.compose.runtime.rememberCoroutineScope // [40feel]
+import androidx.compose.ui.draw.clip // [40feel]
+import androidx.compose.ui.geometry.Offset // [40feel]
+import androidx.compose.ui.graphics.Brush // [40feel]
+import androidx.compose.ui.graphics.Color // [40feel]
+import androidx.compose.ui.graphics.StrokeCap // [40feel]
+import androidx.compose.ui.graphics.drawscope.Stroke // [40feel]
+import androidx.compose.ui.graphics.graphicsLayer // [40feel]
+import kotlinx.coroutines.launch // [40feel]
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -79,26 +105,6 @@ private fun heardKeys(context: Context): Set<String> {
     return out
 }
 
-private fun historyKeys(context: Context): Set<String> { // [40dyn] 仅历史（不含收藏），用于新歌计数
-    val out = mutableSetOf<String>()
-    val arr = historyArray(context)
-    for (i in 0 until arr.length()) {
-        val o = arr.optJSONObject(i) ?: continue
-        out += songKey(o.optString("title"), o.optString("artist"))
-    }
-    return out
-}
-
-fun shouldRefresh(context: Context): Boolean { // [40dyn] 增量刷新节流：新歌≥3 首且距上次建池 >1 小时
-    val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-    val lastBuild = prefs.getLong("rec_build_ms", 0L)
-    if (lastBuild == 0L) return false // 首建无快照，不触发，避免首跑双建
-    if (System.currentTimeMillis() - lastBuild <= 3600000L) return false // 未满 1 小时
-    val snap = try { JSONArray(prefs.getString("rec_build_heard_json", "[]")) } catch (_: Exception) { JSONArray() }
-    val snapSet = (0 until snap.length()).map { snap.optString(it) }.toSet()
-    return historyKeys(context).count { it !in snapSet } >= 3 // 新歌满 3 首
-}
-
 private fun songToJson(s: RSong, reason: String, score: Int): JSONObject = JSONObject().apply {
     put("id", s.id); put("title", s.title); put("artist", s.artist); put("album", s.album)
     put("duration", s.duration); put("platform", s.platform); put("picUrl", s.picUrl)
@@ -132,10 +138,10 @@ private fun readExcluded(prefs: android.content.SharedPreferences): Set<String> 
     return out
 }
 
-private fun savePool(prefs: android.content.SharedPreferences, today: String, pool: List<RecommendItem>, histKeys: Set<String>) { // [40dyn] 建池快照
+private fun savePool(prefs: android.content.SharedPreferences, today: String, pool: List<RecommendItem>) { // [40feel] 快照退役
     val arr = JSONArray()
     for (item in pool) arr.put(songToJson(item.song, item.reason, item.score))
-    prefs.edit().putString("rec_pool_date", today + "_v5").putString("rec_pool_json", arr.toString()).putString("rec_reason_ver", "mag1").apply() // [40taste] rec_pool_date 加 _v5，旧池强制重建
+    prefs.edit().putString("rec_pool_date", today + "_v6").putString("rec_pool_json", arr.toString()).putString("rec_reason_ver", "mag1").apply() // [40feel] rec_pool_date 加 _v6，旧池强制重建
     val now = System.currentTimeMillis()
     val old = try { JSONArray(prefs.getString("rec_excluded_json", "[]")) } catch (_: Exception) { JSONArray() }
     val kept = JSONArray()
@@ -147,13 +153,33 @@ private fun savePool(prefs: android.content.SharedPreferences, today: String, po
     for (item in pool) keys.put(songKey(item.song.title, item.song.artist))
     kept.put(JSONObject().apply { put("d", today); put("t", now); put("keys", keys) })
     prefs.edit().putString("rec_excluded_json", kept.toString()).apply()
-    val hk = JSONArray()
-    for (k in histKeys) hk.put(k)
-    prefs.edit().putLong("rec_build_ms", now).putString("rec_build_heard_json", hk.toString()).apply() // [40dyn] 增量刷新快照
 }
 
 // [40taste] 口味标签词库
 private val TASTE_TAGS = listOf("DJ", "电音", "民谣", "说唱", "钢琴", "摇滚", "古风", "粤语", "纯音乐", "爵士")
+
+// [40feel] 口味文案池（建池时随机抽取，随池子存盘，渲染层不重抽）
+private val TASTE_COPY: Map<String, List<String>> = mapOf(
+    "民谣" to listOf("为你定制的民谣", "故事与吉他", "治愈系民谣"),
+    "电音" to listOf("超燃电音派对", "跟着节奏抖腿", "深夜蹦迪指南"),
+    "DJ" to listOf("超燃电音派对", "跟着节奏抖腿", "深夜蹦迪指南"),
+    "说唱" to listOf("纯正街头说唱", "Flow 制造机"),
+    "钢琴" to listOf("纯音静心", "专注时刻 BGM"),
+    "纯音乐" to listOf("纯音静心", "专注时刻 BGM"),
+    "摇滚" to listOf("摇滚不死", "释放灵魂的吉他"),
+    "古风" to listOf("国风雅韵", "穿越千年的旋律"),
+    "粤语" to listOf("港乐情怀", "粤语金曲"),
+    "爵士" to listOf("慵懒爵士夜", "爵士微醺时刻")
+)
+
+// [40feel] 扩散词文案池
+private val TERM_COPY: Map<String, List<String>> = mapOf(
+    "热门推荐" to listOf("全网爆火", "大家都在听", "热歌风向标"),
+    "抖音爆火" to listOf("短视频洗脑神曲", "刷屏级 BGM"),
+    "华语流行" to listOf("华语金曲精选", "流行前线")
+)
+
+private fun pickCopy(pool: List<String>?) = pool?.randomOrNull() ?: "" // [40feel]
 
 // [40taste] 口味标签带权重（count = 最近 30 首里命中次数）
 private data class TagWeight(val name: String, val count: Int)
@@ -202,19 +228,28 @@ private fun takeByWeight(groups: List<List<RecommendItem>>, weights: List<Int>, 
     return out
 }
 
-suspend fun buildRecommendPool(context: Context, force: Boolean = false): List<RecommendItem> { // [40taste] 口味泛化重构
+// [40feel] 缓存池解析（节流回包与失败回旧池共用）
+private fun readCache(prefs: android.content.SharedPreferences): List<RecommendItem> {
+    return try {
+        val arr = JSONArray(prefs.getString("rec_pool_json", "[]"))
+        (0 until arr.length()).map { songFromJson(arr.getJSONObject(it)) }
+    } catch (_: Exception) { emptyList() }
+}
+
+suspend fun buildRecommendPool(context: Context, force: Boolean = false): List<RecommendItem> { // [40feel] 节流建池
     recommendDeviceId(context)
     val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-    if (!force && prefs.getString("rec_pool_date", "") == today + "_v5" && prefs.getString("rec_reason_ver", "") == "mag1") { // [40taste] _v5 强制重建
-        val cached = try {
-            val arr = JSONArray(prefs.getString("rec_pool_json", "[]"))
-            (0 until arr.length()).map { songFromJson(arr.getJSONObject(it)) }
-        } catch (_: Exception) { emptyList() }
-        if (cached.isNotEmpty()) return cached
+    // [40feel] 节流 + 版本：非强制时，版本失配（新包首开/隔日首进）或距上次建池 >10 秒才重建，否则直接回缓存
+    val versionMismatch = prefs.getString("rec_pool_date", "") != today + "_v6"
+    if (!force && !versionMismatch) {
+        val last = prefs.getLong("rec_last_build_ms", 0L)
+        if (System.currentTimeMillis() - last <= 10_000L) {
+            val cached = readCache(prefs)
+            if (cached.isNotEmpty()) return cached
+        }
     }
     val heard = heardKeys(context)
-    val histKeys = historyKeys(context) // [40taste] savePool 快照用完整历史集合
     val excluded = readExcluded(prefs)
     val (top1, tagWeights) = tasteProfile(context)
     fun ok(s: RSong) = songKey(s.title, s.artist) !in heard && songKey(s.title, s.artist) !in excluded
@@ -225,7 +260,7 @@ suspend fun buildRecommendPool(context: Context, force: Boolean = false): List<R
     val anchor = if (top1.isNotEmpty()) {
         val list = try { LxMusicSearchApi.searchFull(top1) } catch (_: Exception) { emptyList() }
         matchArtist(list, top1).filter { s -> ok(s) }.firstOrNull()
-            ?.let { RecommendItem(it, "因为你在听 $top1", 0) }
+            ?.let { RecommendItem(it, listOf("因为你在听 $top1", "你的近期最爱", "重温 $top1 的经典").random(), 0) }
     } else null
     // 泛化 20 首：按权重配比（零标签兜底：热门推荐取 20 首）
     val genLists: List<List<RecommendItem>>
@@ -233,19 +268,19 @@ suspend fun buildRecommendPool(context: Context, force: Boolean = false): List<R
     if (tagWeights.isNotEmpty()) {
         genLists = tagWeights.map { tw ->
             val list = try { LxMusicSearchApi.searchFull(tw.name) } catch (_: Exception) { emptyList() }
-            list.filter { s -> ok(s) }.take(20).map { RecommendItem(it, "探索口味 · ${tw.name}", 0) }
+            list.filter { s -> ok(s) }.take(20).map { RecommendItem(it, pickCopy(TASTE_COPY[tw.name]), 0) }
         }
         genWeights = tagWeights.map { it.count }
     } else {
         val list = try { LxMusicSearchApi.searchFull("热门推荐") } catch (_: Exception) { emptyList() }
-        genLists = listOf(list.filter { s -> ok(s) }.take(20).map { RecommendItem(it, "热门推荐", 0) })
+        genLists = listOf(list.filter { s -> ok(s) }.take(20).map { RecommendItem(it, pickCopy(TERM_COPY["热门推荐"]), 0) })
         genWeights = listOf(1)
     }
     // 扩散 13 首：等权复用同一函数（无相似源，走热门推荐词库）
     val diffTerms = if (tagWeights.isNotEmpty()) listOf("热门推荐", "华语流行", "抖音爆火") else listOf("华语流行", "抖音爆火")
     val diffLists = diffTerms.map { term ->
         val list = try { LxMusicSearchApi.searchFull(term) } catch (_: Exception) { emptyList() }
-        list.filter { s -> ok(s) }.take(20).map { RecommendItem(it, term, 0) }
+        list.filter { s -> ok(s) }.take(20).map { RecommendItem(it, pickCopy(TERM_COPY[term]), 0) }
     }
     // 全局去重（锚点曲目也排除；跨标签同一首归最高权重标签）
     val seen = mutableSetOf<String>()
@@ -265,8 +300,53 @@ suspend fun buildRecommendPool(context: Context, force: Boolean = false): List<R
         cappedRest += item
     }
     val capped = listOfNotNull(anchor) + cappedRest
-    savePool(prefs, today, capped, histKeys)
+    prefs.edit().putLong("rec_last_build_ms", System.currentTimeMillis()).apply() // [40feel] 建池完成即写戳，成功失败都写
+    if (capped.isEmpty()) {
+        val cached = readCache(prefs)
+        if (cached.isNotEmpty()) return cached // 失败不断线：旧池继续显示
+        return emptyList() // 彻底失败：无缓存，入口显示断线空状态
+    }
+    savePool(prefs, today, capped)
     return capped
+}
+
+@Composable
+private fun ShimmerCard() { // [40feel] 首屏骨架卡：200dp/20dp 圆角 + 微光扫过
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val offset by transition.animateFloat(0f, 1f,
+        infiniteRepeatable(tween(1200), RepeatMode.Restart), label = "shimmerOffset")
+    Box(
+        Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(20.dp)).background(musicColors().card)
+    ) {
+        Box(
+            Modifier.fillMaxSize()
+                .graphicsLayer { translationX = (offset * 2f - 1f) * size.width }
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color.Transparent,
+                            musicColors().textSecondary.copy(alpha = 0.25f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+    }
+}
+
+@Composable
+private fun OfflineIcon() { // [40feel] 极简断线图标：圆圈 + 斜杠，2dp 线条
+    val tint = musicColors().textSecondary
+    Canvas(Modifier.size(64.dp)) {
+        drawCircle(color = tint, radius = size.minDimension / 2f - 2.dp.toPx(), style = Stroke(width = 2.dp.toPx()))
+        drawLine(
+            color = tint,
+            start = Offset(size.width * 0.28f, size.height * 0.28f),
+            end = Offset(size.width * 0.72f, size.height * 0.72f),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    }
 }
 
 @Composable // [40tastefix] 注解归位 RecommendScreen
@@ -285,16 +365,13 @@ fun RecommendScreen(
     var visible by remember { mutableStateOf<List<RecommendItem>>(emptyList()) }
     var loadingMore by remember { mutableStateOf(false) }
     var loadingFirst by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) { // [40dyn] 先上缓存，后台刷新、无缝替换
-        val cached = buildRecommendPool(context, force = false)
-        fullPool = cached
-        visible = cached.take(20)
+    var buildFailed by remember { mutableStateOf(false) } // [40feel] 建池彻底失败（无缓存）时显示断线空状态
+    LaunchedEffect(Unit) { // [40feel] 节流建池：函数内裁决缓存/重建，shouldRefresh 退役
+        val pool = buildRecommendPool(context, force = false)
+        fullPool = pool
+        visible = pool.take(20)
         loadingFirst = false
-        if (shouldRefresh(context)) { // 新歌≥3 且距上次建池 >1h
-            val fresh = buildRecommendPool(context, force = true)
-            fullPool = fresh
-            visible = fresh.take(20) // 旧列表全程在线，直接替换，零转圈零白屏
-        }
+        buildFailed = pool.isEmpty()
     }
     LaunchedEffect(listState) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }.collect { last ->
@@ -315,16 +392,53 @@ fun RecommendScreen(
             prev = idx
         }
     }
-    if (loadingFirst) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        return
-    }
-    if (visible.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("暂无推荐，去听几首歌再来", color = musicColors().textSecondary)
-        }
-        return
-    }
+    var isRefreshing by remember { mutableStateOf(false) } // [40feel] 下拉刷新状态
+    val refreshScope = rememberCoroutineScope() // [40feel]
+    val refreshState = rememberPullToRefreshState() // [40feel]
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            refreshScope.launch {
+                isRefreshing = true
+                val pool = buildRecommendPool(context, force = true) // force 绕过节流与版本门
+                fullPool = pool
+                visible = pool.take(20)
+                loadingFirst = false
+                buildFailed = pool.isEmpty()
+                isRefreshing = false
+            }
+        },
+        state = refreshState
+    ) {
+        if (loadingFirst) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                repeat(3) { ShimmerCard() }
+            }
+        } else if (visible.isEmpty()) {
+            if (buildFailed) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    OfflineIcon()
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "网络开小差了，点击重试",
+                        color = musicColors().textSecondary,
+                        modifier = Modifier.clickable {
+                            refreshScope.launch {
+                                val pool = buildRecommendPool(context, force = true)
+                                fullPool = pool
+                                visible = pool.take(20)
+                                loadingFirst = false
+                                buildFailed = pool.isEmpty()
+                            }
+                        }
+                    )
+                }
+            } else {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("暂无推荐，去听几首歌再来", color = musicColors().textSecondary)
+                }
+            }
+        } else {
     LazyColumn(
         state = listState,
         flingBehavior = rememberSnapFlingBehavior(listState), // [40final] 滑动吸附
@@ -355,6 +469,8 @@ fun RecommendScreen(
                     CircularProgressIndicator()
                 }
             }
+        }
+    }
         }
     }
 }
