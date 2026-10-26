@@ -11331,3 +11331,68 @@ private fun testRangeOk(url: String): Boolean {
     print("OK 32 v147 高级检测一首真歌 + 复核完成")
 PYEOF147
 echo "=== 32 v147 完成 ==="
+
+# === 32 v148: 构建红修复（CI 853:27 实证：testPlatformProbe 内 if-is-return 后 main 未收窄为 Fail） ===
+python3 << 'PYEOF148'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v148]" in s:
+    print("跳过（32 v148 已应用）")
+else:
+    def rep(old, new, cnt=1):
+        n = s.count(old)
+        assert n == cnt, "v148 锚点数=%d 期望=%d: %s" % (n, cnt, old[:60])
+        return s.replace(old, new)
+
+    # testPlatformProbe 整函数改 return-when 主体分支：Fail 分支内 main 已收窄，reason 可读；v146 同款 when 已绿
+    s = rep("""// [32v147] 单平台一首 + 复核：主测过即正常（显示该首耗时）；主测失败换第二首复核，两首都失败才判败（原因取主测原因）；无歌即搜不到歌
+private suspend fun testPlatformProbe(engine: TestEngine, plat: String, songs: List<LxMusicSearchApi.SongInfo>): TestState {
+    if (songs.isEmpty()) return TestState.NoSong
+    val main = testOneSong(engine, plat, songs[0])
+    if (main is SongResult.Ok) return TestState.Ok(main.ms)
+    val mainReason = main.reason
+    if (songs.size < 2) return TestState.Fail(mainReason, false)
+    val backup = testOneSong(engine, plat, songs[1])
+    if (backup is SongResult.Ok) return TestState.Ok(backup.ms)
+    return TestState.Fail(mainReason, true)
+}""", """// [32v148] 构建红修复：CI 853:27 实证——if (main is Ok) return 后编译器不把 main 收窄为 Fail（接收者仍为 SongResult 父类型），改 return-when 主体分支（v146 同款已绿写法）
+private suspend fun testPlatformProbe(engine: TestEngine, plat: String, songs: List<LxMusicSearchApi.SongInfo>): TestState {
+    if (songs.isEmpty()) return TestState.NoSong
+    return when (val main = testOneSong(engine, plat, songs[0])) {
+        is SongResult.Ok -> TestState.Ok(main.ms)
+        is SongResult.Fail -> {
+            if (songs.size < 2) TestState.Fail(main.reason, false)
+            else when (val backup = testOneSong(engine, plat, songs[1])) {
+                is SongResult.Ok -> TestState.Ok(backup.ms)
+                is SongResult.Fail -> TestState.Fail(main.reason, true)
+            }
+        }
+    }
+}""")
+
+    # 后验：新串齐全、旧串清零
+    for k, c in [
+        ("return when (val main = testOneSong(engine, plat, songs[0])) {", 1),
+        ("when (val backup = testOneSong(engine, plat, songs[1])) {", 1),
+        ("fun testPlatformProbe(engine: TestEngine, plat: String, songs: List<LxMusicSearchApi.SongInfo>): TestState {", 1),
+    ]:
+        assert s.count(k) == c, "v148 后验失败 %s: %d != %d" % (k[:50], s.count(k), c)
+    for old in [
+        "val mainReason = main.reason",
+        "if (main is SongResult.Ok) return TestState.Ok(main.ms)",
+        "return TestState.Fail(mainReason, true)",
+    ]:
+        assert old not in s, "v148 旧串残留: " + old[:60]
+    assert s.count("[32v148]") >= 1, "v148 标记数=" + str(s.count("[32v148]"))
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v148 构建红修复完成")
+PYEOF148
+echo "=== 32 v148 完成 ==="
