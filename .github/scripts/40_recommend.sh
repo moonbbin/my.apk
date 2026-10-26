@@ -510,16 +510,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur // [40rb] 新增
-import androidx.compose.ui.draw.drawWithContent // [40poster]
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow // [40rb] 新增
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer // [40mag]
-import androidx.compose.ui.graphics.BlendMode // [40poster]
-import androidx.compose.ui.graphics.CompositingStrategy // [40poster]
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke // [40mag]
@@ -578,39 +574,13 @@ fun FeedCard(
             .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp)) // [40rb] 极细白边
             .clickable { onClick() }
     ) {
-        AsyncImage( // [40rb] 底层模糊图
+        AsyncImage( // [40full] 顶层全幅图（Crop 铺满，40poster 渐隐退役）
             model = item.song.picUrl,
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxWidth().height(240.dp) // [40mag] 图比卡高 40dp，留位移余量
-                .align(Alignment.Center) // [40mag] 居中，上下各余 20dp
-                .graphicsLayer { scaleX = 1.3f; scaleY = 1.3f; translationY = parallax * 20.dp.toPx(); alpha = 0.7f } // [40poster] 底层放大成氛围背景 // [40fin] 底层 0.7f，与 Fit 图融合
-                .blur(25.dp)
-        )
-        AsyncImage( // [40poster] 顶层完整图 + 左右边缘渐隐
-            model = item.song.picUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxWidth().height(240.dp)
                 .align(Alignment.Center)
-                .graphicsLayer {
-                    translationY = parallax * 20.dp.toPx()
-                    compositingStrategy = CompositingStrategy.Offscreen
-                }
-                .drawWithContent {
-                    drawContent()
-                    drawRect(
-                        brush = Brush.horizontalGradient(
-                            colorStops = arrayOf(
-                                0f to Color.Transparent,
-                                0.15f to Color.Black,
-                                0.85f to Color.Black,
-                                1f to Color.Transparent
-                            )
-                        ),
-                        blendMode = BlendMode.DstIn
-                    )
-                }
+                .graphicsLayer { translationY = parallax * 20.dp.toPx() }
         )
         // [40rb] 暗化层已删（全屏暗化禁用）
         Box( // [40rb] 渐变只占底部 40%
