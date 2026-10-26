@@ -41,6 +41,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition // [40feel]
 import androidx.compose.animation.core.tween // [40feel]
 import androidx.compose.foundation.Canvas // [40feel]
 import androidx.compose.foundation.background // [40feel]
+import androidx.compose.foundation.border // [40glass]
 import androidx.compose.foundation.clickable // [40feel]
 import androidx.compose.foundation.layout.Column // [40feel]
 import androidx.compose.foundation.layout.Spacer // [40feel]
@@ -311,12 +312,15 @@ suspend fun buildRecommendPool(context: Context, force: Boolean = false): List<R
 }
 
 @Composable
-private fun ShimmerCard() { // [40feel] 首屏骨架卡：200dp/20dp 圆角 + 微光扫过
+private fun ShimmerCard() { // [40glass] 磨砂玻璃骨架：半透明底 + 极细白边 + 慢速微光
     val transition = rememberInfiniteTransition(label = "shimmer")
     val offset by transition.animateFloat(0f, 1f,
-        infiniteRepeatable(tween(1200), RepeatMode.Restart), label = "shimmerOffset")
+        infiniteRepeatable(tween(1500), RepeatMode.Restart), label = "shimmerOffset")
     Box(
-        Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(20.dp)).background(musicColors().card)
+        Modifier.fillMaxWidth().height(200.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(musicColors().card.copy(alpha = 0.35f))
+            .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(20.dp))
     ) {
         Box(
             Modifier.fillMaxSize()
@@ -325,7 +329,7 @@ private fun ShimmerCard() { // [40feel] 首屏骨架卡：200dp/20dp 圆角 + �
                     Brush.horizontalGradient(
                         listOf(
                             Color.Transparent,
-                            musicColors().textSecondary.copy(alpha = 0.25f),
+                            Color.White.copy(alpha = 0.15f),
                             Color.Transparent
                         )
                     )
@@ -411,7 +415,7 @@ fun RecommendScreen(
         state = refreshState
     ) {
         if (loadingFirst) {
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 160.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 repeat(3) { ShimmerCard() }
             }
         } else if (visible.isEmpty()) {
