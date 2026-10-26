@@ -10802,3 +10802,48 @@ private fun isValidTestMusicUrl(url: String): Boolean {
     print("OK 32 v144 构建红修复完成")
 PYEOF144
 echo "=== 32 v144 完成 ==="
+# === 32 v145: 构建红修复（v144 残留一错 594:39，2026-10-26） ===
+python3 << 'PYEOF145'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v145]" in s:
+    print("跳过（32 v145 已应用）")
+else:
+    old = """        IconButton(onClick = { showTestDialog = true }) {
+            Canvas(Modifier.size(24.dp)) {
+                val r = 2.5.dp.toPx()
+                val cx = size.width / 2
+                val c = MaterialTheme.colorScheme.onSurfaceVariant
+                drawCircle(c, r, Offset(cx, 5.dp.toPx()))
+                drawCircle(c, r, Offset(cx, 12.dp.toPx()))
+                drawCircle(c, r, Offset(cx, 19.dp.toPx()))
+            }
+        }"""
+    assert s.count(old) == 1, "v145 锚点数=%d" % s.count(old)
+    new = """        IconButton(onClick = { showTestDialog = true }) {
+            val dotColor = MaterialTheme.colorScheme.onSurfaceVariant // [32v145] 主题色必须在 @Composable 上下文读；Canvas 的 DrawScope 里读即报 594:39
+            Canvas(Modifier.size(24.dp)) {
+                val r = 2.5.dp.toPx()
+                val cx = size.width / 2
+                drawCircle(dotColor, r, Offset(cx, 5.dp.toPx()))
+                drawCircle(dotColor, r, Offset(cx, 12.dp.toPx()))
+                drawCircle(dotColor, r, Offset(cx, 19.dp.toPx()))
+            }
+        }"""
+    s = s.replace(old, new)
+    assert s.count("val dotColor = MaterialTheme.colorScheme.onSurfaceVariant") == 1, "v145 dotColor 数异常"
+    assert "val c = MaterialTheme.colorScheme.onSurfaceVariant" not in s, "v145 旧读色行残留"
+    assert s.count("drawCircle(dotColor, r,") == 3, "v145 三点用色数异常"
+    assert s.count("[32v145]") >= 1, "v145 标记数=" + str(s.count("[32v145]"))
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v145 构建红修复完成")
+PYEOF145
+echo "=== 32 v145 完成 ==="
