@@ -11498,3 +11498,121 @@ private suspend fun resolveUrlSuspend(engine: TestEngine, plat: String, song: Lx
     print("OK 32 v149 探针补强完成")
 PYEOF149
 echo "=== 32 v149 完成 ==="
+# === 32 v150: Range 失败明细进运行日志（判定门不动，只把码/类型/读数写进 LxRuntimeLog） ===
+python3 << 'PYEOF150'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v150]" in s:
+    print("跳过（32 v150 已应用）")
+else:
+    def rep(old, new, cnt=1):
+        n = s.count(old)
+        assert n == cnt, "v150 锚点数=%d 期望=%d: %s" % (n, cnt, old[:60])
+        return s.replace(old, new)
+
+    # 1) import：LxRuntimeLog 在 util 包（v115 建，object + add(String)），LxSourceSettings 此前未引
+    s = rep("""import com.github.tvbox.osc.util.ScriptInfo""", """import com.github.tvbox.osc.util.ScriptInfo
+import com.github.tvbox.osc.util.LxRuntimeLog // [32v150]""")
+
+    # 2) testOneSong 的 Range 段：Boolean 改明细，失败时写运行日志（码/类型/读数/异常；只记 host 不记完整 URL，签名参数不进日志）；格子原因仍为 Range失败
+    s = rep("""    val rangeOk = try {
+        withContext(Dispatchers.IO) { testRangeOk(url) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        false
+    }
+    if (!rangeOk) return SongResult.Fail("Range失败")""", """    val range = try {
+        withContext(Dispatchers.IO) { testRangeOk(url) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        RangeDetail(false, -1, "", 0, "异常:" + (e::class.simpleName ?: "?") + ":" + (e.message ?: ""))
+    }
+    if (!range.ok) {
+        // [32v150] Range 失败明细进运行日志：码/类型/读数/异常；只记 host 不记完整 URL（签名参数不进日志）
+        val host = url.substringAfter("://").substringBefore("/").substringBefore("?")
+        LxRuntimeLog.add("探针 Range 失败: plat=" + plat + " 歌=" + song.title + "/" + song.artist + " 码=" + range.code + " 类型=" + range.contentType + " 读数=" + range.readBytes + " host=" + host + if (range.error.isNotEmpty()) " 原因=" + range.error else "")
+        return SongResult.Fail("Range失败")
+    }""")
+
+    # 3) RangeDetail 定义 + testRangeOk 签名：Boolean 改明细；判定门（码/类型/读数）一字未动
+    s = rep("""private fun testRangeOk(url: String): Boolean {""", """// [32v150] Range 明细：返回值由 Boolean 改 RangeDetail，判定门（码/类型/读数）一字未动；失败明细由 testOneSong 写运行日志
+private data class RangeDetail(
+    val ok: Boolean,
+    val code: Int,
+    val contentType: String,
+    val readBytes: Long,
+    val error: String
+)
+
+private fun testRangeOk(url: String): RangeDetail {""")
+
+    # 4) testRangeOk 内各返回点：只换返回值，门与日志行不动（锚点带 LxSourceTest 日志行，与 verifier 的 TAG 版区分）
+    s = rep("""            if (code != 200 && code != 206) {
+                android.util.Log.w("LxSourceTest", "Range GET 状态码不通过: $code $url")
+                return false
+            }""", """            if (code != 200 && code != 206) {
+                android.util.Log.w("LxSourceTest", "Range GET 状态码不通过: $code $url")
+                return RangeDetail(false, code, "", 0, "状态码不通过")
+            }""")
+    s = rep("""            if (!typeOk) {
+                android.util.Log.w("LxSourceTest", "Content-Type 不通过: $contentType $url")
+                return false
+            }""", """            if (!typeOk) {
+                android.util.Log.w("LxSourceTest", "Content-Type 不通过: $contentType $url")
+                return RangeDetail(false, code, contentType, 0, "类型不通过")
+            }""")
+    s = rep("""            val contentLength = resp.header("Content-Length")?.toLongOrNull() ?: -1L
+            if (contentLength > 0) return true""", """            val contentLength = resp.header("Content-Length")?.toLongOrNull() ?: -1L
+            if (contentLength > 0) return RangeDetail(true, code, contentType, contentLength, "")""")
+    s = rep("""            if (body == null) {
+                android.util.Log.w("LxSourceTest", "响应 body 为空: $url")
+                return false
+            }""", """            if (body == null) {
+                android.util.Log.w("LxSourceTest", "响应 body 为空: $url")
+                return RangeDetail(false, code, contentType, 0, "body为空")
+            }""")
+    s = rep("""            val ok = buf.size > 0
+            if (!ok) android.util.Log.w("LxSourceTest", "未读到任何数据: $url")
+            ok""", """            if (buf.size <= 0) android.util.Log.w("LxSourceTest", "未读到任何数据: $url")
+            RangeDetail(buf.size > 0, code, contentType, readTotal, if (buf.size > 0) "" else "未读到数据")""")
+    s = rep("""    } catch (e: Exception) {
+        android.util.Log.w("LxSourceTest", "Range 检查异常: $url", e)
+        false
+    }""", """    } catch (e: Exception) {
+        android.util.Log.w("LxSourceTest", "Range 检查异常: $url", e)
+        RangeDetail(false, -1, "", 0, "异常:" + (e::class.simpleName ?: "?") + ":" + (e.message ?: ""))
+    }""")
+
+    # 后验：新串齐全、旧串清零、标记数（注意：verifier 的 rangeCheckOk 仍是旧版，它的那行 return true 是另一条路，不在此列）
+    for k, c in [
+        ("private data class RangeDetail(", 1),
+        ("fun testRangeOk(url: String): RangeDetail", 1),
+        ("import com.github.tvbox.osc.util.LxRuntimeLog", 1),
+        ("LxRuntimeLog.add(\"探针 Range 失败:", 1),
+        ("return RangeDetail(false, code, \"\", 0, \"状态码不通过\")", 1),
+        ("return RangeDetail(false, code, contentType, 0, \"类型不通过\")", 1),
+        ("return RangeDetail(true, code, contentType, contentLength", 1),
+        ("RangeDetail(buf.size > 0, code, contentType, readTotal", 1),
+    ]:
+        assert s.count(k) == c, "v150 后验失败 %s: %d != %d" % (k[:50], s.count(k), c)
+    for old in [
+        "private fun testRangeOk(url: String): Boolean {",
+        "val rangeOk = try {",
+        "if (!rangeOk) return SongResult.Fail(\"Range失败\")",
+    ]:
+        assert old not in s, "v150 旧串残留: " + old[:60]
+    assert s.count("[32v150]") == 3, "v150 标记数=" + str(s.count("[32v150]"))
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v150 Range 明细进日志完成")
+PYEOF150
+echo "=== 32 v150 完成 ==="
