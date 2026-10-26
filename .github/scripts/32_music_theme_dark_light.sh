@@ -10414,3 +10414,39 @@ else:
     print("OK 32 v141 animateFloat import 已补")
 PYEOF141
 echo "=== 32 v141 完成 ==="
+
+# === 32 v142: 6 Tab 胶囊自适应均分（40rec 加第 6 个 Tab 后固定宽溢出） ===
+# 实测根因：胶囊容器左右各 24dp + 每个 Tab 固定宽 56dp；6 Tab 共 336dp；
+# 360dp 屏胶囊可用宽 312dp，超 24dp，SpaceEvenly 负 slack 无法分布，首尾 Tab 被推出边缘裁切。
+# 只压边距不够（16dp 后可用 328dp，仍少 8dp）。修法：item 固定宽改 weight 均分 + 边距压 16dp + 图标 24→22dp。
+# 图标坐标上限 20.5（SEARCH 手柄、心形右圆边、SETTINGS 辐条 20.2）均在 22dp 框内；20dp 会裁，故取 22。
+# 文字已是 10sp、Row 已是 SpaceEvenly、Row 高 56dp 锁定，均不动；设置页 padding 已是 140dp（v101），不动。
+# RowScope 说明：MH 已引 layout.*（RowScope 同包，无需新 import）；PillTabItem97 仅在胶囊 Row 内调用，接收者改动安全。
+python3 << 'PYEOF142'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v142]" in s:
+    print("跳过（32 v142 已应用）")
+else:
+    def rep(old, new):
+        global s
+        assert s.count(old) == 1, "v142 锚点数=" + str(s.count(old)) + ": " + old[:60]
+        s = s.replace(old, new, 1)
+    rep("                    .align(Alignment.BottomCenter)\n                    .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),",
+        "                    .align(Alignment.BottomCenter)\n                    .padding(start = 16.dp, end = 16.dp, bottom = 24.dp), // [32v142] 6 Tab 边距压缩")
+    rep("private fun PillTabItem97(tab: MusicTab, label: String, selected: Boolean, dark: Boolean, onClick: () -> Unit) { // [32v102] dark 入参",
+        "private fun RowScope.PillTabItem97(tab: MusicTab, label: String, selected: Boolean, dark: Boolean, onClick: () -> Unit) { // [32v142] 自适应均分")
+    rep("            .width(56.dp)\n            .clickable(onClick = onClick)",
+        "            .weight(1f) // [32v142] 固定 56dp 改均分，任何屏宽不裁切\n            .clickable(onClick = onClick)")
+    rep("private fun TabLineIcon97(tab: MusicTab, tint: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {\n    Canvas(modifier = modifier.size(24.dp)) {",
+        "private fun TabLineIcon97(tab: MusicTab, tint: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {\n    Canvas(modifier = modifier.size(22.dp)) { // [32v142] 6 Tab 图标瘦身")
+    assert s.count("[32v142]") == 4, "v142 post-check"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v142 胶囊自适应均分完成")
+PYEOF142
+echo "=== 32 v142 完成 ==="
