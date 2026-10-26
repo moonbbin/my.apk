@@ -11086,3 +11086,248 @@ private fun testRangeOk(url: String): Boolean {
     print("OK 32 v146 高级检测严谨版完成")
 PYEOF146
 echo "=== 32 v146 完成 ==="
+
+# === 32 v147: 高级检测一首真歌 + 复核（用户 2026-10-26 确认：搜海阔天空真歌测 1 首，失败换第二首复核，5 首制作废） ===
+python3 << 'PYEOF147'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v147]" in s:
+    print("跳过（32 v147 已应用）")
+else:
+    def rep(old, new, cnt=1):
+        n = s.count(old)
+        assert n == cnt, "v147 锚点数=%d 期望=%d: %s" % (n, cnt, old[:60])
+        return s.replace(old, new)
+
+    # ① TestState：Fail 带原因 + 是否两首都失败；NoSong = 该平台搜不到探针歌
+    s = rep("""// [32v146] 严谨版状态机：Fail 带原因 + 通过数（5 首制）
+private sealed interface TestState {
+    data object Testing : TestState
+    data class Ok(val ms: Long) : TestState
+    data class Fail(val reason: String, val okCount: Int) : TestState
+}""", """// [32v147] 一首真歌 + 复核状态机：Fail 带原因 + 是否两首都失败（1+1 制，5 首制作废）；NoSong = 该平台搜不到探针歌
+private sealed interface TestState {
+    data object Testing : TestState
+    data class Ok(val ms: Long) : TestState
+    data class Fail(val reason: String, val bothFailed: Boolean) : TestState
+    data object NoSong : TestState
+}""")
+
+    # ② 弹窗循环：引擎加载后先搜一次真歌（失败则整表记搜索失败），再逐平台一首 + 复核；无声明平台直接完成（空平台提示行条件不变）
+    s = rep("""            val eng = loadDeclsSuspend(context, source.id)
+            engine = eng
+            platforms = eng.platforms
+            results = platforms.associateWith { TestState.Testing }
+            phase = "正在检测..."
+            coroutineScope {
+                val tasks = platforms.map { plat ->
+                    async { testPlatform(eng, plat) } // [32v146] 严谨版：每平台 5 首顺序测 + Range，任务本身只抛取消
+                }
+                for ((plat, task) in platforms.zip(tasks)) {
+                    results = results + (plat to task.await())
+                }
+            }
+            phase = "完成\"""", """            val eng = loadDeclsSuspend(context, source.id)
+            engine = eng
+            platforms = eng.platforms
+            results = platforms.associateWith { TestState.Testing }
+            if (platforms.isNotEmpty()) {
+                phase = "正在搜索..." // [32v147]
+                val songsByPlat = try {
+                    probeSongsByPlatform() // [32v147]
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
+                if (songsByPlat == null) {
+                    phase = "搜索失败"
+                    results = platforms.associateWith { TestState.Fail("搜索失败", false) } // [32v147]
+                } else {
+                    phase = "正在检测..."
+                    coroutineScope {
+                        val tasks = platforms.map { plat ->
+                            async { testPlatformProbe(eng, plat, songsByPlat[probeNormPlat(plat)] ?: emptyList()) } // [32v147] 一首真歌 + 复核，任务本身只抛取消
+                        }
+                        for ((plat, task) in platforms.zip(tasks)) {
+                            results = results + (plat to task.await())
+                        }
+                    }
+                    phase = "完成"
+                }
+            } else {
+                phase = "完成"
+            }""")
+
+    # ③ 格子失败行：两首都失败才带后缀；NoSong 单行灰字
+    s = rep("""                                is TestState.Fail -> {
+                                    Text("解析失败", style = MaterialTheme.typography.labelSmall, color = Color(0xFFF44336))
+                                    Text("${r.reason} · ${r.okCount}/5通过", style = MaterialTheme.typography.labelSmall, color = musicColors().textSecondary)
+                                }""", """                                is TestState.Fail -> {
+                                    Text("解析失败", style = MaterialTheme.typography.labelSmall, color = Color(0xFFF44336))
+                                    Text(if (r.bothFailed) "${r.reason} · 两首均失败" else r.reason, style = MaterialTheme.typography.labelSmall, color = musicColors().textSecondary) // [32v147]
+                                }
+                                TestState.NoSong -> Text("搜不到歌", style = MaterialTheme.typography.labelSmall, color = musicColors().textSecondary) // [32v147]""")
+
+    # ④ 固定 5 首歌单作废，换成探针歌选取：搜一次海阔天空，按平台取主测 + 复核两首真歌
+    s = rep("""// [32v146] 严谨版测试歌单：与卡片 verify() 的 5 首固定歌完全一致（同 id 集、同 128k）；不提前 break，X/5 为实测数
+private val TEST_SONGS = listOf(
+    Triple("347230", "海阔天空", "Beyond"),
+    Triple("186016", "晴天", "周杰伦"),
+    Triple("260573", "夜曲", "周杰伦"),
+    Triple("33894312", "演员", "薛之谦"),
+    Triple("167876", "有何不可", "许嵩")
+)""", """// [32v147] 一首真歌探针：关键词固定为海阔天空（五平台共有歌）；每平台取搜索结果里的真歌测，不再用固定 id
+private const val PROBE_KEYWORD = "海阔天空" // [32v147]
+private const val PROBE_ARTIST = "Beyond" // [32v147]
+
+// [32v147] 平台键归一：App 搜索 QQ 侧 code 为 tx、脚本声明侧可能为 qq，统一成 qq 再配对；显示仍用原始 code 走 platformName
+private fun probeNormPlat(code: String): String = if (code == "tx") "qq" else code // [32v147]
+
+private fun probeNorm(s: String): String = s.filter { !it.isWhitespace() }.lowercase() // [32v147]
+
+// [32v147] 每平台取主测 + 复核两首：优先歌名精确 + 歌手含 Beyond，退而求其次只歌名精确；均无则空列表（该平台显示搜不到歌）
+private fun pickProbeSongs(songs: List<LxMusicSearchApi.SongInfo>): List<LxMusicSearchApi.SongInfo> {
+    val key = probeNorm(PROBE_KEYWORD)
+    val artistKey = probeNorm(PROBE_ARTIST)
+    val titleOk = songs.filter { probeNorm(it.title) == key }
+    val artistOk = titleOk.filter { probeNorm(it.artist).contains(artistKey) }
+    return (if (artistOk.isNotEmpty()) artistOk else titleOk).take(2)
+}
+
+// [32v147] 搜一次取全平台探针歌：searchFull 五平台并行、单平台搜索失败只吞成空列表（其自带 try-catch）；返回键为归一化平台 code
+private suspend fun probeSongsByPlatform(): Map<String, List<LxMusicSearchApi.SongInfo>> {
+    val all = LxMusicSearchApi.searchFull(PROBE_KEYWORD)
+    return all.groupBy { probeNormPlat(it.platform) }
+        .mapValues { (_, list) -> pickProbeSongs(list) }
+        .filterValues { it.isNotEmpty() }
+}""")
+
+    # ⑤ 解析桥接：musicInfo 改传搜索结果真实字段（hash/songmid/专辑 id），不再 id 硬填四项
+    s = rep("""// [32v146] 单首解析桥接：只把引擎结果取回为 URL 字符串；字符串校验与 Range 由 testOneSong 做
+private suspend fun resolveUrlSuspend(engine: TestEngine, plat: String, songId: String, name: String, singer: String): String =
+    suspendCancellableCoroutine { cont ->
+        val musicInfo = mapOf(
+            "id" to songId,
+            "songId" to songId,
+            "songmid" to songId,
+            "name" to name,
+            "singer" to singer,
+            "source" to plat,
+            "hash" to songId,
+            "albumAudioId" to ""
+        )""", """// [32v147] 单首解析桥接：只把引擎结果取回为 URL 字符串；字符串校验与 Range 由 testOneSong 做；musicInfo 改传搜索结果真实字段（hash/songmid/专辑 id），不再 id 硬填四项
+private suspend fun resolveUrlSuspend(engine: TestEngine, plat: String, song: LxMusicSearchApi.SongInfo): String =
+    suspendCancellableCoroutine { cont ->
+        val musicInfo = mapOf(
+            "id" to song.id,
+            "songId" to song.id,
+            "songmid" to song.songmid,
+            "name" to song.title,
+            "singer" to song.artist,
+            "source" to plat,
+            "hash" to song.hash.ifBlank { song.id },
+            "albumAudioId" to song.albumAudioId
+        )""")
+
+    # ⑥ 单首测试：入参改真歌对象，超时/校验/Range 逻辑不动
+    s = rep("""// [32v146] 单首严谨测试：解析 15 秒超时 → 字符串校验 → IO 线程 Range 真拉流（主线程直接联网会闪退，故 withContext(Dispatchers.IO)；取消一律透传，不记为失败）
+private suspend fun testOneSong(engine: TestEngine, plat: String, song: Triple<String, String, String>): SongResult {
+    val (songId, name, singer) = song
+    val start = System.currentTimeMillis()
+    val url: String = try {
+        withTimeout(15_000L) { resolveUrlSuspend(engine, plat, songId, name, singer) }""", """// [32v147] 单首测试：解析 15 秒超时 → 字符串校验 → IO 线程 Range 真拉流（主线程直接联网会闪退，故 withContext(Dispatchers.IO)；取消一律透传，不记为失败）
+private suspend fun testOneSong(engine: TestEngine, plat: String, song: LxMusicSearchApi.SongInfo): SongResult {
+    val start = System.currentTimeMillis()
+    val url: String = try {
+        withTimeout(15_000L) { resolveUrlSuspend(engine, plat, song) }""")
+
+    # ⑦ 单平台 5 首制改一首 + 复核：主测过即正常；主测失败换第二首，两首都失败才判败（原因取主测原因）；无歌即搜不到歌
+    s = rep("""// [32v146] 单平台严谨测试：5 首顺序测（与 verify() 同规则 ≥4 首过即正常；JS 单线程串行，顺序测与并发测底层一致）
+private suspend fun testPlatform(engine: TestEngine, plat: String): TestState {
+    var okCount = 0
+    var okMs = 0L
+    val failReasons = mutableListOf<String>()
+    for (song in TEST_SONGS) {
+        when (val r = testOneSong(engine, plat, song)) {
+            is SongResult.Ok -> { okCount++; okMs += r.ms }
+            is SongResult.Fail -> failReasons += r.reason
+        }
+    }
+    if (okCount >= 4) return TestState.Ok(if (okCount > 0) okMs / okCount else 0)
+    val reason = failReasons.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key ?: "未知"
+    return TestState.Fail(reason, okCount)
+}""", """// [32v147] 单平台一首 + 复核：主测过即正常（显示该首耗时）；主测失败换第二首复核，两首都失败才判败（原因取主测原因）；无歌即搜不到歌
+private suspend fun testPlatformProbe(engine: TestEngine, plat: String, songs: List<LxMusicSearchApi.SongInfo>): TestState {
+    if (songs.isEmpty()) return TestState.NoSong
+    val main = testOneSong(engine, plat, songs[0])
+    if (main is SongResult.Ok) return TestState.Ok(main.ms)
+    val mainReason = main.reason
+    if (songs.size < 2) return TestState.Fail(mainReason, false)
+    val backup = testOneSong(engine, plat, songs[1])
+    if (backup is SongResult.Ok) return TestState.Ok(backup.ms)
+    return TestState.Fail(mainReason, true)
+}""")
+
+    # ⑧ Range 共用 Client：连接复用，省每首歌重复 TLS 握手（超时与 rangeCheckOk 同值 5 秒）
+    s = rep("""// [32v146] Range 真拉流：与卡片 verify() 的 rangeCheckOk 同体（200/206 + 音频 Content-Type + 实读数据；顶层无 verifier 的 TAG，用字面 tag）
+private fun testRangeOk(url: String): Boolean {
+    return try {
+        val client = okhttp3.OkHttpClient.Builder()
+            .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+            .followRedirects(true)
+            .build()""", """// [32v147] Range 真拉流：与卡片 verify() 的 rangeCheckOk 同体（200/206 + 音频 Content-Type + 实读数据；顶层无 verifier 的 TAG，用字面 tag）；Client 共用，连接复用省重复 TLS 握手
+private val sharedRangeClient = okhttp3.OkHttpClient.Builder() // [32v147]
+    .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+    .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+    .followRedirects(true)
+    .build()
+
+private fun testRangeOk(url: String): Boolean {
+    return try {
+        val client = sharedRangeClient // [32v147]""")
+
+    # 后验：新串齐全、旧串清零
+    for k, c in [
+        ("data class Fail(val reason: String, val bothFailed: Boolean)", 1),
+        ("data object NoSong : TestState", 1),
+        ("async { testPlatformProbe(eng, plat, songsByPlat[probeNormPlat(plat)] ?: emptyList()) }", 1),
+        ("TestState.NoSong -> Text(\"搜不到歌\"", 1),
+        ("private const val PROBE_KEYWORD", 1),
+        ("fun probeSongsByPlatform", 1),
+        ("fun pickProbeSongs", 1),
+        ("fun probeNormPlat", 1),
+        ("fun testPlatformProbe", 1),
+        ("val sharedRangeClient", 1),
+        ("val client = sharedRangeClient", 1),
+        ("LxMusicSearchApi.searchFull(PROBE_KEYWORD)", 1),
+        ("fun resolveUrlSuspend(engine: TestEngine, plat: String, song: LxMusicSearchApi.SongInfo)", 1),
+        ("fun testOneSong(engine: TestEngine, plat: String, song: LxMusicSearchApi.SongInfo)", 1),
+        ("phase = \"正在搜索...\"", 1),
+        ("phase = \"搜索失败\"", 1),
+    ]:
+        assert s.count(k) == c, "v147 后验失败 %s: %d != %d" % (k[:50], s.count(k), c)
+    for old in [
+        "private val TEST_SONGS",
+        "testPlatform(eng, plat)",
+        "${r.okCount}/5通过",
+        "song: Triple<String, String, String>",
+        "songId: String, name: String, singer: String",
+        "for (song in TEST_SONGS)",
+        "groupingBy { it }.eachCount().maxByOrNull",
+    ]:
+        assert old not in s, "v147 旧串残留: " + old[:60]
+    assert s.count("[32v147]") >= 16, "v147 标记数=" + str(s.count("[32v147]"))
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v147 高级检测一首真歌 + 复核完成")
+PYEOF147
+echo "=== 32 v147 完成 ==="
