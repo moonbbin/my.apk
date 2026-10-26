@@ -39,6 +39,12 @@ import androidx.compose.animation.core.animateFloat // [40feel]
 import androidx.compose.animation.core.infiniteRepeatable // [40feel]
 import androidx.compose.animation.core.rememberInfiniteTransition // [40feel]
 import androidx.compose.animation.core.tween // [40feel]
+import androidx.compose.animation.core.animateDpAsState // [40float]
+import androidx.compose.animation.AnimatedVisibility // [40float]
+import androidx.compose.animation.fadeIn // [40float]
+import androidx.compose.animation.fadeOut // [40float]
+import androidx.compose.animation.slideInVertically // [40float]
+import androidx.compose.animation.slideOutVertically // [40float]
 import androidx.compose.foundation.Canvas // [40feel]
 import androidx.compose.foundation.background // [40feel]
 import androidx.compose.foundation.border // [40glass]
@@ -49,6 +55,7 @@ import androidx.compose.foundation.layout.height // [40feel]
 import androidx.compose.foundation.layout.size // [40feel]
 import androidx.compose.foundation.rememberScrollState // [40feel]
 import androidx.compose.foundation.shape.RoundedCornerShape // [40feel]
+import androidx.compose.foundation.shape.CircleShape // [40float]
 import androidx.compose.foundation.verticalScroll // [40feel]
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox // [40feel]
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState // [40feel]
@@ -370,6 +377,19 @@ fun RecommendScreen(
     var loadingMore by remember { mutableStateOf(false) }
     var loadingFirst by remember { mutableStateOf(true) }
     var buildFailed by remember { mutableStateOf(false) } // [40feel] 建池彻底失败（无缓存）时显示断线空状态
+    // [40float] 悬浮置顶状态：置顶歌按 title+artist 在池内匹配（与播放高亮同规则）
+    val pinnedSong = fullPool.firstOrNull { it.song.title == playerTitle && it.song.artist == playerArtist }
+    var isPinned by remember { mutableStateOf(true) }
+    // 切歌重弹：只关当前歌，切歌后新歌重新置顶
+    LaunchedEffect(pinnedSong?.song?.title, pinnedSong?.song?.artist) { isPinned = true }
+    val pinVisible = isPinned && pinnedSong != null
+    // 退出动画期间内容兜底：歌被清空时仍用上一首滑出
+    var lastPinned by remember { mutableStateOf<RecommendItem?>(null) }
+    LaunchedEffect(pinnedSong) { if (pinnedSong != null) lastPinned = pinnedSong }
+    val topPadding by animateDpAsState(
+        targetValue = if (pinVisible) 216.dp else 0.dp, // 200 卡高 + 16 卡间距
+        animationSpec = tween(300), label = "pinPadding"
+    )
     LaunchedEffect(Unit) { // [40feel] 节流建池：函数内裁决缓存/重建，shouldRefresh 退役
         val pool = buildRecommendPool(context, force = false)
         fullPool = pool
@@ -443,19 +463,23 @@ fun RecommendScreen(
                 }
             }
         } else {
+    // [40float] 悬浮置顶：外层 Box，列表 + 悬浮卡同级（卡后声明压在上层）
+    Box(Modifier.fillMaxSize()) {
+    val displayed = if (pinVisible) visible.filterNot { it.song.title == pinnedSong?.song?.title && it.song.artist == pinnedSong?.song?.artist } else visible
     LazyColumn(
         state = listState,
         flingBehavior = rememberSnapFlingBehavior(listState), // [40final] 滑动吸附
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp), // [40card] 卡间留白
-        contentPadding = PaddingValues(bottom = 160.dp) // [40feed] 120 -> 160 终极避让
+        contentPadding = PaddingValues(top = topPadding, bottom = 160.dp) // [40float] 顶部动态让位，底 160 不动
     ) {
-        items(visible, key = { it.song.title + "|" + it.song.artist + "|" + it.song.platform }) { item ->
+        items(displayed, key = { it.song.title + "|" + it.song.artist + "|" + it.song.platform }) { item ->
             val playing = playerTitle == item.song.title && playerArtist == item.song.artist
             val songs = visible.map { it.song }
             val idx = visible.indexOf(item)
             // [40mag] 视差系数：-0.5（视口顶）~ +0.5（视口底），居中为 0
-            val info = listState.layoutInfo.visibleItemsInfo.find { it.index == idx }
+            val dispIdx = displayed.indexOf(item) // [40float] 显示下标：只给视差查 layoutInfo 用
+            val info = listState.layoutInfo.visibleItemsInfo.find { it.index == dispIdx }
             val vpH = listState.layoutInfo.viewportSize.height
             val parallax = if (info != null && vpH > 0)
                 (info.offset + info.size / 2 - vpH / 2).toFloat() / vpH else 0f
@@ -475,6 +499,40 @@ fun RecommendScreen(
             }
         }
     }
+    AnimatedVisibility(
+        visible = pinVisible,
+        enter = slideInVertically(tween(300)) { -it } + fadeIn(tween(300)),
+        exit = slideOutVertically(tween(300)) { -it } + fadeOut(tween(300)),
+        modifier = Modifier.align(Alignment.TopCenter)
+    ) {
+        val pinned = lastPinned ?: return@AnimatedVisibility
+        val fullSongs = fullPool.map { it.song }
+        val fullIdx = fullPool.indexOf(pinned)
+        Box {
+            FeedCard(
+                item = pinned,
+                isPlaying = playerIsPlaying,
+                onClick = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPlay(fullSongs, fullIdx) },
+                onTogglePlay = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); if (playerIsPlaying) onTogglePlay() else onPlayOnly(fullSongs, fullIdx) }
+            )
+            Box(
+                modifier = Modifier.align(Alignment.TopEnd)
+                    .padding(top = 8.dp, end = 24.dp)
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.35f))
+                    .clickable { isPinned = false },
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(Modifier.size(14.dp)) {
+                    val sw = size.width
+                    drawLine(Color.White, Offset(0f, 0f), Offset(sw, sw), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+                    drawLine(Color.White, Offset(sw, 0f), Offset(0f, sw), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+                }
+            }
+        }
+    }
+    } // [40float] 外层 Box 关
         }
     }
 }
