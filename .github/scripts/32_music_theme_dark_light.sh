@@ -11839,3 +11839,44 @@ import androidx.compose.ui.unit.sp // [32v151]""")
     print("OK 32 v151 SourceTestDialog 单列重构完成")
 PYEOF151
 echo "=== 32 v151 完成 ==="
+# === 32 v153: FontWeight 去重（编译 Conflicting import 修复） ===
+python3 << 'PYEOF153'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v153]" in s:
+    print("跳过（32 v153 已应用）")
+else:
+    marked = "import androidx.compose.ui.text.font.FontWeight // [32v151]"
+    anchor = "import androidx.compose.ui.text.font.FontWeight"
+    total = s.count(anchor)
+    if total == 2:
+        # CI 全链态：v117 与 v151 各加了一份同名 import，kotlinc 报 Conflicting import；删后加的 v151 那行，留 v117 的
+        assert s.count(marked) == 1, "v153 标记行数 != 1"
+        s = s.replace(marked + "\n", "// [32v153] FontWeight 去重：v117 已有同名 import，删 v151 重复行（编译 Conflicting import 修复）\n", 1)
+    elif total == 1:
+        # 仅一份 import：不动 import，仅留标记。单份可能是 v151 的标记行（仿真基线缺 v117），也可能是 v117 的裸行
+        if marked in s:
+            s = s.replace(marked + "\n", marked + "\n// [32v153] FontWeight 去重标记（此前仅一份 import，无需删行）\n", 1)
+        else:
+            assert s.count(anchor + "\n") == 1, "v153 裸 import 行数 != 1"
+            s = s.replace(anchor + "\n", anchor + "\n// [32v153] FontWeight 去重标记（此前仅一份 import，无需删行）\n", 1)
+    else:
+        assert False, "v153 FontWeight import 总数=%d" % total
+    assert s.count(anchor) == 1, "v153 去重后 import 数 != 1"
+    assert s.count("[32v153]") == 1, "v153 标记数 != 1"
+    assert "FontWeight.Bold" in s, "v153 FontWeight 用法丢失"
+    assert "FontWeight.Medium" in s, "v153 FontWeight.Medium 丢失"
+    assert "import androidx.compose.foundation.layout.heightIn // [32v151]" in s, "v153 误伤 v151 其余 import"
+    assert "itemsIndexed(platforms" in s, "v153 误伤 v151 列表"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v153 FontWeight 去重完成")
+PYEOF153
+echo "=== 32 v153 完成 ==="
