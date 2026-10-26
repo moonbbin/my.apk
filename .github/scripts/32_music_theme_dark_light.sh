@@ -10719,3 +10719,86 @@ private suspend fun resolveOnePlatformSuspend(engine: TestEngine, plat: String):
     print("OK 32 v143 三点入口 + 高级检测弹窗完成")
 PYEOF143
 echo "=== 32 v143 完成 ==="
+# === 32 v144: 构建红修复（v143 CI 实证四错，2026-10-26） ===
+python3 << 'PYEOF144'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v144]" in s:
+    print("跳过（32 v144 已应用）")
+else:
+    def rep(old, new, cnt=1):
+        n = s.count(old)
+        assert n == cnt, "v144 锚点数=%d 期望=%d: %s" % (n, cnt, old[:60])
+        return s.replace(old, new)
+
+    # ① 补两个缺失 import（CI 实证：Box 未引致整段 @Composable 级联错；grid items 未引致 items 走 Int 重载）
+    anchor_imp = "import kotlinx.coroutines.withTimeout // [32v143]"
+    assert s.count(anchor_imp) == 1, "v144 import 锚点数=%d" % s.count(anchor_imp)
+    s = s.replace(anchor_imp, anchor_imp + "\nimport androidx.compose.foundation.layout.Box // [32v144]\nimport androidx.compose.foundation.lazy.grid.items // [32v144]")
+
+    # ② grid items key 显式类型，彻底断 Int 重载歧义
+    s = rep("items(platforms, key = { it }) { plat ->", "items(platforms, key = { plat: String -> plat }) { plat ->")
+
+    # ③ coroutines 1.11.0：resume 的 onCancellation 无默认值，必须显传 null；resumeWithException 非接口成员，改 resumeWith(Result.failure)
+    s = rep("if (ok) cont.resume(Unit)", "if (ok) cont.resume(Unit, null)")
+    s = rep('else cont.resumeWithException(IllegalStateException("preload 加载失败"))', 'else cont.resumeWith(Result.failure(IllegalStateException("preload 加载失败")))')
+    s = rep("onSuccess = { cont.resume(it) }", "onSuccess = { cont.resume(it, null) }")
+    s = rep("onFailure = { cont.resumeWithException(it) }", "onFailure = { cont.resumeWith(Result.failure(it)) }", 2)
+    s = rep("if (isValidMusicUrl(url)) cont.resume(System.currentTimeMillis() - start)", "if (isValidTestMusicUrl(url)) cont.resume(System.currentTimeMillis() - start, null)")
+    s = rep('else cont.resumeWithException(IllegalStateException("无效 URL"))', 'else cont.resumeWith(Result.failure(IllegalStateException("无效 URL")))')
+
+    # ④ 顶层复刻 ping 口径校验（原函数为 LxSourceVerifier 私有成员，顶层函数不可见）
+    PRED = """// [32v144] ping 口径 URL 校验（与 LxSourceVerifier.isValidMusicUrl 同体；原函数为 verifier 私有成员，顶层函数不可见，故在此复刻）
+private fun isValidTestMusicUrl(url: String): Boolean {
+    if (url.isBlank()) return false
+    val u = url.trim()
+    if (!u.startsWith("http://") && !u.startsWith("https://")) return false
+    if (u.length < 30) return false
+    val lower = u.lowercase()
+    val badKeywords = listOf("error", "null", "undefined", "fail", "empty", "404", "notfound")
+    for (kw in badKeywords) {
+        if (lower.contains(kw)) return false
+    }
+    return true
+}
+
+"""
+    anchor_fn = "private suspend fun resolveOnePlatformSuspend(engine: TestEngine, plat: String): Long ="
+    assert s.count(anchor_fn) == 1, "v144 函数锚点数=%d" % s.count(anchor_fn)
+    s = s.replace(anchor_fn, PRED + anchor_fn)
+
+    # 后验：新串齐全、旧串清零
+    for k, c in [
+        ("import androidx.compose.foundation.layout.Box // [32v144]", 1),
+        ("import androidx.compose.foundation.lazy.grid.items // [32v144]", 1),
+        ("key = { plat: String -> plat }", 1),
+        ("cont.resume(Unit, null)", 1),
+        ("cont.resume(it, null)", 1),
+        ("cont.resume(System.currentTimeMillis() - start, null)", 1),
+        ('Result.failure(IllegalStateException("preload 加载失败"))', 1),
+        ('Result.failure(IllegalStateException("无效 URL"))', 1),
+        ("Result.failure(it)", 2),
+        ("fun isValidTestMusicUrl", 1),
+        ("isValidTestMusicUrl(url)", 1),
+    ]:
+        assert s.count(k) == c, "v144 后验失败 %s: %d != %d" % (k[:50], s.count(k), c)
+    for old in [
+        'cont.resumeWithException(IllegalStateException("preload 加载失败"))',
+        "onFailure = { cont.resumeWithException(it) }",
+        'cont.resumeWithException(IllegalStateException("无效 URL"))',
+        "if (isValidMusicUrl(url)) cont.resume(System.currentTimeMillis() - start)",
+    ]:
+        assert old not in s, "v144 旧串残留: " + old[:60]
+    assert s.count("[32v144]") >= 3, "v144 标记数=" + str(s.count("[32v144]"))
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v144 构建红修复完成")
+PYEOF144
+echo "=== 32 v144 完成 ==="
