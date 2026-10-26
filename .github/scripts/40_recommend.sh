@@ -269,6 +269,7 @@ suspend fun buildRecommendPool(context: Context, force: Boolean = false): List<R
     return capped
 }
 
+@Composable // [40tastefix] 注解归位 RecommendScreen
 fun RecommendScreen(
     playerTitle: String,
     playerArtist: String,
