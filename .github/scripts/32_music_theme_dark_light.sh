@@ -10450,3 +10450,272 @@ else:
     print("OK 32 v142 胶囊自适应均分完成")
 PYEOF142
 echo "=== 32 v142 完成 ==="
+# === 32 v143: 音源卡片三点入口 + 高级检测弹窗 SourceTestDialog（视觉并发，单引擎串行解析） ===
+# 红线：零新依赖（手搓 Canvas 三点）；verify()/updatePool/缓存写入一字不动；平台全程取自 decls.keys，严禁写死。
+# 结构实证：SourceCard 根 Card 无 onClick（冲突不存在）；右上角 TopEnd 悬浮须配 Row 右侧避让 60dp，
+# 否则矮卡片（名 + 状态行约 68dp）上 48dp 按钮会盖住居中的删除键（不重叠要求卡高 ≥120dp）。
+# 并发实证：sendScriptRequest 每请求唯一 requestKey + ConcurrentHashMap 分发回调，互不覆盖；JS 单线程串行，
+# 故逐个 await 的顺序即完成序（视觉并发，底层排队）。正常口径 = ping 口径（URL 字符串校验，不做 Range）。
+# 定位方式：签名尾锚点取自 32 v115/v116 自身补丁文本（现行）；函数体用大括号配对定位（体内字符串/注释无非配对花括号，
+# "${...}" 模板均为配对出现）；新顶层代码插在函数尾之后，不锚后续函数。
+python3 << 'PYEOF143'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v143]" in s:
+    print("跳过（32 v143 已应用）")
+else:
+    def rep(old, new):
+        global s
+        assert s.count(old) == 1, "v143 锚点数=" + str(s.count(old)) + ": " + old[:60]
+        s = s.replace(old, new, 1)
+    # 1. imports：缺失才补（去重防重复 import 编译错）
+    NEED_IMPS = [
+        "import androidx.compose.animation.AnimatedVisibility // [32v143]",
+        "import androidx.compose.animation.fadeIn // [32v143]",
+        "import androidx.compose.animation.fadeOut // [32v143]",
+        "import androidx.compose.foundation.Canvas // [32v143]",
+        "import androidx.compose.foundation.lazy.grid.GridCells // [32v143]",
+        "import androidx.compose.foundation.lazy.grid.LazyVerticalGrid // [32v143]",
+        "import androidx.compose.material3.TextButton // [32v143]",
+        "import androidx.compose.runtime.LaunchedEffect // [32v143]",
+        "import androidx.compose.ui.geometry.Offset // [32v143]",
+        "import androidx.compose.ui.platform.LocalContext // [32v143]",
+        "import androidx.compose.ui.window.Dialog // [32v143]",
+        "import kotlinx.coroutines.async // [32v143]",
+        "import kotlinx.coroutines.coroutineScope // [32v143]",
+        "import kotlinx.coroutines.suspendCancellableCoroutine // [32v143]",
+        "import kotlinx.coroutines.withTimeout // [32v143]",
+    ]
+    lines = s.split("\n")
+    last_imp = max(i for i, ln in enumerate(lines) if ln.startswith("import "))
+    for imp in NEED_IMPS:
+        base = imp.split(" // ")[0]
+        if not any(ln == base or ln.startswith(base + " ") for ln in lines):
+            last_imp += 1
+            lines.insert(last_imp, imp)
+    s = "\n".join(lines)
+    # 2. Row 右侧避让：三点显示时留 60dp（48 按钮 + 12 间隙）
+    rep("                .padding(12.dp),\n            verticalAlignment = Alignment.CenterVertically",
+        "                .padding(start = 12.dp, top = 12.dp, end = if (showDots) 60.dp else 12.dp, bottom = 12.dp), // [32v143] 三点显示时右侧留 60dp，矮卡片也不盖删除键\n            verticalAlignment = Alignment.CenterVertically")
+    # 3. SourceCard 手术：签名尾锚点（32 v115/v116 自身文本）+ 大括号配对定位函数体
+    sig = "    onPingClick: () -> Unit = {},\n    isRefreshing: Boolean = false,\n    onShowLog: () -> Unit = {}\n) {"
+    assert s.count(sig) == 1, "v143 SourceCard 签名锚点数=" + str(s.count(sig))
+    body_open = s.index(sig) + len(sig) - 1
+    depth = 0
+    i = body_open
+    func_end = -1
+    while i < len(s):
+        ch = s[i]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                func_end = i
+                break
+        i += 1
+    assert func_end > 0, "v143 SourceCard 函数尾未找到"
+    rest_lines = [ln for ln in s[func_end + 1:].split("\n") if ln.strip() and not ln.strip().startswith("//")]
+    assert rest_lines and (rest_lines[0].startswith("@") or rest_lines[0].startswith("private fun") or rest_lines[0].startswith("fun ") or rest_lines[0].startswith("object ") or rest_lines[0].startswith("class ")), "v143 函数尾后内容异常: " + (rest_lines[0][:40] if rest_lines else "")
+    HEAD = """
+    var showTestDialog by remember { mutableStateOf(false) } // [32v143] 高级检测弹窗开关（每卡自带，签名不动）
+    // 与卡内“验证通过”同一条件；VerifyResult 是 data class（success 布尔字段），无 Success 子类
+    val showDots = verifyResult != null && !verifyResult.verifying && verifyResult.success
+    Box(Modifier.fillMaxWidth()) { // [32v143] 外层 Box：卡片 + 右上角三点悬浮同级
+"""
+    TAIL = """
+    AnimatedVisibility( // [32v143] 三点入口：仅验证成功时淡入
+        visible = showDots,
+        enter = fadeIn(), exit = fadeOut(),
+        modifier = Modifier.align(Alignment.TopEnd)
+    ) {
+        IconButton(onClick = { showTestDialog = true }) {
+            Canvas(Modifier.size(24.dp)) {
+                val r = 2.5.dp.toPx()
+                val cx = size.width / 2
+                val c = MaterialTheme.colorScheme.onSurfaceVariant
+                drawCircle(c, r, Offset(cx, 5.dp.toPx()))
+                drawCircle(c, r, Offset(cx, 12.dp.toPx()))
+                drawCircle(c, r, Offset(cx, 19.dp.toPx()))
+            }
+        }
+    }
+    } // [32v143] 外层 Box 关
+    if (showTestDialog) SourceTestDialog(source = source, onDismiss = { showTestDialog = false })
+"""
+    NEWCODE = """
+// [32v143] 高级检测弹窗：平台检测状态机
+private sealed interface TestState {
+    data object Testing : TestState
+    data class Ok(val ms: Long) : TestState
+    data object Fail : TestState
+}
+
+// [32v143] 平台 code → 中文名；未知 code 原样显示
+private fun platformName(code: String): String = when (code) {
+    "kw" -> "酷我"
+    "kg" -> "酷狗"
+    "tx", "qq" -> "QQ音乐"
+    "wy" -> "网易云"
+    "mg" -> "咪咕"
+    "qs" -> "汽水"
+    else -> code
+}
+
+// [32v143] 高级检测弹窗：单引擎 + 逐平台顺序解析，UI 逐个实时翻转；只读诊断，不回写可用池/缓存
+@Composable
+private fun SourceTestDialog(source: LxSource, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var platforms by remember { mutableStateOf<List<String>>(emptyList()) }
+    var results by remember { mutableStateOf<Map<String, TestState>>(emptyMap()) }
+    var phase by remember { mutableStateOf("引擎加载中...") }
+    LaunchedEffect(Unit) {
+        var engine: TestEngine? = null
+        try {
+            val eng = loadDeclsSuspend(context, source.id)
+            engine = eng
+            platforms = eng.platforms
+            results = platforms.associateWith { TestState.Testing }
+            phase = "正在检测..."
+            coroutineScope {
+                val tasks = platforms.map { plat ->
+                    async {
+                        try {
+                            val ms = withTimeout(15_000L) { resolveOnePlatformSuspend(eng, plat) }
+                            TestState.Ok(ms)
+                        } catch (e: Exception) {
+                            TestState.Fail
+                        }
+                    }
+                }
+                for ((plat, task) in platforms.zip(tasks)) {
+                    results = results + (plat to task.await())
+                }
+            }
+            phase = "完成"
+        } catch (e: Exception) {
+            phase = "引擎加载失败"
+        } finally {
+            try {
+                engine?.release()
+            } catch (_: Exception) {
+            }
+        }
+    }
+    Dialog(onDismissRequest = onDismiss) {
+        Card(colors = CardDefaults.cardColors(containerColor = musicColors().card)) {
+            Column(Modifier.padding(16.dp)) {
+                Text("${source.name} · 高级检测", style = MaterialTheme.typography.titleMedium, color = musicColors().textPrimary)
+                Text(phase, style = MaterialTheme.typography.labelSmall, color = musicColors().textSecondary)
+                if (platforms.isEmpty() && phase == "完成") {
+                    Text("该脚本未声明任何平台", style = MaterialTheme.typography.labelSmall, color = musicColors().textSecondary)
+                }
+                LazyVerticalGrid(columns = GridCells.Fixed(3)) {
+                    items(platforms, key = { it }) { plat ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(platformName(plat), style = MaterialTheme.typography.bodyMedium, color = musicColors().textPrimary)
+                            when (val r = results[plat]) {
+                                null, TestState.Testing -> Text("检测中...", style = MaterialTheme.typography.labelSmall, color = Color(0xFFFFA000))
+                                is TestState.Ok -> Text("解析正常 ${r.ms}ms", style = MaterialTheme.typography.labelSmall, color = musicColors().accent)
+                                TestState.Fail -> Text("解析失败", style = MaterialTheme.typography.labelSmall, color = Color(0xFFF44336))
+                            }
+                        }
+                    }
+                }
+                TextButton(onClick = onDismiss) { Text("完成") }
+            }
+        }
+    }
+}
+
+// [32v143] 检测引擎句柄：引擎与平台列表共享，弹窗关闭时统一销毁（verify() finally 同款）
+private class TestEngine(val engine: LxScriptEngine, val platforms: List<String>) {
+    fun release() {
+        try {
+            engine.destroy()
+        } catch (_: Exception) {
+        }
+    }
+}
+
+// [32v143] 引擎加载 + 取脚本声明平台（复用 verify() 第 1–5 步，Thread + sleep 轮询改挂起桥接；不碰 verify() 本体）
+private suspend fun loadDeclsSuspend(context: android.content.Context, sourceId: String): TestEngine {
+    val scriptContent = LxSourceManager.getScriptContent(sourceId)
+        ?: throw IllegalStateException("脚本内容为空")
+    val sourceName = LxSourceManager.getSources().firstOrNull { it.id == sourceId }?.name ?: sourceId
+    val preloadJs = context.assets.open("lx/preload.js").bufferedReader().use { it.readText() }
+        .takeIf { it.isNotBlank() } ?: throw IllegalStateException("preload 为空")
+    val eng = LxScriptEngine()
+    eng.initialize(context)
+    try {
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine<Unit> { cont ->
+                eng.loadPreloadJs(preloadJs) { ok ->
+                    if (ok) cont.resume(Unit)
+                    else cont.resumeWithException(IllegalStateException("preload 加载失败"))
+                }
+            }
+        }
+        val decls = withTimeout(20_000L) {
+            suspendCancellableCoroutine<Map<String, LxSourceDeclaration>> { cont ->
+                eng.loadScript(sourceId, scriptContent, ScriptInfo(id = sourceId, name = sourceName)) { result ->
+                    result.fold(
+                        onSuccess = { cont.resume(it) },
+                        onFailure = { cont.resumeWithException(it) }
+                    )
+                }
+            }
+        }
+        return TestEngine(eng, decls.keys.toList())
+    } catch (e: Exception) {
+        try {
+            eng.destroy()
+        } catch (_: Exception) {
+        }
+        throw e
+    }
+}
+
+// [32v143] 单平台解析：requestMusicUrl 挂起桥接；正常口径 = ping 口径（URL 字符串校验，不做 Range）
+private suspend fun resolveOnePlatformSuspend(engine: TestEngine, plat: String): Long =
+    suspendCancellableCoroutine { cont ->
+        val start = System.currentTimeMillis()
+        val musicInfo = mapOf(
+            "id" to "347230",
+            "songId" to "347230",
+            "songmid" to "347230",
+            "name" to "海阔天空",
+            "singer" to "Beyond",
+            "source" to plat,
+            "hash" to "347230",
+            "albumAudioId" to ""
+        )
+        engine.engine.requestMusicUrl(plat, musicInfo, "128k") { res ->
+            if (!cont.isActive) return@requestMusicUrl
+            res.fold(
+                onSuccess = { url ->
+                    if (isValidMusicUrl(url)) cont.resume(System.currentTimeMillis() - start)
+                    else cont.resumeWithException(IllegalStateException("无效 URL"))
+                },
+                onFailure = { cont.resumeWithException(it) }
+            )
+        }
+        cont.invokeOnCancellation { }
+    }
+"""
+    # 从后往前插，索引不失效
+    s = s[:func_end + 1] + "\n" + NEWCODE + s[func_end + 1:]
+    s = s[:func_end] + TAIL + s[func_end:]
+    s = s[:body_open + 1] + HEAD + s[body_open + 1:]
+    for k in ["SourceTestDialog(", "loadDeclsSuspend(", "resolveOnePlatformSuspend(", "class TestEngine", "platformName(", "sealed interface TestState", "AnimatedVisibility(", "showTestDialog", "showDots"]:
+        assert k in s, "v143 缺失: " + k
+    assert s.count("[32v143]") >= 11, "v143 标记数=" + str(s.count("[32v143]"))
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v143 三点入口 + 高级检测弹窗完成")
+PYEOF143
+echo "=== 32 v143 完成 ==="
