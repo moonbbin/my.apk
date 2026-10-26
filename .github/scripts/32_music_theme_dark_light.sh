@@ -11396,3 +11396,105 @@ private suspend fun testPlatformProbe(engine: TestEngine, plat: String, songs: L
     print("OK 32 v148 构建红修复完成")
 PYEOF148
 echo "=== 32 v148 完成 ==="
+# === 32 v149: 探针补强（JSON 取 url + 占位黑名单 + [object] + m3u8/mpd 类型门 + 取消先行） ===
+python3 << 'PYEOF149'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v149]" in s:
+    print("跳过（32 v149 已应用）")
+else:
+    def rep(old, new, cnt=1):
+        n = s.count(old)
+        assert n == cnt, "v149 锚点数=%d 期望=%d: %s" % (n, cnt, old[:60])
+        return s.replace(old, new)
+
+    # 1) isValidTestMusicUrl：长度门后加整段 host 占位黑名单（只比 host，不禁裸词 test）；关键词表追加 [object]（防 [object Object]/[object Promise]）
+    s = rep("""private fun isValidTestMusicUrl(url: String): Boolean {
+    if (url.isBlank()) return false
+    val u = url.trim()
+    if (!u.startsWith("http://") && !u.startsWith("https://")) return false
+    if (u.length < 30) return false
+    val lower = u.lowercase()
+    val badKeywords = listOf("error", "null", "undefined", "fail", "empty", "404", "notfound")""", """private fun isValidTestMusicUrl(url: String): Boolean {
+    if (url.isBlank()) return false
+    val u = url.trim()
+    if (!u.startsWith("http://") && !u.startsWith("https://")) return false
+    if (u.length < 30) return false
+    // [32v149] 占位黑名单：只比整段 host，不禁裸词 test（带参数的长占位 URL 至此才拦得住）
+    val host = u.substringAfter("://").substringBefore("/").substringBefore("?").substringBefore(":").lowercase()
+    if (host == "example.com" || host == "example.org" || host == "example.net" ||
+        host == "localhost" || host == "127.0.0.1" ||
+        host.endsWith(".example.com") || host.endsWith(".example.org") || host.endsWith(".example.net")) return false
+    val lower = u.lowercase()
+    val badKeywords = listOf("error", "null", "undefined", "fail", "empty", "404", "notfound", "[object")""")
+
+    # 2) JSON 对象兼容 helper：插在 resolveUrlSuspend 定义之前；org.json 全限定写法，不新增 import
+    s = rep("""private suspend fun resolveUrlSuspend(engine: TestEngine, plat: String, song: LxMusicSearchApi.SongInfo): String =""", """// [32v149] JSON 对象兼容：脚本返回 {"url": "..."} 时先取 url 字段；不是 JSON 对象、解析失败、url 字段为空时原样返回，由下游 isValidTestMusicUrl 判负（fail-closed，不崩）
+private fun extractUrlField(raw: String): String {
+    val t = raw.trim()
+    if (!t.startsWith("{")) return raw
+    return try {
+        val url = org.json.JSONObject(t).optString("url", "")
+        if (url.isNotBlank()) url.trim() else raw
+    } catch (e: Exception) {
+        raw
+    }
+}
+
+private suspend fun resolveUrlSuspend(engine: TestEngine, plat: String, song: LxMusicSearchApi.SongInfo): String =""")
+
+    # 3) resolveUrlSuspend 的 onSuccess：引擎结果先进 extractUrlField 再 resume；15 秒超时与取消透传在 testOneSong，原样不动
+    s = rep("""onSuccess = { url -> cont.resume(url, null) },""", """onSuccess = { raw -> cont.resume(extractUrlField(raw), null) }, // [32v149]""")
+
+    # 4) testRangeOk 类型门：audio/octet-stream 之外放行 m3u8/mpd；锚点带 LxSourceTest 日志行，与 verifier 的 rangeCheckOk（TAG 日志）区分
+    s = rep("""            val typeOk = contentType.contains("audio") ||
+                    contentType.contains("application/octet-stream")
+            if (!typeOk) {
+                android.util.Log.w("LxSourceTest", "Content-Type 不通过: $contentType $url")""", """            val typeOk = contentType.contains("audio") ||
+                    contentType.contains("application/octet-stream") ||
+                    contentType.contains("mpegurl") || // [32v149] m3u8：application/x-mpegURL / vnd.apple.mpegurl，ExoPlayer 可播
+                    contentType.contains("dash+xml") // [32v149] mpd：application/dash+xml，ExoPlayer 可播
+            if (!typeOk) {
+                android.util.Log.w("LxSourceTest", "Content-Type 不通过: $contentType $url")""")
+
+    # 5) testRangeOk catch：取消先行再兜底；Client 共用、GET+Range 0-1023、200/206、实读数据门原样不动
+    s = rep("""    } catch (e: Exception) {
+        android.util.Log.w("LxSourceTest", "Range 检查异常: $url", e)
+        false
+    }""", """    } catch (e: CancellationException) {
+        throw e // [32v149] 取消先行，不记为失败
+    } catch (e: Exception) {
+        android.util.Log.w("LxSourceTest", "Range 检查异常: $url", e)
+        false
+    }""")
+
+    # 后验：新串齐全、旧串清零、标记数
+    for k, c in [
+        ("private fun extractUrlField(raw: String): String {", 1),
+        ("cont.resume(extractUrlField(raw), null)", 1),
+        ("host.endsWith(\".example.com\")", 1),
+        ("\"[object\")", 1),
+        ("contains(\"mpegurl\")", 1),
+        ("contains(\"dash+xml\")", 1),
+    ]:
+        assert s.count(k) == c, "v149 后验失败 %s: %d != %d" % (k[:50], s.count(k), c)
+    for old in [
+        "onSuccess = { url -> cont.resume(url, null) },",
+        "contains(\"application/octet-stream\")\n            if (!typeOk)",
+    ]:
+        assert old not in s, "v149 旧串残留: " + old[:60]
+    # 注意：verifier 的 isValidMusicUrl（约 1500 行）仍是旧关键词表，那是卡片 verify() 的路，本次探针范围不动，故旧表残留恰为 1
+    assert s.count("val badKeywords = listOf(\"error\", \"null\", \"undefined\", \"fail\", \"empty\", \"404\", \"notfound\")") == 1, "v149 旧关键词表残留数异常"
+    assert s.count("[32v149]") == 6, "v149 标记数=" + str(s.count("[32v149]"))
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v149 探针补强完成")
+PYEOF149
+echo "=== 32 v149 完成 ==="
