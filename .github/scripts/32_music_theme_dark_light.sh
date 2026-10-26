@@ -10847,3 +10847,242 @@ else:
     print("OK 32 v145 构建红修复完成")
 PYEOF145
 echo "=== 32 v145 完成 ==="
+# === 32 v146: 高级检测弹窗严谨版（用户 2026-10-26 确认：每平台 5 首歌 + Range 真拉流 + 失败原因） ===
+python3 << 'PYEOF146'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v146]" in s:
+    print("跳过（32 v146 已应用）")
+else:
+    def rep(old, new, cnt=1):
+        n = s.count(old)
+        assert n == cnt, "v146 锚点数=%d 期望=%d: %s" % (n, cnt, old[:60])
+        return s.replace(old, new)
+
+    # ① 补两个协程异常 import（取消透传与超时分类用；withContext/Dispatchers/withTimeout 已有）
+    anchor_imp = "import kotlinx.coroutines.withTimeout // [32v143]"
+    assert s.count(anchor_imp) == 1, "v146 import 锚点数=%d" % s.count(anchor_imp)
+    for imp in ["import kotlinx.coroutines.CancellationException // [32v146]",
+                "import kotlinx.coroutines.TimeoutCancellationException // [32v146]"]:
+        assert s.count(imp) == 0, "v146 import 已存在: " + imp
+    s = s.replace(anchor_imp, anchor_imp + "\nimport kotlinx.coroutines.CancellationException // [32v146]\nimport kotlinx.coroutines.TimeoutCancellationException // [32v146]")
+
+    # ② TestState：Fail 带原因 + 通过数
+    s = rep("""private sealed interface TestState {
+    data object Testing : TestState
+    data class Ok(val ms: Long) : TestState
+    data object Fail : TestState
+}""", """// [32v146] 严谨版状态机：Fail 带原因 + 通过数（5 首制）
+private sealed interface TestState {
+    data object Testing : TestState
+    data class Ok(val ms: Long) : TestState
+    data class Fail(val reason: String, val okCount: Int) : TestState
+}""")
+
+    # ③ 弹窗循环：每平台 5 首顺序测（任务本身只抛取消，其余失败全在 testPlatform 内消化为 Fail）
+    s = rep("""            coroutineScope {
+                val tasks = platforms.map { plat ->
+                    async {
+                        try {
+                            val ms = withTimeout(15_000L) { resolveOnePlatformSuspend(eng, plat) }
+                            TestState.Ok(ms)
+                        } catch (e: Exception) {
+                            TestState.Fail
+                        }
+                    }
+                }""", """            coroutineScope {
+                val tasks = platforms.map { plat ->
+                    async { testPlatform(eng, plat) } // [32v146] 严谨版：每平台 5 首顺序测 + Range，任务本身只抛取消
+                }""")
+
+    # ④ 格子失败行： verdict + 原因 · X/5通过 两行
+    s = rep("""                                TestState.Fail -> Text("解析失败", style = MaterialTheme.typography.labelSmall, color = Color(0xFFF44336))""", """                                is TestState.Fail -> {
+                                    Text("解析失败", style = MaterialTheme.typography.labelSmall, color = Color(0xFFF44336))
+                                    Text("${r.reason} · ${r.okCount}/5通过", style = MaterialTheme.typography.labelSmall, color = musicColors().textSecondary)
+                                }""")
+
+    # ⑤ 旧桥接整段替换：大括号配对定位（体内字符串/注释无非配对花括号），换成 URL 桥接 + 单首 + 单平台 + Range 四件
+    assert s.count("private suspend fun resolveOnePlatformSuspend") == 1, "v146 旧函数锚点异常"
+    i0 = s.index("private suspend fun resolveOnePlatformSuspend")
+    j = s.index("suspendCancellableCoroutine {", i0)
+    b = s.index("{", j)
+    depth = 0
+    k = b
+    while True:
+        ch = s[k]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                break
+        k += 1
+    end = k + 1
+    assert "cont.invokeOnCancellation" in s[i0:end], "v146 旧函数跨度未含 invokeOnCancellation"
+    NEWCODE = """// [32v146] 严谨版测试歌单：与卡片 verify() 的 5 首固定歌完全一致（同 id 集、同 128k）；不提前 break，X/5 为实测数
+private val TEST_SONGS = listOf(
+    Triple("347230", "海阔天空", "Beyond"),
+    Triple("186016", "晴天", "周杰伦"),
+    Triple("260573", "夜曲", "周杰伦"),
+    Triple("33894312", "演员", "薛之谦"),
+    Triple("167876", "有何不可", "许嵩")
+)
+
+private sealed interface SongResult {
+    data class Ok(val ms: Long) : SongResult
+    data class Fail(val reason: String) : SongResult
+}
+
+// [32v146] 单首解析桥接：只把引擎结果取回为 URL 字符串；字符串校验与 Range 由 testOneSong 做
+private suspend fun resolveUrlSuspend(engine: TestEngine, plat: String, songId: String, name: String, singer: String): String =
+    suspendCancellableCoroutine { cont ->
+        val musicInfo = mapOf(
+            "id" to songId,
+            "songId" to songId,
+            "songmid" to songId,
+            "name" to name,
+            "singer" to singer,
+            "source" to plat,
+            "hash" to songId,
+            "albumAudioId" to ""
+        )
+        engine.engine.requestMusicUrl(plat, musicInfo, "128k") { res ->
+            if (!cont.isActive) return@requestMusicUrl
+            res.fold(
+                onSuccess = { url -> cont.resume(url, null) },
+                onFailure = { cont.resumeWith(Result.failure(it)) }
+            )
+        }
+        cont.invokeOnCancellation { }
+    }
+
+// [32v146] 单首严谨测试：解析 15 秒超时 → 字符串校验 → IO 线程 Range 真拉流（主线程直接联网会闪退，故 withContext(Dispatchers.IO)；取消一律透传，不记为失败）
+private suspend fun testOneSong(engine: TestEngine, plat: String, song: Triple<String, String, String>): SongResult {
+    val (songId, name, singer) = song
+    val start = System.currentTimeMillis()
+    val url: String = try {
+        withTimeout(15_000L) { resolveUrlSuspend(engine, plat, songId, name, singer) }
+    } catch (e: TimeoutCancellationException) {
+        return SongResult.Fail("超时")
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        return SongResult.Fail("引擎错误")
+    }
+    if (!isValidTestMusicUrl(url)) return SongResult.Fail("无效URL")
+    val rangeOk = try {
+        withContext(Dispatchers.IO) { testRangeOk(url) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        false
+    }
+    if (!rangeOk) return SongResult.Fail("Range失败")
+    return SongResult.Ok(System.currentTimeMillis() - start)
+}
+
+// [32v146] 单平台严谨测试：5 首顺序测（与 verify() 同规则 ≥4 首过即正常；JS 单线程串行，顺序测与并发测底层一致）
+private suspend fun testPlatform(engine: TestEngine, plat: String): TestState {
+    var okCount = 0
+    var okMs = 0L
+    val failReasons = mutableListOf<String>()
+    for (song in TEST_SONGS) {
+        when (val r = testOneSong(engine, plat, song)) {
+            is SongResult.Ok -> { okCount++; okMs += r.ms }
+            is SongResult.Fail -> failReasons += r.reason
+        }
+    }
+    if (okCount >= 4) return TestState.Ok(if (okCount > 0) okMs / okCount else 0)
+    val reason = failReasons.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key ?: "未知"
+    return TestState.Fail(reason, okCount)
+}
+
+// [32v146] Range 真拉流：与卡片 verify() 的 rangeCheckOk 同体（200/206 + 音频 Content-Type + 实读数据；顶层无 verifier 的 TAG，用字面 tag）
+private fun testRangeOk(url: String): Boolean {
+    return try {
+        val client = okhttp3.OkHttpClient.Builder()
+            .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+            .followRedirects(true)
+            .build()
+        val request = okhttp3.Request.Builder()
+            .url(url)
+            .header("Range", "bytes=0-1023")
+            .header("User-Agent", "Mozilla/5.0 (Linux; Android 10)")
+            .get()
+            .build()
+        client.newCall(request).execute().use { resp ->
+            val code = resp.code
+            if (code != 200 && code != 206) {
+                android.util.Log.w("LxSourceTest", "Range GET 状态码不通过: $code $url")
+                return false
+            }
+            val contentType = (resp.header("Content-Type") ?: "").lowercase()
+            val typeOk = contentType.contains("audio") ||
+                    contentType.contains("application/octet-stream")
+            if (!typeOk) {
+                android.util.Log.w("LxSourceTest", "Content-Type 不通过: $contentType $url")
+                return false
+            }
+            val contentLength = resp.header("Content-Length")?.toLongOrNull() ?: -1L
+            if (contentLength > 0) return true
+            val body = resp.body
+            if (body == null) {
+                android.util.Log.w("LxSourceTest", "响应 body 为空: $url")
+                return false
+            }
+            val buf = okio.Buffer()
+            val source = body.source()
+            var readTotal = 0L
+            while (readTotal < 1024) {
+                val read = source.read(buf, 1024 - readTotal)
+                if (read == -1L) break
+                readTotal += read
+            }
+            val ok = buf.size > 0
+            if (!ok) android.util.Log.w("LxSourceTest", "未读到任何数据: $url")
+            ok
+        }
+    } catch (e: Exception) {
+        android.util.Log.w("LxSourceTest", "Range 检查异常: $url", e)
+        false
+    }
+}
+"""
+    s = s[:i0] + NEWCODE + s[end:]
+
+    # 后验：新串齐全、旧串清零
+    for k, c in [
+        ("import kotlinx.coroutines.CancellationException // [32v146]", 1),
+        ("import kotlinx.coroutines.TimeoutCancellationException // [32v146]", 1),
+        ("data class Fail(val reason: String, val okCount: Int)", 1),
+        ("async { testPlatform(eng, plat) }", 1),
+        ("is TestState.Fail -> {", 1),
+        ("private val TEST_SONGS", 1),
+        ("sealed interface SongResult", 1),
+        ("fun resolveUrlSuspend", 1),
+        ("fun testOneSong", 1),
+        ("fun testPlatform", 1),
+        ("fun testRangeOk", 1),
+        ("withContext(Dispatchers.IO) { testRangeOk(url) }", 1),
+    ]:
+        assert s.count(k) == c, "v146 后验失败 %s: %d != %d" % (k[:50], s.count(k), c)
+    for old in [
+        "data object Fail : TestState",
+        "resolveOnePlatformSuspend",
+        'TestState.Fail -> Text("解析失败"',
+    ]:
+        assert old not in s, "v146 旧串残留: " + old[:60]
+    assert s.count("[32v146]") >= 9, "v146 标记数=" + str(s.count("[32v146]"))
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v146 高级检测严谨版完成")
+PYEOF146
+echo "=== 32 v146 完成 ==="
