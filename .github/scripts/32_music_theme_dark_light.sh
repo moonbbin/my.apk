@@ -11616,3 +11616,223 @@ private fun testRangeOk(url: String): RangeDetail {""")
     print("OK 32 v150 Range 明细进日志完成")
 PYEOF150
 echo "=== 32 v150 完成 ==="
+# === 32 v151: SourceTestDialog 单列重构（仅渲染段，逻辑不动） ===
+python3 << 'PYEOF151'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v151]" in s:
+    print("跳过（32 v151 已应用）")
+else:
+    def rep(old, new, cnt=1):
+        n = s.count(old)
+        assert n == cnt, "v151 锚点数=%d 期望=%d: %s" % (n, cnt, old[:60])
+        return s.replace(old, new)
+
+    # 1) import：删 grid 三件（仅弹窗用），补 7 个新符号
+    s = rep("""import androidx.compose.foundation.lazy.grid.GridCells // [32v143]
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid // [32v143]""", "")
+    s = rep("""import androidx.compose.foundation.lazy.grid.items // [32v144]""", """import androidx.compose.foundation.layout.heightIn // [32v151]
+import androidx.compose.foundation.lazy.itemsIndexed // [32v151]
+import androidx.compose.foundation.shape.RoundedCornerShape // [32v151]
+import androidx.compose.material3.ButtonDefaults // [32v151]
+import androidx.compose.material3.HorizontalDivider // [32v151]
+import androidx.compose.ui.text.font.FontWeight // [32v151]
+import androidx.compose.ui.unit.sp // [32v151]""")
+
+    # 2) Card：20.dp 圆角（颜色不动）
+    s = rep("""        Card(colors = CardDefaults.cardColors(containerColor = musicColors().card)) {""", """        Card( // [32v151]
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = musicColors().card)
+        ) {""")
+
+    # 3) 外层 Column 内边距 16.dp -> 24.dp；标题 titleMedium -> titleLarge + Bold；补 4.dp 间隔
+    s = rep("""            Column(Modifier.padding(16.dp)) {
+                Text("${source.name} · 高级检测", style = MaterialTheme.typography.titleMedium, color = musicColors().textPrimary)""", """            Column(Modifier.padding(24.dp)) {
+                Text(
+                    "${source.name} · 高级检测",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = musicColors().textPrimary
+                )
+                Spacer(Modifier.height(4.dp))""")
+
+    # 4) 副标题 labelSmall -> bodySmall（phase 文案本身不动）
+    s = rep("""                Text(phase, style = MaterialTheme.typography.labelSmall, color = musicColors().textSecondary)""", """                Text(
+                    phase,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = musicColors().textSecondary
+                )""")
+
+    # 5) Grid 3 列 -> 单列 LazyColumn：span 替换（字符串/注释内大括号不计数），其余渲染段按 spec 重写；TestState/探针逻辑一字不动
+    g_anchor = "                LazyVerticalGrid(columns = GridCells.Fixed(3)) {"
+    assert s.count(g_anchor) == 1, "v151 grid 锚点数 != 1"
+    g0 = s.index(g_anchor)
+    depth = 0
+    i = g0
+    state = "code"
+    end = None
+    while i < len(s):
+        ch = s[i]
+        nxt = s[i + 1] if i + 1 < len(s) else ""
+        if state == "code":
+            if ch == '"' and s.startswith('"""', i):
+                state = "triple"
+                i += 3
+                continue
+            if ch == '"':
+                state = "str"
+                i += 1
+                continue
+            if ch == "'":
+                state = "chr"
+                i += 1
+                continue
+            if ch == "/" and nxt == "/":
+                state = "line"
+                i += 2
+                continue
+            if ch == "/" and nxt == "*":
+                state = "block"
+                i += 2
+                continue
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+            i += 1
+        elif state == "str":
+            if ch == "\\":
+                i += 2
+            elif ch == '"':
+                state = "code"
+                i += 1
+            else:
+                i += 1
+        elif state == "chr":
+            if ch == "\\":
+                i += 2
+            elif ch == "'":
+                state = "code"
+                i += 1
+            else:
+                i += 1
+        elif state == "triple":
+            if s.startswith('"""', i):
+                state = "code"
+                i += 3
+            else:
+                i += 1
+        elif state == "line":
+            if ch == "\n":
+                state = "code"
+            i += 1
+        elif state == "block":
+            if ch == "*" and nxt == "/":
+                state = "code"
+                i += 2
+            else:
+                i += 1
+    assert end is not None, "v151 grid span 未闭合"
+    new_span = """                Spacer(Modifier.height(20.dp))
+                LazyColumn(Modifier.heightIn(max = 360.dp)) { // [32v151]
+                    itemsIndexed(platforms, key = { _, plat -> plat }) { index, plat ->
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    platformName(plat),
+                                    modifier = Modifier.width(90.dp),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = musicColors().textPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    when (val r = results[plat]) {
+                                        null, TestState.Testing -> {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(14.dp),
+                                                    color = Color(0xFFFFA000),
+                                                    strokeWidth = 1.5.dp
+                                                )
+                                                Spacer(Modifier.width(6.dp))
+                                                Text("检测中", color = Color(0xFFFFA000), fontSize = 13.sp)
+                                            }
+                                        }
+                                        is TestState.Ok -> {
+                                            Text("成功", color = Color(0xFF00B894), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("${r.ms}ms", color = musicColors().textSecondary, fontSize = 12.sp)
+                                        }
+                                        is TestState.Fail -> {
+                                            Text("失败", color = Color(0xFFFF7675), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        }
+                                        TestState.NoSong -> {
+                                            Text("搜不到歌", color = musicColors().textSecondary, fontSize = 13.sp)
+                                        }
+                                    }
+                                }
+                            }
+                            if (index < platforms.size - 1) {
+                                HorizontalDivider(
+                                    color = musicColors().textSecondary.copy(alpha = 0.1f),
+                                    thickness = 0.5.dp
+                                )
+                            }
+                        }
+                    }
+                }
+"""
+    s = s[:g0] + new_span + s[end:]
+
+    # 6) 底部 TextButton -> 全宽 48.dp accent 按钮（白字 titleMedium），前补 24.dp 间隔
+    s = rep("""                TextButton(onClick = onDismiss) { Text("完成") }""", """                Spacer(Modifier.height(24.dp))
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = musicColors().accent,
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text("完成", style = MaterialTheme.typography.titleMedium)
+                }""")
+
+    # 7) 后验：旧渲染残留为 0，新渲染在位，注解未被吞
+    assert "LazyVerticalGrid" not in s, "v151 残留 LazyVerticalGrid"
+    assert "GridCells" not in s, "v151 残留 GridCells"
+    assert "TextButton(onClick = onDismiss)" not in s, "v151 残留 TextButton"
+    assert "itemsIndexed(platforms" in s, "v151 缺 itemsIndexed"
+    assert "RoundedCornerShape(20.dp)" in s, "v151 缺 20.dp 圆角"
+    assert "HorizontalDivider(" in s, "v151 缺 HorizontalDivider"
+    assert "ButtonDefaults.buttonColors(" in s, "v151 缺 ButtonDefaults"
+    assert "heightIn(max = 360.dp)" in s, "v151 缺 heightIn"
+    assert "@Composable\nprivate fun SourceTestDialog" in s, "v151 吞了 SourceTestDialog 注解"
+    lines = s.split("\n")
+    di = next(i for i, ln in enumerate(lines) if ln.startswith("private fun SourceTestDialog"))
+    print("DIALOG_ANNOT:", lines[di - 1])
+    ti = next(i for i, ln in enumerate(lines) if ln.startswith("private class TestEngine"))
+    print("BEFORE_TESTENGINE:", lines[ti - 2], "|", lines[ti - 1])
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v151 SourceTestDialog 单列重构完成")
+PYEOF151
+echo "=== 32 v151 完成 ==="
