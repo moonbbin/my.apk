@@ -63,32 +63,6 @@ private fun historyArray(context: Context): JSONArray = try {
         .getString("history_list", "[]"))
 } catch (_: Exception) { JSONArray() }
 
-private fun timeWeight(ms: Long): Int {
-    val days = (System.currentTimeMillis() - ms) / 86400000L
-    return when { days < 7 -> 3; days < 30 -> 2; else -> 1 }
-}
-
-private fun weightedTopArtists(context: Context): List<String> {
-    val arr = historyArray(context)
-    val counts = LinkedHashMap<String, Int>()
-    for (i in 0 until minOf(arr.length(), 40)) {
-        val o = arr.optJSONObject(i) ?: continue
-        val artist = o.optString("artist").trim()
-        if (artist.isEmpty() || artist == "未知歌手") continue
-        counts[artist] = (counts[artist] ?: 0) + timeWeight(o.optLong("time", 0L))
-    }
-    return counts.entries.sortedByDescending { it.value }.take(6).map { it.key }
-}
-
-private fun favoriteArtists(context: Context): Set<String> {
-    val out = mutableSetOf<String>()
-    for ((_, v) in context.getSharedPreferences("favorites_detail", 0).all) {
-        val artist = try { JSONObject(v as String).optString("artist").trim() } catch (_: Exception) { "" }
-        if (artist.isNotEmpty()) out += artist
-    }
-    return out
-}
-
 private fun heardKeys(context: Context): Set<String> {
     val out = mutableSetOf<String>()
     val arr = historyArray(context)
@@ -123,33 +97,6 @@ fun shouldRefresh(context: Context): Boolean { // [40dyn] 增量刷新节流：�
     val snap = try { JSONArray(prefs.getString("rec_build_heard_json", "[]")) } catch (_: Exception) { JSONArray() }
     val snapSet = (0 until snap.length()).map { snap.optString(it) }.toSet()
     return historyKeys(context).count { it !in snapSet } >= 3 // 新歌满 3 首
-}
-
-private fun topPlatform(context: Context): String {
-    val counts = LinkedHashMap<String, Int>()
-    val arr = historyArray(context)
-    for (i in 0 until minOf(arr.length(), 20)) {
-        val p = arr.optJSONObject(i)?.optString("platform").orEmpty()
-        if (p.isNotEmpty()) counts[p] = (counts[p] ?: 0) + 1
-    }
-    return counts.maxByOrNull { it.value }?.key ?: ""
-}
-
-// 轮询穿插：按艺人分组，轮流取每组最高分，防一艺人刷屏
-private fun interleave(list: List<RecommendItem>): List<RecommendItem> {
-    val byArtist = list.groupBy { norm(it.song.artist) }
-    val order = byArtist.entries.sortedByDescending { it.value.first().score }.map { it.key }
-    val iters = order.associateWith { byArtist[it]!!.iterator() }
-    val out = mutableListOf<RecommendItem>()
-    var progressed: Boolean
-    do {
-        progressed = false
-        for (a in order) {
-            val it = iters[a]!!
-            if (it.hasNext()) { out += it.next(); progressed = true }
-        }
-    } while (progressed)
-    return out
 }
 
 private fun songToJson(s: RSong, reason: String, score: Int): JSONObject = JSONObject().apply {
@@ -188,7 +135,7 @@ private fun readExcluded(prefs: android.content.SharedPreferences): Set<String> 
 private fun savePool(prefs: android.content.SharedPreferences, today: String, pool: List<RecommendItem>, histKeys: Set<String>) { // [40dyn] 建池快照
     val arr = JSONArray()
     for (item in pool) arr.put(songToJson(item.song, item.reason, item.score))
-    prefs.edit().putString("rec_pool_date", today + "_v4").putString("rec_pool_json", arr.toString()).putString("rec_reason_ver", "mag1").apply() // [40tag] rec_pool_date 加 _v4，旧池强制重建
+    prefs.edit().putString("rec_pool_date", today + "_v5").putString("rec_pool_json", arr.toString()).putString("rec_reason_ver", "mag1").apply() // [40taste] rec_pool_date 加 _v5，旧池强制重建
     val now = System.currentTimeMillis()
     val old = try { JSONArray(prefs.getString("rec_excluded_json", "[]")) } catch (_: Exception) { JSONArray() }
     val kept = JSONArray()
@@ -205,11 +152,61 @@ private fun savePool(prefs: android.content.SharedPreferences, today: String, po
     prefs.edit().putLong("rec_build_ms", now).putString("rec_build_heard_json", hk.toString()).apply() // [40dyn] 增量刷新快照
 }
 
-suspend fun buildRecommendPool(context: Context, force: Boolean = false): List<RecommendItem> { // [40dyn]
+// [40taste] 口味标签词库
+private val TASTE_TAGS = listOf("DJ", "电音", "民谣", "说唱", "钢琴", "摇滚", "古风", "粤语", "纯音乐", "爵士")
+
+// [40taste] 口味标签带权重（count = 最近 30 首里命中次数）
+private data class TagWeight(val name: String, val count: Int)
+
+// [40taste] 特征提取：最近 30 首（time 倒序）→ Top1 + 带权重标签 Top3
+private fun tasteProfile(context: Context): Pair<String, List<TagWeight>> {
+    val arr = historyArray(context)
+    val recent = (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }
+        .sortedByDescending { it.optLong("time", 0L) }.take(30)
+    val byArtist = recent.groupBy { it.optString("artist").trim() }
+        .filterKeys { it.isNotEmpty() && it != "未知歌手" }
+    val stats = byArtist.map { (a, list) -> Triple(a, list.size, list.maxOf { it.optLong("time", 0L) }) }
+    val top1 = stats.sortedWith(compareByDescending<Triple<String, Int, Long>> { it.second }
+        .thenByDescending { it.third }).firstOrNull()?.first.orEmpty()
+    val tagCount = LinkedHashMap<String, Int>()
+    for (o in recent) {
+        val text = norm(o.optString("title")) + norm(o.optString("artist"))
+        for (tag in TASTE_TAGS) {
+            if (text.contains(norm(tag))) tagCount[tag] = (tagCount[tag] ?: 0) + 1
+        }
+    }
+    val tags = tagCount.entries.sortedByDescending { it.value }
+        .map { TagWeight(it.key, it.value) }.take(3)
+    return top1 to tags
+}
+
+// [40taste] 按权重配比取数：名额 = N × count / 总数，最大余数法补齐；单组不够时按权重顺位从剩余里补
+private fun takeByWeight(groups: List<List<RecommendItem>>, weights: List<Int>, n: Int): List<RecommendItem> {
+    val m = minOf(groups.size, weights.size)
+    val g = groups.take(m)
+    val w = weights.take(m)
+    val total = w.sum().coerceAtLeast(1)
+    val quotas = w.map { it * n / total }.toMutableList()
+    val remainders = w.mapIndexed { i, c -> (c * n % total).toDouble() / total to i }
+    var left = n - quotas.sum()
+    val order = remainders.sortedByDescending { it.first }.map { it.second }
+    var oi = 0
+    while (left > 0 && oi < order.size) { quotas[order[oi]] += 1; left -= 1; oi += 1 }
+    val out = mutableListOf<RecommendItem>()
+    val leftovers = mutableListOf<RecommendItem>()
+    for (i in g.indices) {
+        out += g[i].take(quotas[i])
+        if (g[i].size > quotas[i]) leftovers += g[i].drop(quotas[i])
+    }
+    if (out.size < n) out += leftovers.take(n - out.size)
+    return out
+}
+
+suspend fun buildRecommendPool(context: Context, force: Boolean = false): List<RecommendItem> { // [40taste] 口味泛化重构
     recommendDeviceId(context)
     val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-    if (!force && prefs.getString("rec_pool_date", "") == today + "_v4" && prefs.getString("rec_reason_ver", "") == "mag1") { // [40tag] force 绕过缓存，_v4 强制重建
+    if (!force && prefs.getString("rec_pool_date", "") == today + "_v5" && prefs.getString("rec_reason_ver", "") == "mag1") { // [40taste] _v5 强制重建
         val cached = try {
             val arr = JSONArray(prefs.getString("rec_pool_json", "[]"))
             (0 until arr.length()).map { songFromJson(arr.getJSONObject(it)) }
@@ -217,91 +214,61 @@ suspend fun buildRecommendPool(context: Context, force: Boolean = false): List<R
         if (cached.isNotEmpty()) return cached
     }
     val heard = heardKeys(context)
-    val histKeys = historyKeys(context) // [40dyn]
-    val favArtists = favoriteArtists(context)
-    val favNorm = favArtists.map { norm(it) }.toSet()
-    val topPlat = topPlatform(context)
-    val artists = weightedTopArtists(context).ifEmpty { favArtists.take(6) }
-    val latestArtist = try { // [40dyn] 刚听歌手：time 时间戳最大那条
-        val arr = historyArray(context)
-        var bestT = 0L; var bestA = ""
-        for (i in 0 until arr.length()) {
-            val o = arr.optJSONObject(i) ?: continue
-            val t = o.optLong("time", 0L)
-            val a = o.optString("artist").trim()
-            if (t > bestT && a.isNotEmpty() && a != "未知歌手") { bestT = t; bestA = a }
-        }
-        bestA
-    } catch (_: Exception) { "" }
-    fun scoreOf(s: RSong, base: Int): Int {
-        var sc = base
-        if (norm(s.artist) in favNorm) sc += 50
-        if (topPlat.isNotEmpty() && s.platform == topPlat) sc += 20
-        if (latestArtist.isNotEmpty() && norm(s.artist) == norm(latestArtist)) sc += 200 // [40dyn] 刚听歌手权重最高
-        return sc
-    }
+    val histKeys = historyKeys(context) // [40taste] savePool 快照用完整历史集合
+    val excluded = readExcluded(prefs)
+    val (top1, tagWeights) = tasteProfile(context)
+    fun ok(s: RSong) = songKey(s.title, s.artist) !in heard && songKey(s.title, s.artist) !in excluded
     fun matchArtist(list: List<RSong>, a: String) = list.filter {
         norm(it.artist).contains(norm(a)) || norm(a).contains(norm(it.artist))
     }.filter { songKey(it.title, it.artist) !in heard }
-
-    if (artists.isEmpty()) {
-        val pool = mutableListOf<RecommendItem>()
-        for (kw in listOf("华语流行", "抖音爆火", "怀旧经典")) {
-            val list = try { LxMusicSearchApi.searchFull(kw) } catch (_: Exception) { emptyList() }
-            list.filter { songKey(it.title, it.artist) !in heard }
-                .take(15).forEach { pool += RecommendItem(it, listOf("为你精选", "耳畔惊喜").random()) } // [40tag] 兜底池去深夜专属，防与前缀撞词
+    // 锚点：Top1 的热门歌（第 1 张）；ok() 双滤（已听 + 排除项），无命中则缺席
+    val anchor = if (top1.isNotEmpty()) {
+        val list = try { LxMusicSearchApi.searchFull(top1) } catch (_: Exception) { emptyList() }
+        matchArtist(list, top1).filter { s -> ok(s) }.firstOrNull()
+            ?.let { RecommendItem(it, "因为你在听 $top1", 0) }
+    } else null
+    // 泛化 20 首：按权重配比（零标签兜底：热门推荐取 20 首）
+    val genLists: List<List<RecommendItem>>
+    val genWeights: List<Int>
+    if (tagWeights.isNotEmpty()) {
+        genLists = tagWeights.map { tw ->
+            val list = try { LxMusicSearchApi.searchFull(tw.name) } catch (_: Exception) { emptyList() }
+            list.filter { s -> ok(s) }.take(20).map { RecommendItem(it, "探索口味 · ${tw.name}", 0) }
         }
-        val final = pool.distinctBy { songKey(it.song.title, it.song.artist) }.shuffled()
-        savePool(prefs, today, final, histKeys)
-        return final
+        genWeights = tagWeights.map { it.count }
+    } else {
+        val list = try { LxMusicSearchApi.searchFull("热门推荐") } catch (_: Exception) { emptyList() }
+        genLists = listOf(list.filter { s -> ok(s) }.take(20).map { RecommendItem(it, "热门推荐", 0) })
+        genWeights = listOf(1)
     }
-
-    val mainArtists = artists.take(3)
-    val expArtists = artists.drop(3)
-    val rankWeight = listOf(100, 70, 40)
-    val scored = mutableListOf<RecommendItem>()
-    val tail = mutableListOf<RecommendItem>()
-    for ((idx, a) in mainArtists.withIndex()) {
-        val list = try { LxMusicSearchApi.searchFull(a) } catch (_: Exception) { emptyList() }
-        val matched = matchArtist(list, a)
-        matched.take(10).forEach { s -> scored += RecommendItem(s, "因为你在听 $a", scoreOf(s, rankWeight[idx])) } // [40final]
-        matched.drop(10).take(20).forEach { s -> tail += RecommendItem(s, "因为你在听 $a", scoreOf(s, 25)) } // [40final]
+    // 扩散 13 首：等权复用同一函数（无相似源，走热门推荐词库）
+    val diffTerms = if (tagWeights.isNotEmpty()) listOf("热门推荐", "华语流行", "抖音爆火") else listOf("华语流行", "抖音爆火")
+    val diffLists = diffTerms.map { term ->
+        val list = try { LxMusicSearchApi.searchFull(term) } catch (_: Exception) { emptyList() }
+        list.filter { s -> ok(s) }.take(20).map { RecommendItem(it, term, 0) }
     }
-    if (latestArtist.isNotEmpty() && mainArtists.none { norm(it) == norm(latestArtist) }) { // [40dyn] 刚听歌手不在 Top3 时另搜一次补进主池
-        val list = try { LxMusicSearchApi.searchFull(latestArtist) } catch (_: Exception) { emptyList() }
-        matchArtist(list, latestArtist).take(10).forEach { s -> scored += RecommendItem(s, "因为你在听 $latestArtist", scoreOf(s, 0)) }
-    }
-    for (a in expArtists) {
-        val list = try { LxMusicSearchApi.searchFull(a) } catch (_: Exception) { emptyList() }
-        matchArtist(list, a).take(10).forEach { s -> tail += RecommendItem(s, "因为你在听 $a", scoreOf(s, 25)) } // [40final]
-    }
-    val explore = mutableListOf<RecommendItem>()
-    for (kw in listOf("华语流行", "抖音爆火", "怀旧经典")) {
-        val list = try { LxMusicSearchApi.searchFull(kw) } catch (_: Exception) { emptyList() }
-        list.filter { songKey(it.title, it.artist) !in heard }
-            .take(5).forEach { explore += RecommendItem(it, listOf("热门推荐", "宝藏发现", "华语经典", "猜你喜欢", "耳畔惊喜", "心动旋律", "私人珍藏").random()) } // [40tag] 探索位 7 词裸随机
-    }
+    // 全局去重（锚点曲目也排除；跨标签同一首归最高权重标签）
     val seen = mutableSetOf<String>()
-    val main = interleave(scored.sortedByDescending { it.score }
-        .filter { seen.add(songKey(it.song.title, it.song.artist)) })
-    val tailOrdered = interleave(tail.sortedByDescending { it.score }
-        .filter { seen.add(songKey(it.song.title, it.song.artist)) })
-    val exploreDedup = explore.filter { seen.add(songKey(it.song.title, it.song.artist)) }
-    val pool = mutableListOf<RecommendItem>()
-    var ei = 0
-    for ((i, item) in main.withIndex()) {
-        pool += item
-        if ((i + 1) % 8 == 0 && ei < exploreDedup.size) pool += exploreDedup[ei++]
+    anchor?.let { seen += songKey(it.song.title, it.song.artist) }
+    fun dedup(l: List<RecommendItem>) = l.filter { seen.add(songKey(it.song.title, it.song.artist)) }
+    val gen = takeByWeight(genLists.map { dedup(it) }, genWeights, 20)
+    val diff = takeByWeight(diffLists.map { dedup(it) }, List(diffLists.size) { 1 }, 13)
+    // 防刷屏：锚点歌手先计入 1，循环只跑打乱后的 rest，最后 prepend 锚点；同歌手最多 2 首
+    val perArtist = mutableMapOf<String, Int>()
+    anchor?.let { perArtist[norm(it.song.artist)] = 1 } // [40taste] 锚点歌手先计入
+    val cappedRest = mutableListOf<RecommendItem>()
+    for (item in (gen + diff).shuffled()) {
+        val key = norm(item.song.artist)
+        val c = perArtist[key] ?: 0
+        if (c >= 2) continue
+        perArtist[key] = c + 1
+        cappedRest += item
     }
-    pool += tailOrdered
-    val excluded = readExcluded(prefs)
-    val filtered = pool.filter { songKey(it.song.title, it.song.artist) !in excluded }
-    val final = if (filtered.size >= 10) filtered else pool
-    savePool(prefs, today, final, histKeys)
-    return final
+    val capped = listOfNotNull(anchor) + cappedRest
+    savePool(prefs, today, capped, histKeys)
+    return capped
 }
 
-@Composable
 fun RecommendScreen(
     playerTitle: String,
     playerArtist: String,
