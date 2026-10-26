@@ -11518,8 +11518,11 @@ else:
         assert n == cnt, "v150 锚点数=%d 期望=%d: %s" % (n, cnt, old[:60])
         return s.replace(old, new)
 
-    # 1) import：LxRuntimeLog 在 util 包（v115 建，object + add(String)），LxSourceSettings 此前未引
-    s = rep("""import com.github.tvbox.osc.util.ScriptInfo""", """import com.github.tvbox.osc.util.ScriptInfo
+    # 1) import：LxRuntimeLog 在 util 包（v115 建，object + add(String)）；v116 已给 LxSourceSettings 加过该 import（无标记），CI 全链到此已有 1 份，再加即 2 份致后验失败——故已存在时只补标记、不重复加（v152 修复，落 v150 块内：v150 后验先死，后续块跑不到）
+    if "import com.github.tvbox.osc.util.LxRuntimeLog" in s:
+        s = rep("""import com.github.tvbox.osc.util.LxRuntimeLog""", """import com.github.tvbox.osc.util.LxRuntimeLog // [32v150]""")
+    else:
+        s = rep("""import com.github.tvbox.osc.util.ScriptInfo""", """import com.github.tvbox.osc.util.ScriptInfo
 import com.github.tvbox.osc.util.LxRuntimeLog // [32v150]""")
 
     # 2) testOneSong 的 Range 段：Boolean 改明细，失败时写运行日志（码/类型/读数/异常；只记 host 不记完整 URL，签名参数不进日志）；格子原因仍为 Range失败
