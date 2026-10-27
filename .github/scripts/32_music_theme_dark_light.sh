@@ -11968,3 +11968,57 @@ else:
     print("OK 32 v154 弹窗 UI 精修完成")
 PYEOF154
 echo "=== 32 v154 完成 ==="
+# === 32 v155: SourceCard 开关/删除缩小并固定左下角（用户确认） ===
+python3 << 'PYEOF155'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v155 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v155]" in s:
+    print("跳过（32 v155 已应用）")
+else:
+    switch_before = s.count("Switch(")
+    # 1) 卡片 Row 改 Column：文字在上、操作行在下；60dp 右侧留白与三点入口不动
+    s = rep(s,
+        "        Row(\n            modifier = Modifier\n                .fillMaxWidth()\n                .padding(start = 12.dp, top = 12.dp, end = if (showDots) 60.dp else 12.dp, bottom = 12.dp), // [32v143] 三点显示时右侧留 60dp，矮卡片也不盖删除键\n            verticalAlignment = Alignment.CenterVertically\n        ) {",
+        "        Column( // [32v155] 卡片改竖排：文字在上、开关/删除固定左下角一行\n            modifier = Modifier\n                .fillMaxWidth()\n                .padding(start = 12.dp, top = 12.dp, end = if (showDots) 60.dp else 12.dp, bottom = 12.dp), // [32v143] 三点显示时右侧留 60dp，矮卡片也不盖删除键\n        ) {",
+        "row-to-column")
+    # 2) 文字列 weight(1f)（RowScope 语义）改 fillMaxWidth
+    s = rep(s,
+        "            Column(modifier = Modifier.weight(1f)) {",
+        "            Column(modifier = Modifier.fillMaxWidth()) { // [32v155]",
+        "text-column")
+    # 3) 开关/删除改底部操作行：开关 scale 缩小、删除钮 36dp/图标 20dp
+    s = rep(s,
+        "            Spacer(modifier = Modifier.width(8.dp))\n            Switch(\n                checked = source.enabled,\n                onCheckedChange = onToggle\n            )\n            IconButton(onClick = onDeleteClick) {\n                Icon(\n                    Icons.Filled.Delete,\n                    contentDescription = \"删除\",\n                    tint = MaterialTheme.colorScheme.error\n                )\n            }",
+        "            Spacer(modifier = Modifier.height(8.dp)) // [32v155]\n            Row(verticalAlignment = Alignment.CenterVertically) { // [32v155] 操作行固定左下角\n                Switch(\n                    checked = source.enabled,\n                    onCheckedChange = onToggle,\n                    modifier = Modifier.scale(0.8f) // [32v155]\n                )\n                Spacer(modifier = Modifier.width(12.dp))\n                IconButton(\n                    onClick = onDeleteClick,\n                    modifier = Modifier.size(36.dp) // [32v155]\n                ) {\n                    Icon(\n                        Icons.Filled.Delete,\n                        contentDescription = \"删除\",\n                        tint = MaterialTheme.colorScheme.error,\n                        modifier = Modifier.size(20.dp) // [32v155]\n                    )\n                }\n            }",
+        "action-row")
+    # 4) 补 scale import（文件此前没有）
+    if "import androidx.compose.ui.draw.scale" not in s:
+        imp = "import androidx.compose.foundation.layout.width"
+        assert s.count(imp) == 1, "v155 import 锚点"
+        s = s.replace(imp, imp + "\nimport androidx.compose.ui.draw.scale // [32v155]", 1)
+    assert "Modifier.scale(0.8f)" in s, "v155 开关缩放未落"
+    assert "Modifier.size(36.dp)" in s, "v155 删除钮尺寸未落"
+    assert "Modifier.size(20.dp)" in s, "v155 删除图标尺寸未落"
+    assert "import androidx.compose.ui.draw.scale" in s, "v155 scale import 未落"
+    assert s.count("Switch(") == switch_before, "v155 Switch 数量变了"
+    assert "showDots" in s, "v155 三点条件丢失？"
+    assert "AnimatedVisibility( // [32v143]" in s, "v155 三点入口丢失？"
+    assert "Modifier.align(Alignment.TopEnd)" in s, "v155 三点右上对齐丢失？"
+    assert "onToggle" in s and "onDeleteClick" in s and "onPingClick" in s, "v155 回调丢失？"
+    assert "verifyResult" in s, "v155 验证状态丢失？"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v155 开关/删除左下角完成")
+PYEOF155
+echo "=== 32 v155 完成 ==="
