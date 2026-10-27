@@ -11880,3 +11880,91 @@ else:
     print("OK 32 v153 FontWeight 去重完成")
 PYEOF153
 echo "=== 32 v153 完成 ==="
+# === 32 v154: SourceTestDialog 视觉精修 + dialogButtonBg 主题 Token（用户确认方案 A） ===
+python3 << 'PYEOF154'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v154 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+
+# ---------- 1) LxMusicTheme.kt：新增 dialogButtonBg Token ----------
+T = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+t = open(T, encoding="utf-8").read()
+if "[32v154]" in t:
+    print("跳过主题部分（32 v154 已应用）")
+else:
+    assert "dialogButtonBg" not in t, "v154 dialogButtonBg 已存在？"
+    t = rep(t,
+        "    val iconTint: Color,        // 图标颜色\n)",
+        "    val iconTint: Color,        // 图标颜色\n    val dialogButtonBg: Color,  // [32v154] 弹窗按钮背景\n)",
+        "data-class")
+    t = rep(t,
+        "    iconTint = TextPrimary,\n)",
+        "    iconTint = TextPrimary,\n    dialogButtonBg = TextOnAccent,  // [32v154] 深墨绿弹窗按钮\n)",
+        "dark")
+    t = rep(t,
+        "    iconTint = Color(0xFF2B2118),\n)",
+        "    iconTint = Color(0xFF2B2118),\n    dialogButtonBg = Color(0xFF8E2A3E),  // [32v154] 深玫红弹窗按钮（珊瑚粉系深色调，白字可读）\n)",
+        "light")
+    assert t.count("dialogButtonBg") == 3, "v154 Token 计数: %d" % t.count("dialogButtonBg")
+    assert t.count("val dialogButtonBg: Color") == 1
+    assert "fun musicColors()" in t, "v154 musicColors 丢失？"
+    open(T, "w", encoding="utf-8").write(t)
+    print("OK 32 v154 dialogButtonBg Token 已注入")
+
+# ---------- 2) LxSourceSettings.kt：弹窗 UI 精修（探针逻辑不动） ----------
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v154]" in s:
+    print("跳过弹窗部分（32 v154 已应用）")
+else:
+    accent_before = s.count("musicColors().accent,")
+    s = rep(s,
+        "        Card( // [32v151]\n            shape = RoundedCornerShape(20.dp),",
+        "        Card( // [32v151]\n            modifier = Modifier.fillMaxWidth(0.85f), // [32v154]\n            shape = RoundedCornerShape(20.dp),",
+        "card-width")
+    s = rep(s,
+        "            Column(Modifier.padding(24.dp)) {",
+        "            Column(Modifier.padding(20.dp)) { // [32v154]",
+        "column-padding")
+    s = rep(s,
+        "                Spacer(Modifier.height(20.dp))\n",
+        "",
+        "spacer20")
+    s = rep(s,
+        "                                modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),",
+        "                                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),",
+        "row-padding")
+    s = rep(s,
+        "                                    modifier = Modifier.width(90.dp),",
+        "                                    modifier = Modifier.width(80.dp),",
+        "plat-width")
+    s = rep(s,
+        '                                            Text("${r.ms}ms", color = musicColors().textSecondary, fontSize = 12.sp)',
+        '                                            Text("${r.ms}ms", color = musicColors().textSecondary.copy(alpha = 0.7f), fontSize = 11.sp) // [32v154]',
+        "ms")
+    s = rep(s,
+        "                Button(\n                    onClick = onDismiss,\n                    modifier = Modifier.fillMaxWidth().height(48.dp),\n                    colors = ButtonDefaults.buttonColors(\n                        containerColor = musicColors().accent,\n                        contentColor = Color.White\n                    )",
+        "                Button( // [32v154]\n                    onClick = onDismiss,\n                    modifier = Modifier.fillMaxWidth().height(48.dp),\n                    shape = RoundedCornerShape(12.dp),\n                    colors = ButtonDefaults.buttonColors(\n                        containerColor = musicColors().dialogButtonBg,\n                        contentColor = Color.White\n                    )",
+        "button")
+    assert s.count("musicColors().dialogButtonBg") == 1, "v154 按钮 Token 引用"
+    assert s.count("musicColors().accent,") == accent_before - 1, "v154 accent 计数未减 1"
+    assert "Spacer(Modifier.height(20.dp))" not in s, "v154 Spacer 未删净"
+    assert "fillMaxWidth(0.85f)" in s, "v154 卡宽未落"
+    assert "RoundedCornerShape(12.dp)" in s, "v154 按钮圆角未落"
+    assert "probeSongsByPlatform()" in s, "v154 探针逻辑丢失？"
+    assert "testPlatformProbe(" in s, "v154 探针函数丢失？"
+    assert "TestState.Testing" in s, "v154 状态机丢失？"
+    assert 'phase = "完成"' in s, "v154 phase 丢失？"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v154 弹窗 UI 精修完成")
+PYEOF154
+echo "=== 32 v154 完成 ==="
