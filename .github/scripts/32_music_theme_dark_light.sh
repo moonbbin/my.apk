@@ -12245,3 +12245,42 @@ else:
     print("OK 32 v158 卡片验证探针口径完成")
 PYEOF158
 echo "=== 32 v158 完成 ==="
+# === 32 v159: 探针弹窗标题单行 + 底部免责说明 ===
+python3 << 'PYEOF159'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v159 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v159]" in s:
+    print("跳过（32 v159 已应用）")
+else:
+    s = rep(s,
+        "                Text(\n                    \"${source.name} · 高级检测\",\n                    style = MaterialTheme.typography.titleLarge,\n                    fontWeight = FontWeight.Bold,\n                    color = musicColors().textPrimary\n                )",
+        "                Text(\n                    \"${source.name} · 高级检测\",\n                    style = MaterialTheme.typography.titleMedium, // [32v159]\n                    fontWeight = FontWeight.SemiBold, // [32v159]\n                    color = musicColors().textPrimary,\n                    maxLines = 1, // [32v159]\n                    overflow = TextOverflow.Ellipsis // [32v159]\n                )",
+        "dialog-title")
+    s = rep(s,
+        "                Spacer(Modifier.height(24.dp))\n                Button( // [32v154]",
+        "                Spacer(Modifier.height(16.dp)) // [32v159]\n                Text(\n                    \"注：部分聚合脚本存在多后端机制。若此处探测失败，播放时仍可能自动切换备用节点成功获取音源，请以实际播放为准。\", // [32v159]\n                    fontSize = 11.sp,\n                    lineHeight = 16.sp,\n                    color = musicColors().textSecondary.copy(alpha = 0.6f)\n                )\n                Spacer(Modifier.height(16.dp)) // [32v159]\n                Button( // [32v154]",
+        "dialog-disclaimer")
+    assert "style = MaterialTheme.typography.titleMedium, // [32v159]" in s, "v159 标题未落"
+    assert "fontWeight = FontWeight.SemiBold, // [32v159]" in s, "v159 字重未落"
+    assert "maxLines = 1, // [32v159]" in s, "v159 单行未落"
+    assert "注：部分聚合脚本存在多后端机制" in s, "v159 免责未落"
+    assert "Modifier.fillMaxWidth().height(48.dp)" in s, "v159 按钮高度丢失？"
+    assert "shape = RoundedCornerShape(12.dp)" in s, "v159 按钮圆角丢失？"
+    assert "val passed = okCount > 0" in s, "v159 误动 v158 判定？"
+    assert "val showDots = verifyResult != null && !verifyResult.verifying" in s, "v159 误动 v157 入口？"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v159 弹窗标题单行 + 免责完成")
+PYEOF159
+echo "=== 32 v159 完成 ==="
