@@ -12085,3 +12085,36 @@ else:
     print("OK 32 v156 三点横向 + 右侧操作列完成")
 PYEOF156
 echo "=== 32 v156 完成 ==="
+# === 32 v157: 三点入口放开（方案 B，verify 判定不动） ===
+python3 << 'PYEOF157'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v157 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v157]" in s:
+    print("跳过（32 v157 已应用）")
+else:
+    s = rep(s,
+        "    // 与卡内“验证通过”同一条件；VerifyResult 是 data class（success 布尔字段），无 Success 子类\n    val showDots = verifyResult != null && !verifyResult.verifying && verifyResult.success",
+        "    // [32v157] 三点入口放开（方案 B）：有结果且不在验证中即显示，成功失败都可点开高级检测；verify 判定不动\n    val showDots = verifyResult != null && !verifyResult.verifying",
+        "showDots")
+    assert "val showDots = verifyResult != null && !verifyResult.verifying" in s, "v157 showDots 未落"
+    assert "val showDots = verifyResult != null && !verifyResult.verifying && verifyResult.success" not in s, "v157 旧定义残留"
+    assert "AnimatedVisibility( // [32v143]" in s, "v157 三点入口丢失？"
+    assert "showTestDialog" in s, "v157 弹窗开关丢失？"
+    assert "val passed = successCount >= 4" in s, "v157 误动 verify 判定？"
+    assert "fun verify(" in s, "v157 verify 本体丢失？"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v157 三点入口放开完成")
+PYEOF157
+echo "=== 32 v157 完成 ==="
