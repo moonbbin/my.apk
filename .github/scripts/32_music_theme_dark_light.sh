@@ -12118,3 +12118,130 @@ else:
     print("OK 32 v157 三点入口放开完成")
 PYEOF157
 echo "=== 32 v157 完成 ==="
+# === 32 v158: 卡片验证改探针口径（任一平台能播即通过，方案 A） ===
+python3 << 'PYEOF158'
+import os, re
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v158 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+def stripped(t):
+    t = re.sub(r'"(?:\\.|[^"\\])*"', '""', t)
+    t = re.sub(r"'(?:\\.|[^'\\])*'", "''", t)
+    t = re.sub(r"//[^\n]*", "", t)
+    t = re.sub(r"/\*.*?\*/", "", t, flags=re.S)
+    return t
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v158]" in s:
+    print("跳过（32 v158 已应用）")
+else:
+    # 1) 跨度替换：步骤 6 + 5 首固定歌循环 + 汇总 -> 探针口径（dialog 同款调用链）
+    lines = s.split("\n")
+    starts = [i for i, ln in enumerate(lines) if "选测试平台：优先 wy" in ln]
+    ends = [i for i, ln in enumerate(lines) if ln.strip() == "finish(passed, avgLatency, if (passed) null else lastError)"]
+    assert len(starts) == 1 and len(ends) == 1, "v158 跨度锚点: %d/%d" % (len(starts), len(ends))
+    si, ei = starts[0], ends[0]
+    assert si < ei, "v158 跨度倒置"
+    new_block = """                // 6. [32v158] 探针口径：全部声明平台实测，任一平台能播即通过（方案 A）
+                if (decls.isEmpty()) {
+                    android.util.Log.w(TAG, "验证 $sourceId: 脚本未声明任何平台")
+                    LxRuntimeLog.add("验证 $sourceId: 脚本未声明任何平台")
+                    finish(false, System.currentTimeMillis() - start, "脚本未声明任何平台")
+                    return@Thread
+                }
+                android.util.Log.i(TAG, "验证 $sourceId: 独立引擎在 ${decls.size} 个平台探针测试")
+                val probeEngine = TestEngine(eng, decls.keys.toList())
+                var searchFailed = false
+                val songsByPlat: Map<String, List<LxMusicSearchApi.SongInfo>> = try {
+                    kotlinx.coroutines.runBlocking { probeSongsByPlatform() }
+                } catch (e: Exception) {
+                    searchFailed = true
+                    emptyMap()
+                }
+                val probeResults: List<Pair<String, TestState>> = kotlinx.coroutines.runBlocking {
+                    coroutineScope {
+                        val tasks = decls.keys.map { plat ->
+                            async {
+                                if (searchFailed) {
+                                    TestState.Fail("搜索失败", false)
+                                } else {
+                                    testPlatformProbe(probeEngine, plat, songsByPlat[probeNormPlat(plat)] ?: emptyList())
+                                }
+                            }
+                        }
+                        val out = mutableListOf<Pair<String, TestState>>()
+                        for ((plat, task) in decls.keys.zip(tasks)) {
+                            out.add(plat to task.await())
+                        }
+                        out
+                    }
+                }
+                var okCount = 0
+                var firstOkMs: Long? = null
+                val failNotes = mutableListOf<String>()
+                for ((plat, st) in probeResults) {
+                    when (st) {
+                        is TestState.Ok -> {
+                            okCount++
+                            if (firstOkMs == null) firstOkMs = st.ms
+                        }
+                        is TestState.Fail -> {
+                            failNotes.add(plat + ": " + st.reason)
+                            LxRuntimeLog.add("验证 $sourceId 平台 $plat 失败: " + st.reason)
+                        }
+                        is TestState.NoSong -> failNotes.add(plat + ": 搜不到歌")
+                        is TestState.Testing -> {}
+                    }
+                }
+                val passed = okCount > 0 // [32v158]
+                val latencyMs = firstOkMs ?: (System.currentTimeMillis() - start)
+                android.util.Log.i(TAG, "验证 $sourceId: $okCount/${decls.size} 平台可播, ${if (passed) "有效" else "无效"}")
+                LxRuntimeLog.add("验证 $sourceId($sourceName): $okCount/${decls.size} 平台可播, " + if (passed) "有效" else "无效")
+                finish(passed, latencyMs, if (passed) null else failNotes.joinToString("；").ifEmpty { "全部平台无可播歌曲" })"""
+    lines[si:ei + 1] = new_block.split("\n")
+    s = "\n".join(lines)
+    # 2) 退役 rangeCheckOk：旧循环唯一调用点已随跨度替换删除，函数本体按大括号跨度删除
+    lines = s.split("\n")
+    di = [i for i, ln in enumerate(lines) if ln.strip() == "private fun rangeCheckOk(url: String): Boolean {"]
+    assert len(di) == 1, "v158 rangeCheckOk 锚点: %d" % len(di)
+    di = di[0]
+    depth = 0
+    ej = None
+    for j in range(di, len(lines)):
+        st = stripped(lines[j])
+        depth += st.count("{") - st.count("}")
+        if j > di and depth == 0:
+            ej = j
+            break
+    assert ej is not None, "v158 rangeCheckOk 跨度未闭合"
+    del lines[di:ej + 1]
+    s = "\n".join(lines)
+    # 3) 探针 Range 注释去 stale：卡片 rangeCheckOk 已退役
+    s = rep(s,
+        "// [32v147] Range 真拉流：与卡片 verify() 的 rangeCheckOk 同体（200/206 + 音频 Content-Type + 实读数据；顶层无 verifier 的 TAG，用字面 tag）；Client 共用，连接复用省重复 TLS 握手",
+        "// [32v147] Range 真拉流（200/206 + 音频 Content-Type + 实读数据；顶层无 verifier 的 TAG，用字面 tag）；Client 共用，连接复用省重复 TLS 握手",
+        "range-comment")
+    assert "testSongs" not in s, "v158 旧循环残留 testSongs"
+    assert "successCount" not in s, "v158 旧循环残留 successCount"
+    assert "avgLatency" not in s, "v158 旧汇总残留 avgLatency"
+    assert "val passed = successCount >= 4" not in s, "v158 旧门残留"
+    assert "rangeCheckOk" not in s, "v158 rangeCheckOk 残留"
+    assert "testPlatformProbe(probeEngine" in s, "v158 探针调用未落"
+    assert "probeSongsByPlatform()" in s, "v158 探针搜歌未落"
+    assert "val passed = okCount > 0" in s, "v158 新门未落"
+    assert "fun verify(" in s and "updatePool(" in s and "saveResultCache(" in s, "v158 写池路径丢失？"
+    assert "fun ping(" in s and "isValidMusicUrl(url)" in s, "v158 ping 误伤？"
+    assert "val showDots = verifyResult != null && !verifyResult.verifying" in s, "v158 误动 v157 入口？"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v158 卡片验证探针口径完成")
+PYEOF158
+echo "=== 32 v158 完成 ==="
