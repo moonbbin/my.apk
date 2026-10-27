@@ -12022,3 +12022,66 @@ else:
     print("OK 32 v155 开关/删除左下角完成")
 PYEOF155
 echo "=== 32 v155 完成 ==="
+# === 32 v156: SourceCard 三点改横向 + 右侧操作列上下对齐（用户确认） ===
+python3 << 'PYEOF156'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v156 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v156]" in s:
+    print("跳过（32 v156 已应用）")
+else:
+    switch_before = s.count("Switch(")
+    # 1) 撤销外层 Box 悬浮结构（描述/版本声明上移）
+    s = rep(s,
+        "    Box(Modifier.fillMaxWidth()) { // [32v143] 外层 Box：卡片 + 右上角三点悬浮同级\n\n    val description = source.scriptInfo[\"description\"].orEmpty()\n    val version = source.scriptInfo[\"version\"].orEmpty()",
+        "    val description = source.scriptInfo[\"description\"].orEmpty()\n    val version = source.scriptInfo[\"version\"].orEmpty()",
+        "box-remove")
+    # 2) 卡片竖 Column 回横 Row，60dp 悬浮留白退役
+    s = rep(s,
+        "        Column( // [32v155] 卡片改竖排：文字在上、开关/删除固定左下角一行\n            modifier = Modifier\n                .fillMaxWidth()\n                .padding(start = 12.dp, top = 12.dp, end = if (showDots) 60.dp else 12.dp, bottom = 12.dp), // [32v143] 三点显示时右侧留 60dp，矮卡片也不盖删除键\n        ) {",
+        "        Row( // [32v156] 回左右两列：左文字列、右操作列\n            modifier = Modifier\n                .fillMaxWidth()\n                .padding(12.dp), // [32v156] 三点改行内布局，60dp 悬浮留白退役\n        ) {",
+        "row-restore")
+    # 3) 文字列回 weight(1f)
+    s = rep(s,
+        "            Column(modifier = Modifier.fillMaxWidth()) { // [32v155]",
+        "            Column(modifier = Modifier.weight(1f)) { // [32v156] 文字列回 weight",
+        "text-column")
+    # 4) 底部操作行改右侧操作列：上横向三点、Spacer 顶底、下开关删除；悬浮三点与 Box 关一并删除
+    s = rep(s,
+        "            Spacer(modifier = Modifier.height(8.dp)) // [32v155]\n            Row(verticalAlignment = Alignment.CenterVertically) { // [32v155] 操作行固定左下角\n                Switch(\n                    checked = source.enabled,\n                    onCheckedChange = onToggle,\n                    modifier = Modifier.scale(0.8f) // [32v155]\n                )\n                Spacer(modifier = Modifier.width(12.dp))\n                IconButton(\n                    onClick = onDeleteClick,\n                    modifier = Modifier.size(36.dp) // [32v155]\n                ) {\n                    Icon(\n                        Icons.Filled.Delete,\n                        contentDescription = \"删除\",\n                        tint = MaterialTheme.colorScheme.error,\n                        modifier = Modifier.size(20.dp) // [32v155]\n                    )\n                }\n            }\n        }\n    }\n\n    AnimatedVisibility( // [32v143] 三点入口：仅验证成功时淡入\n        visible = showDots,\n        enter = fadeIn(), exit = fadeOut(),\n        modifier = Modifier.align(Alignment.TopEnd)\n    ) {\n        IconButton(onClick = { showTestDialog = true }) {\n            val dotColor = MaterialTheme.colorScheme.onSurfaceVariant // [32v145] 主题色必须在 @Composable 上下文读；Canvas 的 DrawScope 里读即报 594:39\n            Canvas(Modifier.size(24.dp)) {\n                val r = 2.5.dp.toPx()\n                val cx = size.width / 2\n                drawCircle(dotColor, r, Offset(cx, 5.dp.toPx()))\n                drawCircle(dotColor, r, Offset(cx, 12.dp.toPx()))\n                drawCircle(dotColor, r, Offset(cx, 19.dp.toPx()))\n            }\n        }\n    }\n    } // [32v143] 外层 Box 关",
+        "            Spacer(modifier = Modifier.width(8.dp))\n            Column( // [32v156] 右侧操作列：上三点、下开关删除，右对齐\n                modifier = Modifier.fillMaxHeight(),\n                horizontalAlignment = Alignment.End\n            ) {\n                AnimatedVisibility( // [32v143] 三点入口：仅验证成功时淡入\n                    visible = showDots,\n                    enter = fadeIn(), exit = fadeOut()\n                ) {\n                    IconButton(onClick = { showTestDialog = true }) {\n                        val dotColor = MaterialTheme.colorScheme.onSurfaceVariant // [32v145] 主题色必须在 @Composable 上下文读；Canvas 的 DrawScope 里读即报 594:39\n                        Canvas(Modifier.size(24.dp)) {\n                            val r = 2.0.dp.toPx() // [32v156] 横向三点\n                            val cy = size.height / 2\n                            drawCircle(dotColor, r, Offset(4.dp.toPx(), cy))\n                            drawCircle(dotColor, r, Offset(12.dp.toPx(), cy))\n                            drawCircle(dotColor, r, Offset(20.dp.toPx(), cy))\n                        }\n                    }\n                }\n                Spacer(modifier = Modifier.weight(1f))\n                Row(verticalAlignment = Alignment.CenterVertically) { // [32v156] 底部操作行\n                    Switch(\n                        checked = source.enabled,\n                        onCheckedChange = onToggle,\n                        modifier = Modifier.scale(0.8f) // [32v155]\n                    )\n                    Spacer(modifier = Modifier.width(12.dp))\n                    IconButton(\n                        onClick = onDeleteClick,\n                        modifier = Modifier.size(36.dp) // [32v155]\n                    ) {\n                        Icon(\n                            Icons.Filled.Delete,\n                            contentDescription = \"删除\",\n                            tint = MaterialTheme.colorScheme.error,\n                            modifier = Modifier.size(20.dp) // [32v155]\n                        )\n                    }\n                }\n            }\n        }\n    }",
+        "action-column")
+    # 5) 补 fillMaxHeight import（文件此前没有）
+    if "import androidx.compose.foundation.layout.fillMaxHeight" not in s:
+        imp = "import androidx.compose.foundation.layout.fillMaxSize"
+        assert s.count(imp) == 1, "v156 import 锚点"
+        s = s.replace(imp, imp + "\nimport androidx.compose.foundation.layout.fillMaxHeight // [32v156]", 1)
+    assert "val r = 2.0.dp.toPx()" in s, "v156 横向三点半径未落"
+    assert "Offset(4.dp.toPx(), cy)" in s and "Offset(20.dp.toPx(), cy)" in s, "v156 横向三点坐标未落"
+    assert "Modifier.fillMaxHeight()" in s, "v156 右侧列 fillMaxHeight 未落"
+    assert "import androidx.compose.foundation.layout.fillMaxHeight" in s, "v156 fillMaxHeight import 未落"
+    assert "外层 Box：卡片 + 右上角三点悬浮同级" not in s, "v156 外层 Box 未删干净"
+    assert "end = if (showDots) 60.dp else 12.dp" not in s, "v156 60dp 悬浮留白未退役"
+    assert s.count("Switch(") == switch_before, "v156 Switch 数量变了"
+    assert "showDots" in s, "v156 三点条件丢失？"
+    assert "AnimatedVisibility( // [32v143]" in s, "v156 三点入口丢失？"
+    assert "showTestDialog" in s, "v156 弹窗开关丢失？"
+    assert "onToggle" in s and "onDeleteClick" in s and "onPingClick" in s, "v156 回调丢失？"
+    assert "verifyResult" in s, "v156 验证状态丢失？"
+    assert "Modifier.scale(0.8f)" in s, "v156 开关尺寸未保留"
+    assert "Modifier.size(36.dp)" in s and "Modifier.size(20.dp)" in s, "v156 删除尺寸未保留"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v156 三点横向 + 右侧操作列完成")
+PYEOF156
+echo "=== 32 v156 完成 ==="
