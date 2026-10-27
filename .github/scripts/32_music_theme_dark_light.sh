@@ -12485,3 +12485,70 @@ private fun readProbeCount(body: okhttp3.ResponseBody?, max: Long): Long {
     print("OK 32 v161 探针去 Range + 跟随 + 扒皮完成")
 PYEOF161
 echo "=== 32 v161 完成 ==="
+# === 32 v162: 运行日志抽屉底部锚定（reverseLayout + 倒序 + 跟随） ===
+python3 << 'PYEOF162'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v162 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v162]" in s:
+    print("跳过（32 v162 已应用）")
+else:
+    if "import androidx.compose.foundation.lazy.rememberLazyListState" not in s:
+        s = rep(s,
+            "import androidx.compose.foundation.lazy.itemsIndexed // [32v151]",
+            "import androidx.compose.foundation.lazy.itemsIndexed // [32v151]\nimport androidx.compose.foundation.lazy.rememberLazyListState // [32v162]",
+            "import-rememberLazyListState")
+    s = rep(s, """            if (logLines.isEmpty()) {
+                Text(
+                    text = "暂无日志",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = musicColors().textSecondary
+                )""", """            if (logLines.isEmpty()) {
+                Box( // [32v162] 空状态也贴底
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.BottomStart
+                ) {
+                    Text(
+                        text = "暂无日志",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary
+                    )
+                }""", "empty-bottom")
+    s = rep(s, """                LazyColumn(modifier = Modifier.weight(1f)) {
+                    items(logLines) { line ->""", """                val logListState = rememberLazyListState() // [32v162]
+                LaunchedEffect(logLines.size) { // [32v162] 新日志来时仅在底部才跟随
+                    val atBottom = logListState.layoutInfo.visibleItemsInfo.any { it.index == 0 }
+                    if (atBottom) logListState.scrollToItem(0)
+                }
+                val displayLines = logLines.asReversed() // [32v162] 新→旧，配合 reverseLayout 使最新一条贴底
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    state = logListState, // [32v162]
+                    reverseLayout = true // [32v162]
+                ) {
+                    itemsIndexed(displayLines, key = { index, _ -> index }) { _, line ->""", "list-reverse")
+    assert "reverseLayout = true" in s, "v162 reverseLayout 未落"
+    assert "logLines.asReversed()" in s, "v162 倒序未落"
+    assert "rememberLazyListState()" in s, "v162 listState 未落"
+    assert "scrollToItem(0)" in s, "v162 跟随未落"
+    assert "items(logLines)" not in s, "v162 旧列表残留"
+    assert "itemsIndexed(displayLines" in s, "v162 itemsIndexed 未落"
+    assert s.count("import androidx.compose.foundation.lazy.rememberLazyListState") == 1, "v162 import 数量异常"
+    assert "暂无日志" in s, "v162 空状态丢失？"
+    assert "LxRuntimeLog.clear()" in s, "v162 误动标题行？"
+    assert "ModalBottomSheet" in s, "v162 误动抽屉？"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v162 运行日志抽屉底部锚定完成")
+PYEOF162
+echo "=== 32 v162 完成 ==="
