@@ -12316,3 +12316,172 @@ else:
     print("OK 32 v160 成功耗时改成功绿完成")
 PYEOF160
 echo "=== 32 v160 完成 ==="
+# === 32 v161: 探针去 Range + 手动跟随重定向 + JSON 扒皮 ===
+python3 << 'PYEOF161'
+import os, re
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v161 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+def stripped(t):
+    t = re.sub(r'"(?:\\.|[^"\\])*"', '""', t)
+    t = re.sub(r"'(?:\\.|[^'\\])*'", "''", t)
+    t = re.sub(r"//[^\n]*", "", t)
+    t = re.sub(r"/\*.*?\*/", "", t, flags=re.S)
+    return t
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v161]" in s:
+    print("跳过（32 v161 已应用）")
+else:
+    s = rep(s,
+        "private val sharedRangeClient = okhttp3.OkHttpClient.Builder() // [32v147]\n    .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)\n    .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)\n    .followRedirects(true)\n    .build()",
+        "private val sharedRangeClient = okhttp3.OkHttpClient.Builder() // [32v147]\n    .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)\n    .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)\n    .followRedirects(false) // [32v161]\n    .followSslRedirects(false) // [32v161]\n    .build()",
+        "range-client")
+    lines = s.split("\n")
+    di = [i for i, ln in enumerate(lines) if ln.strip() == "private fun testRangeOk(url: String): RangeDetail {"]
+    assert len(di) == 1, "v161 testRangeOk 锚点: %d" % len(di)
+    di = di[0]
+    depth = 0
+    ej = None
+    for j in range(di, len(lines)):
+        st = stripped(lines[j])
+        depth += st.count("{") - st.count("}")
+        if j > di and depth == 0:
+            ej = j
+            break
+    assert ej is not None, "v161 testRangeOk 跨度未闭合"
+    new_code = r"""// [32v161] 探针 liveness：普通 GET（去 Range）+ 手动跟随重定向 + JSON 扒皮一层
+private fun testRangeOk(url: String): RangeDetail {
+    return checkProbeUrl(url, 0)
+}
+
+private fun checkProbeUrl(url: String, peelDepth: Int): RangeDetail {
+    var current = url
+    val visited = mutableSetOf<String>()
+    repeat(6) { // 首次 + 最多 5 次跳转
+        if (!visited.add(current)) {
+            return RangeDetail(false, -1, "", 0, "重定向循环")
+        }
+        when (val r = fetchProbeOnce(current, peelDepth)) {
+            is ProbeFetch.Redirect -> current = r.location
+            is ProbeFetch.Done -> return r.detail
+        }
+    }
+    return RangeDetail(false, -1, "", 0, "重定向过多")
+}
+
+private sealed interface ProbeFetch {
+    data class Redirect(val location: String) : ProbeFetch
+    data class Done(val detail: RangeDetail) : ProbeFetch
+}
+
+private fun fetchProbeOnce(url: String, peelDepth: Int): ProbeFetch {
+    return try {
+        val request = okhttp3.Request.Builder()
+            .url(url)
+            .header("User-Agent", "Mozilla/5.0 (Linux; Android 10)")
+            .get()
+            .build()
+        sharedRangeClient.newCall(request).execute().use { resp ->
+            val code = resp.code
+            if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
+                val loc = resp.header("Location")
+                if (loc.isNullOrBlank()) {
+                    ProbeFetch.Done(RangeDetail(false, code, "", 0, "重定向无 Location"))
+                } else {
+                    val resolved = try {
+                        java.net.URL(java.net.URL(url), loc).toString()
+                    } catch (_: Exception) {
+                        loc
+                    }
+                    ProbeFetch.Redirect(resolved)
+                }
+            } else if (code != 200 && code != 206) {
+                ProbeFetch.Done(RangeDetail(false, code, "", 0, "状态码不通过"))
+            } else {
+                val contentType = (resp.header("Content-Type") ?: "").lowercase()
+                if (contentType.contains("json")) {
+                    if (peelDepth >= 1) {
+                        ProbeFetch.Done(RangeDetail(false, code, contentType, 0, "类型不通过"))
+                    } else {
+                        val text = readProbeText(resp.body, 1024)
+                        val peeled = Regex("https?://[^\\s\"'\\\\]+").find(text)?.value
+                        if (peeled == null) {
+                            ProbeFetch.Done(RangeDetail(false, code, contentType, 0, "类型不通过"))
+                        } else {
+                            ProbeFetch.Done(checkProbeUrl(peeled, peelDepth + 1))
+                        }
+                    }
+                } else {
+                    val typeOk = contentType.contains("audio") ||
+                        contentType.contains("application/octet-stream") ||
+                        contentType.contains("mpegurl") ||
+                        contentType.contains("dash+xml")
+                    if (!typeOk) {
+                        ProbeFetch.Done(RangeDetail(false, code, contentType, 0, "类型不通过"))
+                    } else {
+                        val read = readProbeCount(resp.body, 1024)
+                        if (read > 0) ProbeFetch.Done(RangeDetail(true, code, contentType, read, ""))
+                        else ProbeFetch.Done(RangeDetail(false, code, contentType, 0, "body为空"))
+                    }
+                }
+            }
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        ProbeFetch.Done(RangeDetail(false, -1, "", 0, "异常:" + (e::class.simpleName ?: "?") + ":" + (e.message ?: "")))
+    }
+}
+
+private fun readProbeText(body: okhttp3.ResponseBody?, max: Long): String {
+    if (body == null) return ""
+    val source = body.source()
+    val buf = okio.Buffer()
+    var total = 0L
+    while (total < max) {
+        val read = source.read(buf, max - total)
+        if (read == -1L) break
+        total += read
+    }
+    return buf.readUtf8()
+}
+
+private fun readProbeCount(body: okhttp3.ResponseBody?, max: Long): Long {
+    if (body == null) return 0
+    val source = body.source()
+    val buf = okio.Buffer()
+    var total = 0L
+    while (total < max) {
+        val read = source.read(buf, max - total)
+        if (read == -1L) break
+        total += read
+    }
+    buf.clear()
+    return total
+}"""
+    lines[di:ej + 1] = new_code.split("\n")
+    s = "\n".join(lines)
+    assert "checkProbeUrl(url, 0)" in s, "v161 新门未落"
+    assert ".followRedirects(false)" in s, "v161 client 未落"
+    assert "readProbeText" in s and "readProbeCount" in s, "v161 读数 helper 未落"
+    assert "重定向循环" in s and "重定向过多" in s, "v161 重定向原因未落"
+    assert ".header(\"Range\", \"bytes=0-1023\")" not in s, "v161 Range 头残留"
+    assert ".followRedirects(true)" not in s, "v161 旧跟随残留"
+    assert "data class RangeDetail" in s, "v161 RangeDetail 丢失？"
+    assert "testRangeOk(url)" in s, "v161 调用点丢失？"
+    assert "style = MaterialTheme.typography.titleMedium, // [32v159]" in s, "v161 误动 v159？"
+    assert "val passed = okCount > 0" in s, "v161 误动 v158 判定？"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v161 探针去 Range + 跟随 + 扒皮完成")
+PYEOF161
+echo "=== 32 v161 完成 ==="
