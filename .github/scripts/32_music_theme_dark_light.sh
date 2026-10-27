@@ -12284,3 +12284,35 @@ else:
     print("OK 32 v159 弹窗标题单行 + 免责完成")
 PYEOF159
 echo "=== 32 v159 完成 ==="
+# === 32 v160: 探针弹窗成功耗时 ms 改成功绿 ===
+python3 << 'PYEOF160'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v160 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v160]" in s:
+    print("跳过（32 v160 已应用）")
+else:
+    s = rep(s,
+        "                                            Text(\"${r.ms}ms\", color = musicColors().textSecondary.copy(alpha = 0.7f), fontSize = 11.sp) // [32v154]",
+        "                                            Text(\"${r.ms}ms\", color = Color(0xFF00B894).copy(alpha = 0.6f), fontSize = 11.sp) // [32v160]",
+        "dialog-ms-color")
+    assert "color = Color(0xFF00B894).copy(alpha = 0.6f), fontSize = 11.sp) // [32v160]" in s, "v160 ms 颜色未落"
+    assert "Text(\"${r.ms}ms\", color = musicColors().textSecondary.copy(alpha = 0.7f)" not in s, "v160 旧灰色残留"
+    assert "style = MaterialTheme.typography.titleMedium, // [32v159]" in s, "v160 误动 v159 标题？"
+    assert "注：部分聚合脚本存在多后端机制" in s, "v160 误动 v159 免责？"
+    assert "val passed = okCount > 0" in s, "v160 误动 v158 判定？"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v160 成功耗时改成功绿完成")
+PYEOF160
+echo "=== 32 v160 完成 ==="
