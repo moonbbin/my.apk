@@ -1259,3 +1259,33 @@ assert "精选" not in s2 and "Stroke(width" not in s2 and "TextAlign" not in s2
 print("OK 41 v9 FeedCard 排版二期已加")
 PYEOF41V9B
 echo "=== 41 v9 完成 ==="
+
+# === 41 v10: 段标题绿线换白点 ===
+python3 << 'PYEOF41V10'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+if not os.path.exists(P):
+    print("❌ 未找到 RecommendScreen.kt"); sys.exit(1)
+s = open(P, encoding="utf-8").read()
+if "[41v10]" in s:
+    print("跳过（41 v10 已应用）"); sys.exit(0)
+
+def rep(old, new, tag):
+    global s
+    assert s.count(old) == 1, "锚点异常: " + tag
+    s = s.replace(old, new, 1)
+
+rep("import androidx.compose.foundation.shape.CircleShape // [40float]\n",
+    "import androidx.compose.foundation.shape.CircleShape // [40float]\nimport androidx.compose.ui.draw.shadow // [41v10] 白点淡阴影\n", "白点阴影 import")
+rep("                    Box(Modifier.size(width = 20.dp, height = 3.dp).background(musicColors().accent))",
+    "                    Box(Modifier.size(8.dp).shadow(2.dp, CircleShape).background(Color.White, CircleShape)) // [41v10] 段标题白点", "绿线换白点")
+
+open(P, "w", encoding="utf-8").write(s)
+s2 = open(P, encoding="utf-8").read()
+assert "[41v10]" in s2 and "size(8.dp).shadow(2.dp, CircleShape)" in s2, "写盘复核失败"
+assert "size(width = 20.dp, height = 3.dp)" not in s2, "旧绿线残留"
+print("OK 41 v10 段标题白点已加")
+PYEOF41V10
+echo "=== 41 v10 完成 ==="
