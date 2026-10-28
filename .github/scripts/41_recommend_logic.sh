@@ -1043,3 +1043,29 @@ assert "[41v7]" in s2 and "ShelfCard" in s2 and "isHero" in s2, "写盘复核失
 print("OK 41 v7 FeedCard 主角卡 + 货架小卡已加")
 PYEOF41V7B
 echo "=== 41 v7 完成 ==="
+
+# === 41 v8: 构建红修复（定键 when 三分支挤在一行被编译器粘成一个分支，改每分支独立行）===
+python3 << 'PYEOF41V8'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+if not os.path.exists(P):
+    print("❌ 未找到 RecommendScreen.kt"); sys.exit(1)
+s = open(P, encoding="utf-8").read()
+if "[41v8]" in s:
+    print("跳过（41 v8 已应用）"); sys.exit(0)
+
+old = 'key = { row -> when (row) { is DisplayRow.Card -> row.item.song.title + "|" + row.item.song.artist + "|" + row.item.song.platform is DisplayRow.Header -> "header:" + row.title is DisplayRow.Shelf -> "shelf:hot" } }'
+assert s.count(old) == 1, "锚点异常: 定键单行 when"
+new = 'key = { row ->\n            when (row) { // [41v8] 分支各独立行（单行挤写会被粘成一个分支）\n                is DisplayRow.Card -> row.item.song.title + "|" + row.item.song.artist + "|" + row.item.song.platform\n                is DisplayRow.Header -> "header:" + row.title\n                is DisplayRow.Shelf -> "shelf:hot"\n            }\n        }'
+s = s.replace(old, new, 1)
+
+open(P, "w", encoding="utf-8").write(s)
+s2 = open(P, encoding="utf-8").read()
+assert "[41v8]" in s2, "写盘复核失败"
+assert "platform is DisplayRow.Header" not in s2, "粘连仍在"
+assert 'is DisplayRow.Shelf -> "shelf:hot"\n' in s2, "货架分支未独立成行"
+print("OK 41 v8 定键 when 分支独立行已加")
+PYEOF41V8
+echo "=== 41 v8 完成 ==="
