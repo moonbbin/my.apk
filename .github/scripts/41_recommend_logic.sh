@@ -438,3 +438,198 @@ assert old not in s2, "旧接点仍在"
 print("OK 41 v3 逗号已补")
 PYEOF41V3
 echo "=== 41 v3 完成 ==="
+
+# === 41 v4: 分区排布 + 换一批 ===
+python3 << 'PYEOF41V4'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+if not os.path.exists(P):
+    print("❌ 未找到 RecommendScreen.kt"); sys.exit(1)
+s = open(P, encoding="utf-8").read()
+if "[41v4]" in s:
+    print("跳过（41 v4 已应用）"); sys.exit(0)
+
+def rep(old, new, tag):
+    global s
+    assert s.count(old) == 1, "锚点异常: " + tag
+    s = s.replace(old, new, 1)
+
+# import 按需补
+if "material3.MaterialTheme" not in s:
+    rep("import androidx.compose.material3.Text",
+        "import androidx.compose.material3.Text\nimport androidx.compose.material3.MaterialTheme", "MaterialTheme import")
+if "lazy.stickyHeader" not in s:
+    rep("import androidx.compose.foundation.lazy.items",
+        "import androidx.compose.foundation.lazy.items\nimport androidx.compose.foundation.lazy.stickyHeader", "stickyHeader import")
+if "foundation.ExperimentalFoundationApi" not in s:
+    rep("import androidx.compose.foundation.layout.Box",
+        "import androidx.compose.foundation.layout.Box\nimport androidx.compose.foundation.ExperimentalFoundationApi", "实验 API import")
+rep("@Composable // [40tastefix]",
+    "@OptIn(ExperimentalFoundationApi::class) // [41v4]\n@Composable // [40tastefix]", "OptIn 注解")
+
+# 数据类加 section + 分区行类型 + 邻接重排 + 派生行
+rep("data class RecommendItem(val song: RSong, val reason: String, val score: Int = 0)",
+    """data class RecommendItem(val song: RSong, val reason: String, val score: Int = 0, val section: String = "") // [41v4]
+
+// [41v4] 分区渲染行：标题行 + 卡片行（旧缓存 section 为空时只出卡片行）
+private sealed interface DisplayRow {
+    data class Header(val title: String) : DisplayRow
+    data class Card(val item: RecommendItem) : DisplayRow
+}
+
+private fun sectionTitle(section: String): String = when (section) {
+    "anchor" -> "因为你在听"
+    "like" -> "猜你喜欢"
+    "hot" -> "大家都在听"
+    else -> ""
+}
+
+// [41v4] 邻接重排：同歌手中间至少隔一张，seedArtist 计入首位（锚点/上一区尾巴）
+private fun noAdjacentOrder(items: List<RecommendItem>, seedArtist: String): List<RecommendItem> {
+    val ordered = mutableListOf<RecommendItem>()
+    val rest = items.toMutableList()
+    var lastA: String? = seedArtist.ifEmpty { null }
+    while (rest.isNotEmpty()) {
+        val idx = rest.indexOfFirst { norm(it.song.artist) != lastA }
+        if (idx < 0) { ordered += rest; break }
+        val picked = rest.removeAt(idx)
+        ordered += picked
+        lastA = norm(picked.song.artist)
+    }
+    return ordered
+}
+
+// [41v4] 由 visible 派生渲染行
+private fun buildDisplayRows(visible: List<RecommendItem>): List<DisplayRow> {
+    val rows = mutableListOf<DisplayRow>()
+    var lastSection = ""
+    for (item in visible) {
+        val sec = item.section
+        if (sec.isNotEmpty() && sec != lastSection) {
+            rows += DisplayRow.Header(sectionTitle(sec))
+            lastSection = sec
+        }
+        rows += DisplayRow.Card(item)
+    }
+    return rows
+}""", "分区类型")
+
+# 持久化：section 入 JSON
+rep("private fun songToJson(s: RSong, reason: String, score: Int): JSONObject = JSONObject().apply {",
+    "private fun songToJson(s: RSong, reason: String, score: Int, section: String): JSONObject = JSONObject().apply {", "songToJson 签名")
+rep('    put("reason", reason); put("score", score)',
+    '    put("reason", reason); put("score", score); put("section", section)', "songToJson 字段")
+rep('    return RecommendItem(s, o.optString("reason"), o.optInt("score"))',
+    '    return RecommendItem(s, o.optString("reason"), o.optInt("score"), o.optString("section"))', "songFromJson 字段")
+rep("arr.put(songToJson(item.song, item.reason, item.score))",
+    "arr.put(songToJson(item.song, item.reason, item.score, item.section))", "savePool 调用")
+
+# 池版本 _v7 -> _v8（两处 + 注释）
+assert s.count('today + "_v7"') == 2, "版本锚点"
+s = s.replace('today + "_v7"', 'today + "_v8"')
+rep("rec_pool_date 加 _v7，旧池强制重建", "rec_pool_date 加 _v8，旧池强制重建", "版本注释")
+
+# 锚点与打分区标记
+rep('?.let { RecommendItem(it, listOf("因为你在听 $top1", "你的近期最爱", "重温 $top1 的经典").random(), 0) }',
+    '?.let { RecommendItem(it, listOf("因为你在听 $top1", "你的近期最爱", "重温 $top1 的经典").random(), 0, "anchor") } // [41v4]', "锚点分区")
+rep("    val scoredGen = gen.map { it.copy(score = scoreParts(it.song, 15)) }",
+    '    val scoredGen = gen.map { it.copy(score = scoreParts(it.song, 15), section = "like") } // [41v4]', "标签组分区")
+rep("    val scoredDiff = diff.map { it.copy(score = scoreParts(it.song, 5)) }",
+    '    val scoredDiff = diff.map { it.copy(score = scoreParts(it.song, 5), section = "hot") } // [41v4]', "扩散组分区")
+
+# 分区排序：替换 v1 全局排序块
+start_mark = "    // [41v1] 先按分排，再邻接重排"
+assert s.count(start_mark) == 1, "排序块锚点"
+i = s.index(start_mark)
+end_mark = "    val capped = ordered\n"
+j = s.index(end_mark, i) + len(end_mark)
+new_sort = """    // [41v4] 分区排序：每区内按分排 + 邻接重排（锚点计入猜你喜欢首位，猜你喜欢尾巴计入大家都在听首位）
+    val cappedGen = cappedRest.filter { it.section == "like" }
+    val cappedDiff = cappedRest.filter { it.section == "hot" }
+    val anchorArtist = anchor?.song?.artist?.let { norm(it) } ?: ""
+    val orderedGen = noAdjacentOrder(cappedGen.sortedByDescending { it.score }, anchorArtist)
+    val genTailArtist = orderedGen.lastOrNull()?.song?.artist?.let { norm(it) } ?: ""
+    val orderedDiff = noAdjacentOrder(cappedDiff.sortedByDescending { it.score }, genTailArtist)
+    val capped = listOfNotNull(anchor) + orderedGen + orderedDiff
+"""
+s = s[:i] + new_sort + s[j:]
+
+# 渲染行派生（visible 声明之后，切歌滚动之前）
+rep("    var visible by remember { mutableStateOf<List<RecommendItem>>(emptyList()) }",
+    """    var visible by remember { mutableStateOf<List<RecommendItem>>(emptyList()) }
+    // [41v4] 分区渲染行：visible 顺序不变，按 section 变化插标题行
+    val displayRows = remember(visible) { buildDisplayRows(visible) }""", "渲染行派生")
+
+# 切歌滚动改按渲染行下标
+rep("""    // [40scroll] 切歌时平滑滚到列表内原位置（索引按 visible 算）
+    LaunchedEffect(playerTitle, playerArtist, visible.isEmpty()) {
+        val index = visible.indexOfFirst { it.song.title == playerTitle && it.song.artist == playerArtist }
+        if (index >= 0) listState.animateScrollToItem(index)
+    }""",
+    """    // [41v4] 切歌时平滑滚到列表内原位置（索引按渲染行算，含标题行）
+    LaunchedEffect(playerTitle, playerArtist, visible.isEmpty()) {
+        val index = displayRows.indexOfFirst { it is DisplayRow.Card && it.item.song.title == playerTitle && it.item.song.artist == playerArtist }
+        if (index >= 0) listState.animateScrollToItem(index)
+    }""", "切歌滚动")
+
+# 视差改按渲染行下标（items 改写前先改，改写时整体缩进会带走）
+rep("            val info = listState.layoutInfo.visibleItemsInfo.find { it.index == idx } // [40scroll] 视差下标合回 idx，displayed 退役",
+    "            val info = listState.layoutInfo.visibleItemsInfo.find { it.index == displayRows.indexOf(row) } // [41v4] 视差按渲染行下标（含标题行）", "视差下标")
+
+# 换一批置顶（LazyColumn 内第一块）
+rep("""        contentPadding = PaddingValues(bottom = 160.dp) // [40scroll] 顶部让位删除，底 160 不动
+    ) {""",
+    """        contentPadding = PaddingValues(bottom = 160.dp) // [40scroll] 顶部让位删除，底 160 不动
+    ) {
+        stickyHeader { // [41v4] 换一批：纯打乱当前池（锚点首位不动），零网络，下拉刷新恢复按分排
+            Box(
+                Modifier.fillMaxWidth().background(musicColors().background).padding(end = 16.dp, top = 8.dp, bottom = 8.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Text(
+                    "换一批",
+                    color = musicColors().accent,
+                    modifier = Modifier.clickable {
+                        val anchorItem = fullPool.firstOrNull { it.section == "anchor" }
+                        val seed = anchorItem?.song?.artist?.let { norm(it) } ?: ""
+                        val rest = fullPool.filterNot { it.section == "anchor" }.shuffled()
+                        fullPool = listOfNotNull(anchorItem) + noAdjacentOrder(rest, seed)
+                        visible = fullPool.take(20)
+                        refreshScope.launch { listState.scrollToItem(0) }
+                    }
+                )
+            }
+        }""", "换一批")
+
+# items 块整体改写：displayRows + 标题行 + 卡片分支（体部原样整体缩进 4 格）
+start_mark = "        items(visible, key = "
+assert s.count(start_mark) == 1, "items 锚点"
+i = s.index(start_mark)
+end_mark = "        if (loadingMore) {"
+j = s.index(end_mark, i)
+old_block = s[i:j].rstrip("\n")
+lines = old_block.split("\n")
+assert lines[0].startswith("        items(visible,"), "items 首行"
+assert lines[-1] == "        }", "items 尾行"
+body = lines[1:-1]
+body_indented = ["    " + ln if ln.strip() else ln for ln in body]
+new_block = '        items(displayRows, key = { row -> if (row is DisplayRow.Card) row.item.song.title + "|" + row.item.song.artist + "|" + row.item.song.platform else "header:" + (row as DisplayRow.Header).title }) { row ->\n'
+new_block += "            if (row is DisplayRow.Header) {\n"
+new_block += "                Text(row.title, color = musicColors().textPrimary, style = MaterialTheme.typography.titleMedium, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))\n"
+new_block += "            }\n"
+new_block += "            if (row is DisplayRow.Card) {\n"
+new_block += "                val item = row.item\n"
+new_block += "\n".join(body_indented) + "\n"
+new_block += "            }\n"
+new_block += "        }"
+s = s[:i] + new_block + "\n" + s[j:]
+
+open(P, "w", encoding="utf-8").write(s)
+s2 = open(P, encoding="utf-8").read()
+assert "[41v4]" in s2 and "displayRows" in s2 and "stickyHeader" in s2, "写盘复核失败"
+assert '"_v7"' not in s2, "旧池版本仍在"
+print("OK 41 v4 分区 + 换一批已加")
+PYEOF41V4
+echo "=== 41 v4 完成 ==="
