@@ -415,3 +415,26 @@ assert "[41v2]" in s2 and "DropdownMenu" in s2 and "onBlock" in s2, "写盘复�
 print("OK 41 v2 FeedCard 负反馈菜单已加")
 PYEOF41V2B
 echo "=== 41 v2 完成 ==="
+
+# === 41 v3: 构建红修复（v2 漏了 onTogglePlay 参数后的逗号）===
+python3 << 'PYEOF41V3'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+if not os.path.exists(P):
+    print("❌ 未找到 RecommendScreen.kt"); sys.exit(1)
+s = open(P, encoding="utf-8").read()
+if "[41v3]" in s:
+    print("跳过（41 v3 已应用）"); sys.exit(0)
+old = "} // [40fin] 按钮播歌不进页\n                onNotInterested = {"
+assert s.count(old) == 1, "锚点异常：v2 回调接点数量 %d" % s.count(old)
+new = "}, // [40fin] 按钮播歌不进页 [41v3]\n                onNotInterested = {"
+s = s.replace(old, new, 1)
+open(P, "w", encoding="utf-8").write(s)
+s2 = open(P, encoding="utf-8").read()
+assert "}, // [40fin] 按钮播歌不进页 [41v3]" in s2, "写盘复核失败"
+assert old not in s2, "旧接点仍在"
+print("OK 41 v3 逗号已补")
+PYEOF41V3
+echo "=== 41 v3 完成 ==="
