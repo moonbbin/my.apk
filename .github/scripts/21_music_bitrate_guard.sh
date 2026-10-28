@@ -2716,3 +2716,25 @@ open(P, "w", encoding="utf-8").write(s)
 print("OK 21 v45 Sub 键改 subfx 已加")
 PYEOF21V45
 echo "=== 21 v45 完成 ==="
+
+# === 21 v46: Autogain 开关下发 + 均衡页调试快照 ===
+python3 << 'PYEOF21V46'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[21v46]" in s:
+    print("跳过（21 v46 已应用）"); sys.exit(0)
+old = 'eqDspProcessor.loudEnabled = try { p?.getBoolean("loud", false) ?: false } catch (_: Exception) { false } // [21v44] 等响度开关下发'
+assert s.count(old) == 1, "loud 锚点"
+new = old + '\n            eqDspProcessor.agEnabled = try { p?.getBoolean("ag", false) ?: false } catch (_: Exception) { false } // [21v46] Autogain 开关下发'
+s = s.replace(old, new, 1)
+old2 = "fun applyEqFromPrefs() { // [21v37]"
+assert s.count(old2) == 1, "applyEq 锚点"
+new2 = "fun dspDebugSnapshot(): EqDspProcessor.DspDebug = eqDspProcessor.debugSnapshot() // [21v46] 均衡页实时状态快照\n    " + old2
+s = s.replace(old2, new2, 1)
+open(P, "w", encoding="utf-8").write(s)
+print("OK 21 v46 ag 下发 + 快照已加")
+PYEOF21V46
+echo "=== 21 v46 完成 ==="
