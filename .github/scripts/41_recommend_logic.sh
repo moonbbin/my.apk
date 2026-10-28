@@ -1069,3 +1069,193 @@ assert 'is DisplayRow.Shelf -> "shelf:hot"\n' in s2, "货架分支未独立成�
 print("OK 41 v8 定键 when 分支独立行已加")
 PYEOF41V8
 echo "=== 41 v8 完成 ==="
+
+# === 41 v9: 排版二期（字阶/段标题/主角出血/主角两行/实心钮/胶囊缩短/顶部渐变）===
+python3 << 'PYEOF41V9A'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+if not os.path.exists(P):
+    print("❌ 未找到 RecommendScreen.kt"); sys.exit(1)
+s = open(P, encoding="utf-8").read()
+if "[41v9]" in s:
+    print("跳过（41 v9 RecommendScreen 已应用）"); sys.exit(0)
+
+def rep(old, new, tag):
+    global s
+    assert s.count(old) == 1, "锚点异常: " + tag
+    s = s.replace(old, new, 1)
+
+rep("import androidx.compose.foundation.lazy.LazyRow // [41v7] 横滑货架\n",
+    "import androidx.compose.foundation.lazy.LazyRow // [41v7] 横滑货架\nimport androidx.compose.foundation.layout.width // [41v9] 段标题横线间隔\nimport androidx.compose.ui.graphics.Shadow // [41v9] 段标题弱阴影\n", "段标题 import")
+rep("                Text(row.title, color = musicColors().textPrimary, style = MaterialTheme.typography.titleMedium, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))",
+    """                Row( // [41v9] 段标题绿横线 + 弱阴影
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(Modifier.size(width = 20.dp, height = 3.dp).background(musicColors().accent))
+                    Spacer(Modifier.width(8.dp))
+                    Text(row.title, color = musicColors().textPrimary, style = MaterialTheme.typography.titleMedium.copy(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 6f)))
+                }""", "段标题行")
+
+open(P, "w", encoding="utf-8").write(s)
+s2 = open(P, encoding="utf-8").read()
+assert "[41v9]" in s2 and "size(width = 20.dp, height = 3.dp)" in s2, "写盘复核失败"
+print("OK 41 v9 RecommendScreen 段标题已加")
+PYEOF41V9A
+
+python3 << 'PYEOF41V9B'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/FeedCard.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+if not os.path.exists(P):
+    print("❌ 未找到 FeedCard.kt"); sys.exit(1)
+s = open(P, encoding="utf-8").read()
+if "[41v9]" in s:
+    print("跳过（41 v9 FeedCard 已应用）"); sys.exit(0)
+
+def rep(old, new, tag):
+    global s
+    assert s.count(old) == 1, "锚点异常: " + tag
+    s = s.replace(old, new, 1)
+
+rep("            .padding(horizontal = 16.dp)\n            .height(if (isHero) 200.dp else 160.dp)",
+    "            .padding(horizontal = if (isHero) 0.dp else 16.dp) // [41v9] 主角卡左右顶边\n            .height(if (isHero) 200.dp else 160.dp)", "主角出血")
+rep("                .graphicsLayer { translationY = parallax * 20.dp.toPx() }\n        )\n        // [40rb] 暗化层已删（全屏暗化禁用）",
+    """                .graphicsLayer { translationY = parallax * 20.dp.toPx() }
+        )
+        Box( // [41v9] 顶部淡渐变，与底部对称
+            modifier = Modifier.align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .fillMaxHeight(0.25f)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent)
+                    )
+                )
+        )
+        // [40rb] 暗化层已删（全屏暗化禁用）""", "顶部渐变")
+rep('                timePrefix() + platformName(item.song.platform) + "精选 · " + item.reason, // [40tag] 时间前缀 + 平台精选 + 动态理由',
+    '                timePrefix() + platformName(item.song.platform) + " · " + item.reason, // [41v9] 胶囊缩短', "胶囊缩短")
+rep("                style = (if (isHero) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineSmall).copy(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 4f)), // [41v7] 主角标题大一号",
+    "                style = (if (isHero) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineSmall).copy(shadow = Shadow(Color.Black.copy(alpha = if (isHero) 0.5f else 0.35f), blurRadius = if (isHero) 4f else 6f)), // [41v9] 标准卡标题阴影收弱", "标题阴影")
+rep("                fontWeight = FontWeight.Black, // [40fin]\n                maxLines = 1,",
+    "                fontWeight = if (isHero) FontWeight.Black else FontWeight.ExtraBold, // [41v9] 标准卡标题降重\n                maxLines = if (isHero) 2 else 1, // [41v9] 主角标题两行", "标题字重行数")
+rep("""                "— " + item.song.artist.ifEmpty { "未知歌手" }, // [40final] 落款格式
+                color = Color.White.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.bodySmall, // [40final] bodyMedium -> bodySmall
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(), // [40fin] 右对齐落款
+                textAlign = TextAlign.End // [40fin]
+            )""",
+    """                item.song.artist.ifEmpty { "未知歌手" }, // [41v9] 落款横线随右对齐去掉
+                color = Color.White.copy(alpha = 0.85f),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )""", "歌手行左对齐")
+rep("""                .size(40.dp) // [40compact] 48 -> 40
+                .clip(CircleShape)
+                .border(1.dp, Color.White.copy(alpha = 0.6f), CircleShape) // [40mag] 极细白圈，无底色
+                .clickable { onTogglePlay() },""",
+    """                .size(40.dp) // [40compact] 48 -> 40
+                .clip(CircleShape)
+                .background(if (isPlaying) musicColors().accent else Color.White) // [41v9] 播放钮实心化
+                .clickable { onTogglePlay() },""", "标准卡实心钮")
+rep("""                .size(36.dp)
+                .clip(CircleShape)
+                .border(1.dp, Color.White.copy(alpha = 0.6f), CircleShape)
+                .clickable { onTogglePlay() },""",
+    """                .size(36.dp)
+                .clip(CircleShape)
+                .background(if (isPlaying) musicColors().accent else Color.White) // [41v9] 播放钮实心化
+                .clickable { onTogglePlay() },""", "货架卡实心钮")
+
+new_canvas = """            Canvas(Modifier.size(18.dp)) { // [41v9] 实心钮：白底/绿底 + 深色图标
+                val cap = StrokeCap.Round
+                val dark = Color.Black
+                if (isPlaying) {
+                    val bw = 3.dp.toPx()
+                    drawLine(dark, Offset(6.dp.toPx(), 3.dp.toPx()), Offset(6.dp.toPx(), 15.dp.toPx()), bw, cap)
+                    drawLine(dark, Offset(12.dp.toPx(), 3.dp.toPx()), Offset(12.dp.toPx(), 15.dp.toPx()), bw, cap)
+                } else {
+                    drawPath(
+                        Path().apply {
+                            moveTo(6.dp.toPx(), 3.dp.toPx())
+                            lineTo(14.dp.toPx(), 9.dp.toPx())
+                            lineTo(6.dp.toPx(), 15.dp.toPx())
+                            close()
+                        },
+                        dark
+                    )
+                }
+            }"""
+old_canvas_feed = """            Canvas(Modifier.size(18.dp)) { // [40compact] 22 -> 18，等比缩
+                val sw = 1.5.dp.toPx() // [40mag] 2 -> 1.5 细线
+                val cap = StrokeCap.Round
+                val white = Color.White
+                if (isPlaying) {
+                    drawLine(white, Offset(6.dp.toPx(), 3.dp.toPx()), Offset(6.dp.toPx(), 15.dp.toPx()), sw, cap)
+                    drawLine(white, Offset(12.dp.toPx(), 3.dp.toPx()), Offset(12.dp.toPx(), 15.dp.toPx()), sw, cap)
+                } else {
+                    drawPath(
+                        Path().apply {
+                            moveTo(6.dp.toPx(), 3.dp.toPx())
+                            lineTo(14.dp.toPx(), 9.dp.toPx())
+                            lineTo(6.dp.toPx(), 15.dp.toPx())
+                            close()
+                        },
+                        white, style = Stroke(width = sw) // [40mag] 单线三角，描边不填充
+                    )
+                }
+            }"""
+rep(old_canvas_feed, new_canvas, "标准卡图标")
+old_canvas_shelf = old_canvas_feed.replace(" // [40compact] 22 -> 18，等比缩", "").replace(" // [40mag] 2 -> 1.5 细线", "").replace(" // [40mag] 单线三角，描边不填充", "")
+rep(old_canvas_shelf, new_canvas, "货架卡图标")
+
+rep("""            modifier = Modifier.fillMaxSize()
+        )
+        Box(
+            modifier = Modifier.align(Alignment.BottomCenter)""",
+    """            modifier = Modifier.fillMaxSize()
+        )
+        Box( // [41v9] 顶部淡渐变
+            modifier = Modifier.align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .fillMaxHeight(0.25f)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Black.copy(alpha = 0.35f), Color.Transparent)
+                    )
+                )
+        )
+        Box(
+            modifier = Modifier.align(Alignment.BottomCenter)""", "货架顶部渐变")
+rep("""            Text(
+                "— " + item.song.artist.ifEmpty { "未知歌手" },
+                color = Color.White.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )""",
+    """            Text(
+                item.song.artist.ifEmpty { "未知歌手" }, // [41v9] 与标准卡同款副标题
+                color = Color.White.copy(alpha = 0.85f),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )""", "货架歌手行")
+rep("import androidx.compose.ui.graphics.drawscope.Stroke // [40mag]\n", "", "删 Stroke import")
+rep("import androidx.compose.ui.text.style.TextAlign // [40fin] 落款右对齐\n", "", "删 TextAlign import")
+
+open(P, "w", encoding="utf-8").write(s)
+s2 = open(P, encoding="utf-8").read()
+assert "[41v9]" in s2 and "FontWeight.ExtraBold" in s2, "写盘复核失败"
+assert s2.count("background(if (isPlaying) musicColors().accent else Color.White)") == 2, "实心钮未成对"
+assert "精选" not in s2 and "Stroke(width" not in s2 and "TextAlign" not in s2, "旧物残留"
+print("OK 41 v9 FeedCard 排版二期已加")
+PYEOF41V9B
+echo "=== 41 v9 完成 ==="
