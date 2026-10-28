@@ -697,3 +697,60 @@ assert "stickyHeader" not in s2 and "ExperimentalFoundationApi" not in s2, "置�
 print("OK 41 v5 置顶改固定顶行已加")
 PYEOF41V5
 echo "=== 41 v5 完成 ==="
+
+# === 41 v6: 换一批黑条修复（去实底色，改小胶囊，壁纸透出）===
+python3 << 'PYEOF41V6'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+if not os.path.exists(P):
+    print("❌ 未找到 RecommendScreen.kt"); sys.exit(1)
+s = open(P, encoding="utf-8").read()
+if "[41v6]" in s:
+    print("跳过（41 v6 已应用）"); sys.exit(0)
+
+def rep(old, new, tag):
+    global s
+    assert s.count(old) == 1, "锚点异常: " + tag
+    s = s.replace(old, new, 1)
+
+# 顶行去实底色（本页根是壁纸透出，实底色会刷出黑条）
+rep("            Modifier.fillMaxWidth().background(musicColors().background).padding(end = 16.dp, top = 8.dp, bottom = 8.dp),",
+    "            Modifier.fillMaxWidth().padding(end = 16.dp, top = 8.dp, bottom = 8.dp), // [41v6] 去实底色，壁纸透出", "顶行去底色")
+
+# 换一批改小胶囊（黑 0.35f，与卡片 ⋮ 钮同款压图语言；点击区移到胶囊上）
+start_mark = '            Text(\n                "换一批",'
+assert s.count(start_mark) == 1, "换一批锚点"
+i = s.index(start_mark)
+end_mark = "                    refreshScope.launch { listState.scrollToItem(0) }\n                }\n            )\n        }"
+j = s.index(end_mark, i) + len(end_mark)
+new_span = """            Box(
+                modifier = Modifier.clip(RoundedCornerShape(50))
+                    .background(Color.Black.copy(alpha = 0.35f))
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .clickable {
+                        val anchorItem = fullPool.firstOrNull { it.section == "anchor" }
+                        val seed = anchorItem?.song?.artist?.let { norm(it) } ?: ""
+                        val rest = fullPool.filterNot { it.section == "anchor" }.shuffled()
+                        fullPool = listOfNotNull(anchorItem) + noAdjacentOrder(rest, seed)
+                        visible = fullPool.take(20)
+                        refreshScope.launch { listState.scrollToItem(0) }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "换一批",
+                    color = musicColors().accent
+                )
+            }
+        }"""
+s = s[:i] + new_span + s[j:]
+
+open(P, "w", encoding="utf-8").write(s)
+s2 = open(P, encoding="utf-8").read()
+assert "[41v6]" in s2 and "Black.copy(alpha = 0.35f)" in s2, "写盘复核失败"
+assert "background(musicColors().background)" not in s2, "实底色仍在"
+print("OK 41 v6 换一批小胶囊已加")
+PYEOF41V6
+echo "=== 41 v6 完成 ==="
