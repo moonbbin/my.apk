@@ -88,6 +88,8 @@ jobs:
         run: bash .github/scripts/39_wallpaper.sh
       - name: 40_recommend
         run: bash .github/scripts/40_recommend.sh
+      - name: 41_recommend_logic
+        run: bash .github/scripts/41_recommend_logic.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
