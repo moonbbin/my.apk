@@ -754,3 +754,292 @@ assert "background(musicColors().background)" not in s2, "实底色仍在"
 print("OK 41 v6 换一批小胶囊已加")
 PYEOF41V6
 echo "=== 41 v6 完成 ==="
+
+# === 41 v7: 三段式布局（锚点主角卡 + 大卡流 + 大家都在听横滑货架）===
+python3 << 'PYEOF41V7A'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+if not os.path.exists(P):
+    print("❌ 未找到 RecommendScreen.kt"); sys.exit(1)
+s = open(P, encoding="utf-8").read()
+if "[41v7]" in s:
+    print("跳过（41 v7 RecommendScreen 已应用）"); sys.exit(0)
+
+def rep(old, new, tag):
+    global s
+    assert s.count(old) == 1, "锚点异常: " + tag
+    s = s.replace(old, new, 1)
+
+rep("import androidx.compose.foundation.lazy.LazyColumn\n",
+    "import androidx.compose.foundation.lazy.LazyColumn\nimport androidx.compose.foundation.lazy.LazyRow // [41v7] 横滑货架\n", "货架 import")
+rep("    data class Card(val item: RecommendItem) : DisplayRow\n}",
+    "    data class Card(val item: RecommendItem) : DisplayRow\n    data class Shelf(val items: List<RecommendItem>) : DisplayRow // [41v7] 横滑货架行\n}", "货架行类型")
+
+start_mark = "private fun buildDisplayRows(visible: List<RecommendItem>): List<DisplayRow> {"
+i = s.index(start_mark)
+end_mark = "    return rows\n}"
+j = s.index(end_mark, i) + len(end_mark)
+new_fn = """private fun buildDisplayRows(visible: List<RecommendItem>): List<DisplayRow> { // [41v7] hot 段收进一行货架
+    val rows = mutableListOf<DisplayRow>()
+    var lastSection = ""
+    val shelfBuffer = mutableListOf<RecommendItem>()
+    fun flushShelf() {
+        if (shelfBuffer.isNotEmpty()) {
+            rows += DisplayRow.Shelf(shelfBuffer.toList())
+            shelfBuffer.clear()
+        }
+    }
+    for (item in visible) {
+        val sec = item.section
+        if (sec == "hot") {
+            if (lastSection != "hot") {
+                rows += DisplayRow.Header(sectionTitle(sec))
+                lastSection = "hot"
+            }
+            shelfBuffer += item
+        } else {
+            flushShelf()
+            if (sec.isNotEmpty() && sec != lastSection) {
+                rows += DisplayRow.Header(sectionTitle(sec))
+                lastSection = sec
+            }
+            rows += DisplayRow.Card(item)
+        }
+    }
+    flushShelf()
+    return rows
+}"""
+s = s[:i] + new_fn + s[j:]
+
+rep("val index = displayRows.indexOfFirst { it is DisplayRow.Card && it.item.song.title == playerTitle && it.item.song.artist == playerArtist }",
+    "val index = displayRows.indexOfFirst { (it is DisplayRow.Card && it.item.song.title == playerTitle && it.item.song.artist == playerArtist) || (it is DisplayRow.Shelf && it.items.any { s -> s.song.title == playerTitle && s.song.artist == playerArtist }) } // [41v7] 货架行内找歌", "滚到货架歌")
+rep("    LaunchedEffect(listState) {\n        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }.collect { last ->",
+    "    LaunchedEffect(listState, displayRows.size) { // [41v7] 行数变化重订（货架行使行数小于歌数）\n        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }.collect { last ->", "分页重订")
+rep("            if (visible.isEmpty() || last < visible.size - 3) return@collect",
+    "            if (visible.isEmpty() || last < displayRows.size - 3) return@collect // [41v7] 按行数算（货架行）", "分页按行数")
+rep('key = { row -> if (row is DisplayRow.Card) row.item.song.title + "|" + row.item.song.artist + "|" + row.item.song.platform else "header:" + (row as DisplayRow.Header).title }',
+    'key = { row -> when (row) { is DisplayRow.Card -> row.item.song.title + "|" + row.item.song.artist + "|" + row.item.song.platform is DisplayRow.Header -> "header:" + row.title is DisplayRow.Shelf -> "shelf:hot" } }', "行定键")
+rep("                FeedCard(\n                    item = item,\n",
+    "                FeedCard(\n                    item = item,\n                    isHero = item.section == \"anchor\", // [41v7] 锚点主角卡\n", "主角卡参数")
+
+old_tail = "                )\n            }\n        }\n        if (loadingMore) {"
+assert s.count(old_tail) == 1, "锚点异常: 货架分支"
+shelf_branch = """                )
+            }
+            if (row is DisplayRow.Shelf) { // [41v7] 横滑货架行
+                val songs = visible.map { it.song }
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().height(120.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp)
+                ) {
+                    items(row.items, key = { it.song.title + "|" + it.song.artist + "|" + it.song.platform }) { shelfItem ->
+                        val sPlaying = playerTitle == shelfItem.song.title && playerArtist == shelfItem.song.artist
+                        val sIdx = visible.indexOf(shelfItem)
+                        ShelfCard(
+                            item = shelfItem,
+                            isPlaying = sPlaying && playerIsPlaying,
+                            onClick = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPlay(songs, sIdx) },
+                            onTogglePlay = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); if (sPlaying) onTogglePlay() else onPlayOnly(songs, sIdx) },
+                            onNotInterested = {
+                                val a = shelfItem.song.artist
+                                val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                                if (addDownweight(prefs, a)) {
+                                    val k = norm(a)
+                                    fullPool = fullPool.filterNot { norm(it.song.artist) == k }
+                                    visible = visible.filterNot { norm(it.song.artist) == k }
+                                }
+                            },
+                            onBlock = {
+                                val a = shelfItem.song.artist
+                                val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                                if (addBlock(prefs, a)) {
+                                    val k = norm(a)
+                                    fullPool = fullPool.filterNot { norm(it.song.artist) == k }
+                                    visible = visible.filterNot { norm(it.song.artist) == k }
+                                    blockedList = readBlocked(prefs)
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        if (loadingMore) {"""
+s = s.replace(old_tail, shelf_branch, 1)
+
+open(P, "w", encoding="utf-8").write(s)
+s2 = open(P, encoding="utf-8").read()
+assert "[41v7]" in s2 and "shelf:hot" in s2 and "LazyRow" in s2 and "DisplayRow.Shelf" in s2 and "isHero" in s2, "写盘复核失败"
+print("OK 41 v7 RecommendScreen 三段式已加")
+PYEOF41V7A
+
+python3 << 'PYEOF41V7B'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/FeedCard.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+if not os.path.exists(P):
+    print("❌ 未找到 FeedCard.kt"); sys.exit(1)
+s = open(P, encoding="utf-8").read()
+if "[41v7]" in s:
+    print("跳过（41 v7 FeedCard 已应用）"); sys.exit(0)
+
+def rep(old, new, tag):
+    global s
+    assert s.count(old) == 1, "锚点异常: " + tag
+    s = s.replace(old, new, 1)
+
+rep("    parallax: Float = 0f, // [40mag] 视差系数 -0.5~0.5\n",
+    "    parallax: Float = 0f, // [40mag] 视差系数 -0.5~0.5\n    isHero: Boolean = false, // [41v7] 主角卡\n", "主角参数")
+rep("            .height(200.dp) // [40compact] 240 -> 200",
+    "            .height(if (isHero) 200.dp else 160.dp) // [41v7] 主角卡加高", "主角卡高")
+rep("            modifier = Modifier.fillMaxWidth().height(240.dp)",
+    "            modifier = Modifier.fillMaxWidth().height(if (isHero) 240.dp else 200.dp) // [41v7] 视差预留", "主角图高")
+rep("                style = MaterialTheme.typography.headlineSmall.copy(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 4f)), // [40fin] 标题放大极粗，弱阴影保留",
+    "                style = (if (isHero) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineSmall).copy(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 4f)), // [41v7] 主角标题大一号", "主角标题")
+
+shelf_card = """
+@Composable // [41v7] 横滑货架小卡：图 + 底渐变 + 标题/歌手 + 播放钮 + ⋮ 菜单，无理由胶囊
+fun ShelfCard(
+    item: RecommendItem,
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    onTogglePlay: () -> Unit,
+    onNotInterested: () -> Unit,
+    onBlock: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    Box(
+        modifier = modifier
+            .width(210.dp)
+            .height(120.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(musicColors().card)
+            .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
+            .clickable { onClick() }
+    ) {
+        AsyncImage(
+            model = item.song.picUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+        Box(
+            modifier = Modifier.align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .fillMaxHeight(0.4f)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
+                    )
+                )
+        )
+        Column(
+            modifier = Modifier.align(Alignment.BottomStart)
+                .padding(start = 12.dp, bottom = 12.dp, end = 52.dp)
+        ) {
+            Text(
+                item.song.title,
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium.copy(shadow = Shadow(Color.Black.copy(alpha = 0.5f), blurRadius = 4f)),
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                "— " + item.song.artist.ifEmpty { "未知歌手" },
+                color = Color.White.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Box(
+            modifier = Modifier.align(Alignment.BottomEnd)
+                .padding(end = 12.dp, bottom = 12.dp)
+                .size(36.dp)
+                .clip(CircleShape)
+                .border(1.dp, Color.White.copy(alpha = 0.6f), CircleShape)
+                .clickable { onTogglePlay() },
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(Modifier.size(18.dp)) {
+                val sw = 1.5.dp.toPx()
+                val cap = StrokeCap.Round
+                val white = Color.White
+                if (isPlaying) {
+                    drawLine(white, Offset(6.dp.toPx(), 3.dp.toPx()), Offset(6.dp.toPx(), 15.dp.toPx()), sw, cap)
+                    drawLine(white, Offset(12.dp.toPx(), 3.dp.toPx()), Offset(12.dp.toPx(), 15.dp.toPx()), sw, cap)
+                } else {
+                    drawPath(
+                        Path().apply {
+                            moveTo(6.dp.toPx(), 3.dp.toPx())
+                            lineTo(14.dp.toPx(), 9.dp.toPx())
+                            lineTo(6.dp.toPx(), 15.dp.toPx())
+                            close()
+                        },
+                        white, style = Stroke(width = sw)
+                    )
+                }
+            }
+        }
+        if (isPlaying) {
+            val t = rememberInfiniteTransition(label = "recGlowShelf")
+            val alpha by t.animateFloat(
+                initialValue = 0.9f,
+                targetValue = 0.25f,
+                animationSpec = infiniteRepeatable(tween(1000), RepeatMode.Reverse),
+                label = "recGlowShelfA"
+            )
+            Box(
+                Modifier.matchParentSize()
+                    .border(2.dp, musicColors().accent.copy(alpha = alpha), RoundedCornerShape(20.dp))
+            )
+        }
+        Box(
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 12.dp)
+        ) {
+            Box(
+                modifier = Modifier.size(28.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.35f))
+                    .clickable { menuExpanded = true },
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(Modifier.size(18.dp)) {
+                    val white = Color.White
+                    val r = 1.6.dp.toPx()
+                    val cx = size.width / 2
+                    drawCircle(white, r, Offset(cx, size.height * 0.25f))
+                    drawCircle(white, r, Offset(cx, size.height * 0.5f))
+                    drawCircle(white, r, Offset(cx, size.height * 0.75f))
+                }
+            }
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("不感兴趣") },
+                    onClick = { menuExpanded = false; onNotInterested() }
+                )
+                DropdownMenuItem(
+                    text = { Text("不要再推荐") },
+                    onClick = { menuExpanded = false; onBlock() }
+                )
+            }
+        }
+    }
+}
+"""
+s = s.rstrip("\n") + "\n" + shelf_card
+open(P, "w", encoding="utf-8").write(s)
+s2 = open(P, encoding="utf-8").read()
+assert "[41v7]" in s2 and "ShelfCard" in s2 and "isHero" in s2, "写盘复核失败"
+print("OK 41 v7 FeedCard 主角卡 + 货架小卡已加")
+PYEOF41V7B
+echo "=== 41 v7 完成 ==="
