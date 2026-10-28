@@ -2650,3 +2650,51 @@ open(P, "w", encoding="utf-8").write(s)
 print("OK 21 v43 切歌锁已加")
 PYEOF21V43
 echo "=== 21 v43 完成 ==="
+# === 21 v44: 激励器 + 等响度开关下发 + 音量刷新 ===
+python3 << 'PYEOF21V44'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[21v44]" in s:
+    print("跳过（21 v44 已应用）"); sys.exit(0)
+old = 'eqDspProcessor.cfEnabled = try { p?.getBoolean("cross", false) ?: false } catch (_: Exception) { false } // [21v41] Crossfeed 开关下发'
+assert s.count(old) == 1, "cf 锚点"
+new = old + """
+            eqDspProcessor.excEnabled = try { p?.getBoolean("exc", false) ?: false } catch (_: Exception) { false } // [21v44] 激励器开关下发
+            eqDspProcessor.loudEnabled = try { p?.getBoolean("loud", false) ?: false } catch (_: Exception) { false } // [21v44] 等响度开关下发
+            refreshLoudnessVolume() // [21v44] 音量刷新（换歌/改设置时）"""
+s = s.replace(old, new, 1)
+old2 = "fun applyEqFromPrefs() {"
+assert s.count(old2) == 1, "applyEq 锚点"
+vol_block = """        // [21v44] 等响度音量来源：系统音乐音量（0..1）；换歌/改设置时刷新 + 音量广播跟随（注册失败则只靠换歌刷新）
+        @Volatile private var loudReceiverRegistered = false
+        fun refreshLoudnessVolume() {
+            try {
+                val am = appContext?.getSystemService(android.content.Context.AUDIO_SERVICE) as? android.media.AudioManager
+                val vol = am?.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) ?: 0
+                val max = am?.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC) ?: 1
+                eqDspProcessor.loudVolume = if (max > 0) (vol.toFloat() / max.toFloat()).coerceIn(0f, 1f) else 1f
+            } catch (_: Exception) {
+            }
+            try {
+                val ctx = appContext
+                if (ctx != null && !loudReceiverRegistered) {
+                    ctx.registerReceiver(object : android.content.BroadcastReceiver() {
+                        override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
+                            try { refreshLoudnessVolume() } catch (_: Exception) { }
+                        }
+                    }, android.content.IntentFilter("android.media.VOLUME_CHANGED_ACTION"))
+                    loudReceiverRegistered = true
+                }
+            } catch (_: Exception) {
+            }
+        }
+
+"""
+s = s.replace(old2, vol_block + old2, 1)
+open(P, "w", encoding="utf-8").write(s)
+print("OK 21 v44 exc/loud 下发 + 音量刷新已加")
+PYEOF21V44
+echo "=== 21 v44 完成 ==="
