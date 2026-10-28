@@ -2698,3 +2698,21 @@ open(P, "w", encoding="utf-8").write(s)
 print("OK 21 v44 exc/loud 下发 + 音量刷新已加")
 PYEOF21V44
 echo "=== 21 v44 完成 ==="
+
+# === 21 v45: Sub 开关键改 subfx（避与 60Hz 滑块键 sub 撞键，切歌不再自动关） ===
+python3 << 'PYEOF21V45'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[21v45]" in s:
+    print("跳过（21 v45 已应用）"); sys.exit(0)
+old = 'eqDspProcessor.subEnabled = try { p?.getBoolean("sub", false) ?: false } catch (_: Exception) { false } // [21v41] Sub 谐波合成开关下发'
+assert s.count(old) == 1, "sub 锚点"
+new = 'eqDspProcessor.subEnabled = try { p?.getBoolean("subfx", false) ?: false } catch (_: Exception) { false } // [21v41] Sub 谐波合成开关下发 [21v45] 键改 subfx'
+s = s.replace(old, new, 1)
+open(P, "w", encoding="utf-8").write(s)
+print("OK 21 v45 Sub 键改 subfx 已加")
+PYEOF21V45
+echo "=== 21 v45 完成 ==="
