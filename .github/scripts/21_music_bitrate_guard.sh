@@ -2756,3 +2756,24 @@ open(P, "w", encoding="utf-8").write(s)
 print("OK 21 v47 rev 下发已加")
 PYEOF21V47
 echo "=== 21 v47 完成 ==="
+
+# === 21 v48: 去齿音 + 延时对齐下发 ===
+python3 << 'PYEOF21V48'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[21v48]" in s:
+    print("跳过（21 v48 已应用）"); sys.exit(0)
+old = 'eqDspProcessor.revEnabled = try { p?.getBoolean("rev", false) ?: false } catch (_: Exception) { false } // [21v47] 混响开关下发'
+assert s.count(old) == 1, "rev 锚点"
+new = old + '\n            eqDspProcessor.deessEnabled = try { p?.getBoolean("deess", false) ?: false } catch (_: Exception) { false } // [21v48] 去齿音开关下发'
+new += '\n            eqDspProcessor.taEnabled = try { p?.getBoolean("ta", false) ?: false } catch (_: Exception) { false } // [21v48] 延时对齐开关下发'
+new += '\n            eqDspProcessor.taLeftMs = try { p?.getFloat("taL", 0f) ?: 0f } catch (_: Exception) { 0f } // [21v48] 左声道延时下发'
+new += '\n            eqDspProcessor.taRightMs = try { p?.getFloat("taR", 0f) ?: 0f } catch (_: Exception) { 0f } // [21v48] 右声道延时下发'
+s = s.replace(old, new, 1)
+open(P, "w", encoding="utf-8").write(s)
+print("OK 21 v48 去齿音 + 延时对齐下发已加")
+PYEOF21V48
+echo "=== 21 v48 完成 ==="
