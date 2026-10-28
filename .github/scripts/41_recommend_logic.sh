@@ -633,3 +633,67 @@ assert '"_v7"' not in s2, "旧池版本仍在"
 print("OK 41 v4 分区 + 换一批已加")
 PYEOF41V4
 echo "=== 41 v4 完成 ==="
+
+# === 41 v5: 构建红修复（stickyHeader 在本工程 foundation 里不存在，改固定顶行）===
+python3 << 'PYEOF41V5'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+if not os.path.exists(P):
+    print("❌ 未找到 RecommendScreen.kt"); sys.exit(1)
+s = open(P, encoding="utf-8").read()
+if "[41v5]" in s:
+    print("跳过（41 v5 已应用）"); sys.exit(0)
+
+def rep(old, new, tag):
+    global s
+    assert s.count(old) == 1, "锚点异常: " + tag
+    s = s.replace(old, new, 1)
+
+# 1) 删 stickyHeader 整块
+i = s.index("        stickyHeader { // [41v4]")
+j = s.index("        items(displayRows", i)
+removed = s[i:j]
+assert "换一批" in removed and removed.strip().endswith("}"), "置顶块边界"
+s = s[:i] + s[j:]
+# 2) 删 stickyHeader import、实验 API import 与 OptIn 注解
+rep("import androidx.compose.foundation.lazy.stickyHeader\n", "", "删置顶 import")
+rep("import androidx.compose.foundation.ExperimentalFoundationApi\n", "", "删实验 API import")
+rep("@OptIn(ExperimentalFoundationApi::class) // [41v4]\n", "", "删 OptIn 注解")
+# 3) 顶部固定换一批行 + Column 包裹（列表改 weight 占剩余空间）
+rep("""        } else {
+    LazyColumn(""",
+    """        } else {
+    Column(Modifier.fillMaxSize()) { // [41v5] 顶部换一批行固定在上，列表占剩余空间
+        Box(
+            Modifier.fillMaxWidth().background(musicColors().background).padding(end = 16.dp, top = 8.dp, bottom = 8.dp),
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            Text(
+                "换一批",
+                color = musicColors().accent,
+                modifier = Modifier.clickable {
+                    val anchorItem = fullPool.firstOrNull { it.section == "anchor" }
+                    val seed = anchorItem?.song?.artist?.let { norm(it) } ?: ""
+                    val rest = fullPool.filterNot { it.section == "anchor" }.shuffled()
+                    fullPool = listOfNotNull(anchorItem) + noAdjacentOrder(rest, seed)
+                    visible = fullPool.take(20)
+                    refreshScope.launch { listState.scrollToItem(0) }
+                }
+            )
+        }
+        LazyColumn(""", "顶行包裹")
+rep("        modifier = Modifier.fillMaxSize(),",
+    "        modifier = Modifier.weight(1f), // [41v5] 列占剩余空间", "列表 weight")
+# 4) 补 Column 闭合（LazyColumn 闭合之后）
+rep("    }\n\n        }\n    }\n}",
+    "    }\n    }\n\n        }\n    }\n}", "Column 闭合")
+
+open(P, "w", encoding="utf-8").write(s)
+s2 = open(P, encoding="utf-8").read()
+assert "[41v5]" in s2 and "换一批" in s2, "写盘复核失败"
+assert "stickyHeader" not in s2 and "ExperimentalFoundationApi" not in s2, "置顶残留"
+print("OK 41 v5 置顶改固定顶行已加")
+PYEOF41V5
+echo "=== 41 v5 完成 ==="
