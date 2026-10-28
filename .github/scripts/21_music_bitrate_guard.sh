@@ -2777,3 +2777,21 @@ open(P, "w", encoding="utf-8").write(s)
 print("OK 21 v48 去齿音 + 延时对齐下发已加")
 PYEOF21V48
 echo "=== 21 v48 完成 ==="
+
+# === 21 v49: 低频起振开关下发 ===
+python3 << 'PYEOF21V49'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[21v49]" in s:
+    print("跳过（21 v49 已应用）"); sys.exit(0)
+old = 'eqDspProcessor.taRightMs = try { p?.getFloat("taR", 0f) ?: 0f } catch (_: Exception) { 0f } // [21v48] 右声道延时下发'
+assert s.count(old) == 1, "taR 锚点"
+new = old + '\n            eqDspProcessor.punchEnabled = try { p?.getBoolean("punch", false) ?: false } catch (_: Exception) { false } // [21v49] 低频起振开关下发'
+s = s.replace(old, new, 1)
+open(P, "w", encoding="utf-8").write(s)
+print("OK 21 v49 低频起振下发已加")
+PYEOF21V49
+echo "=== 21 v49 完成 ==="
