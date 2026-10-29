@@ -1382,3 +1382,298 @@ grep -q 'convwet' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPla
 grep -q 'specext' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt && { echo "X 42 v7 下发残留高频扩展"; exit 1; }
 echo "OK 42 v7 锁定已写入"
 echo "=== 42 v7 完成 ==="
+# === 42 v8: 卷积 IR 试听（7 个外置 IR + 临时选择器；合成路径一字不动，定稿后删选择器、只留胜出 IR） ===
+python3 << 'PYEOF42V8GEN'
+import os, sys, base64
+base = ".github/irs"
+man = os.path.join(base, "irs.txt")
+assert os.path.exists(man), "缺 .github/irs/irs.txt"
+out = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/ConvIrData.kt"
+entries = []
+for line in open(man, encoding="utf-8"):
+    line = line.strip()
+    if not line:
+        continue
+    parts = line.split(None, 2)
+    assert len(parts) == 3, line
+    id_, sr, label = parts
+    b64path = os.path.join(base, id_ + ".b64")
+    assert os.path.exists(b64path), b64path
+    b64 = "".join(open(b64path, encoding="utf-8").read().split())
+    raw = base64.b64decode(b64)
+    assert len(raw) % 4 == 0 and len(raw) >= 256, id_
+    entries.append((id_, sr, label, b64))
+if os.path.exists(out):
+    old = open(out, encoding="utf-8").read()
+    if all(e[0] in old for e in entries):
+        print("跳过（42 v8 IR 数据已生成）"); sys.exit(0)
+def chunks(s, n=30000):
+    return [s[i:i+n] for i in range(0, len(s), n)]
+L = []
+L.append("package com.github.tvbox.osc.ui.activity")
+L.append("")
+L.append("// [42v8] 卷积 IR 试听数据（构建期由 42 脚本从 .github/irs/*.b64 生成，勿手改）")
+L.append("internal object ConvIrData {")
+L.append("    val b64: Map<String, String> = mapOf(")
+for id_, sr, label, b64 in entries:
+    expr = (" +\n        ").join('"%s"' % c for c in chunks(b64))
+    L.append('        "%s" to %s,' % (id_, expr))
+L.append("    )")
+L.append("    val sr: Map<String, Int> = mapOf(")
+for id_, sr, label, b64 in entries:
+    L.append('        "%s" to %s,' % (id_, sr))
+L.append("    )")
+L.append("    val label: Map<String, String> = mapOf(")
+for id_, sr, label, b64 in entries:
+    esc = label.replace("\\", "\\\\").replace('"', '\\"')
+    L.append('        "%s" to "%s",' % (id_, esc))
+L.append("    )")
+L.append("}")
+open(out, "w", encoding="utf-8").write("\n".join(L) + "\n")
+print("OK 42 v8 IR 数据已生成")
+PYEOF42V8GEN
+echo "=== 42 v8 数据完成 ==="
+
+python3 << 'PYEOF42V8ENG'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v8]" in s:
+    print("跳过（42 v8 引擎已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+rep1(r"""    private var convN = 256""",
+r"""    private var convN = 256
+    var convIrId: String = "synthetic" // [42v8] 卷积 IR 选择（synthetic=合成；其余见 ConvIrData）
+    private var appliedConvIrId: String = "synthetic" // [42v8]""", "卷积 IR 选择字段")
+
+rep1(r"""            if (onetapEnabled != appliedOnetap) { // [42v1] 一键开关变了：重算一键级系数（与增益变化无关，防纯开关切换时系数未初始化）
+                updateCoefficients()
+                appliedOnetap = onetapEnabled
+                convReset() // [42v2] 一键开关变了：清卷积缓冲（防旧声残留混入）
+            }""",
+r"""            if (onetapEnabled != appliedOnetap) { // [42v1] 一键开关变了：重算一键级系数（与增益变化无关，防纯开关切换时系数未初始化）
+                updateCoefficients()
+                appliedOnetap = onetapEnabled
+                convReset() // [42v2] 一键开关变了：清卷积缓冲（防旧声残留混入）
+            }
+            if (convIrId != appliedConvIrId) { // [42v8] 卷积 IR 换了：重算系数（与增益/一键无关，防只换 IR 时系数不刷新）
+                updateCoefficients()
+                convReset() // [42v8] IR 换了：清卷积缓冲（防旧 IR 残留混入）
+            }""", "卷积 IR 换触发")
+
+rep1(r"""        // [42v2] 卷积器 IR（采样率变化时重算；1.0 秒合成 IR，分区频谱）
+        if (sr > 0 && sr.toInt() != convSr) {
+            convGenerateIr(sr)
+            convSr = sr.toInt()
+        }""",
+r"""        // [42v2] 卷积器 IR（采样率变化时重算；1.0 秒合成 IR，分区频谱）[42v8] IR 换了也重算
+        if (sr > 0 && (sr.toInt() != convSr || convIrId != appliedConvIrId)) {
+            if (convIrId != "synthetic") convGenerateIrExternal(sr) else convGenerateIr(sr)
+            convSr = sr.toInt()
+            appliedConvIrId = convIrId
+        }""", "卷积 IR 分发")
+
+rep1(r"""                StagePeak("卷积空间", onetapEnabled, dbgConvPeak), // [42v2]""",
+r"""                StagePeak("卷积空间" + convIrLabel(), onetapEnabled, dbgConvPeak), // [42v2][42v8]""", "状态行 IR 名")
+
+rep1(r"""    // [42v2] 清卷积音频缓冲（IR 频谱不动；采样率未变时重算系数也不丢 IR）""",
+r"""    // [42v8] 状态行显示当前 IR（合成不后缀）
+    private fun convIrLabel(): String = if (convIrId == "synthetic") "" else "·" + (ConvIrData.label[convIrId] ?: convIrId)
+
+    // [42v8] 外置 IR：从 ConvIrData 取 base64 PCM，按原生采样率线性重采样到当前 sr，能量归一后分区存谱；查不到/解码失败回落合成 IR（合成路径一字不动）
+    private fun convGenerateIrExternal(sr: Double) {
+        val b64 = ConvIrData.b64[convIrId]
+        val nativeSr = ConvIrData.sr[convIrId] ?: 44100
+        if (b64 == null) { convGenerateIr(sr); return }
+        val bytes = try { android.util.Base64.decode(b64, android.util.Base64.DEFAULT) } catch (_: Exception) { convGenerateIr(sr); return }
+        val frames = bytes.size / 4
+        if (frames < 64) { convGenerateIr(sr); return }
+        convN = if (sr <= 48000.0) 256 else 1024
+        convFftN = convN * 2
+        convFft = Fft(convFftN)
+        convRingSize = convN * 4
+        val len = minOf((frames.toDouble() * sr / nativeSr).toInt(), 65536).coerceAtLeast(4410)
+        val pCount = (len + convN - 1) / convN
+        convTmpRe = FloatArray(convFftN)
+        convTmpIm = FloatArray(convFftN)
+        convAccRe = FloatArray(convFftN)
+        convAccIm = FloatArray(convFftN)
+        convIrRe = Array(2) { Array(pCount) { FloatArray(convFftN) } }
+        convIrIm = Array(2) { Array(pCount) { FloatArray(convFftN) } }
+        convHistRe = Array(2) { Array(pCount) { FloatArray(convFftN) } }
+        convHistIm = Array(2) { Array(pCount) { FloatArray(convFftN) } }
+        convInBlock = Array(2) { FloatArray(convN) }
+        convTail = Array(2) { FloatArray(convN) }
+        convOutRing = Array(2) { FloatArray(convRingSize) }
+        for (ch in 0 until 2) {
+            val ir = FloatArray(len)
+            for (j in 0 until len) {
+                val pos = j.toDouble() * nativeSr / sr
+                val i0 = pos.toInt().coerceIn(0, frames - 1)
+                val i1 = (i0 + 1).coerceIn(0, frames - 1)
+                val frac = (pos - i0).toFloat()
+                val idx0 = i0 * 4 + ch * 2
+                val idx1 = i1 * 4 + ch * 2
+                val s0 = ((bytes[idx0].toInt() and 0xFF) or (bytes[idx0 + 1].toInt() shl 8)).toShort().toFloat() / 32768f
+                val s1 = ((bytes[idx1].toInt() and 0xFF) or (bytes[idx1 + 1].toInt() shl 8)).toShort().toFloat() / 32768f
+                ir[j] = s0 * (1f - frac) + s1 * frac
+            }
+            var energy = 0.0
+            for (v in ir) energy += v.toDouble() * v.toDouble()
+            val scale = if (energy > 0.0) (1.0 / sqrt(energy)).toFloat() else 1f
+            for (j in 0 until len) ir[j] *= scale
+            for (p in 0 until pCount) {
+                for (i in 0 until convFftN) {
+                    val src = p * convN + i
+                    convTmpRe[i] = if (i < convN && src < len) ir[src] else 0f
+                    convTmpIm[i] = 0f
+                }
+                convFft.forward(convTmpRe, convTmpIm)
+                for (i in 0 until convFftN) {
+                    convIrRe[ch][p][i] = convTmpRe[i]
+                    convIrIm[ch][p][i] = convTmpIm[i]
+                }
+            }
+        }
+        convReset()
+    }
+
+    // [42v2] 清卷积音频缓冲（IR 频谱不动；采样率未变时重算系数也不丢 IR）""", "外置 IR 函数")
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v8 引擎已写")
+PYEOF42V8ENG
+echo "=== 42 v8 引擎完成 ==="
+
+python3 << 'PYEOF42V8MGR'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v8]" in s:
+    print("跳过（42 v8 下发已应用）"); sys.exit(0)
+old = '            eqDspProcessor.onetapEnabled = try { p?.getBoolean("onetap", false) ?: false } catch (_: Exception) { false } // [42v1] 一键音效开关下发'
+assert s.count(old) == 1, "一键下发锚点"
+new = old + '\n            eqDspProcessor.convIrId = try { p?.getString("convir", "synthetic") ?: "synthetic" } catch (_: Exception) { "synthetic" } // [42v8] 卷积 IR 选择下发'
+s = s.replace(old, new, 1)
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v8 下发已加")
+PYEOF42V8MGR
+echo "=== 42 v8 下发完成 ==="
+
+python3 << 'PYEOF42V8PAGE'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v8]" in s:
+    print("跳过（42 v8 页面已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+rep1(r"""                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large,
+                        colors = CardDefaults.cardColors(containerColor = musicColors().card)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "极致音质（DSP 引擎）",""",
+r"""                    // [42v8] 卷积 IR 试听选择（临时，定稿后删掉；默认合成，紧贴卡片放、避开 [37eq16] 前的 v6 状态区，防重跑时 v7 状态段计数错位）
+                    var convirId by remember {
+                        mutableStateOf(
+                            try {
+                                context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE).getString("convir", "synthetic") ?: "synthetic"
+                            } catch (_: Exception) {
+                                "synthetic"
+                            }
+                        )
+                    }
+                    Card( // [42v8] 卷积 IR 试听（临时，定稿后删掉；仅一键开时生效）
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large,
+                        colors = CardDefaults.cardColors(containerColor = musicColors().card)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                "卷积 IR（临时试听，定稿后删掉；仅一键开时生效）", // [42v8]
+                                style = MaterialTheme.typography.bodySmall,
+                                color = musicColors().textSecondary
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                listOf(
+                                    "synthetic" to "合成",
+                                    "oppo01" to "OPPO 01",
+                                    "oppo36" to "OPPO 36",
+                                    "oppo72" to "OPPO 72",
+                                    "ambio1" to "Ambiophonic 1",
+                                    "dfx" to "DFX Mega Bass",
+                                    "bathroom" to "Bathroom",
+                                    "plate" to "Plate-Decay"
+                                ).forEach { (id, name) ->
+                                    FilterChip(
+                                        selected = convirId == id,
+                                        onClick = {
+                                            convirId = id
+                                            try { context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE).edit().putString("convir", id).commit() } catch (_: Exception) { }
+                                            try { LxPlayerManager.applyEqFromPrefs() } catch (_: Exception) { }
+                                        },
+                                        label = { Text(name) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                Spacer(Modifier.height(16.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large,
+                        colors = CardDefaults.cardColors(containerColor = musicColors().card)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "极致音质（DSP 引擎）",""", "卷积 IR 选择卡片")
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v8 页面已写")
+PYEOF42V8PAGE
+echo "=== 42 v8 页面完成 ==="
+
+grep -q '42v8' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v8 引擎写入失败"; exit 1; }
+grep -q '42v8' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 42 v8 下发写入失败"; exit 1; }
+grep -q '42v8' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v8 页面写入失败"; exit 1; }
+grep -q 'oppo01' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/ConvIrData.kt || { echo "X 42 v8 IR 数据写入失败"; exit 1; }
+echo "OK 42 v8 卷积 IR 试听已写入"
+echo "=== 42 v8 完成 ==="
