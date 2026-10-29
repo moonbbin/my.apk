@@ -1,0 +1,7 @@
+oppo01 44100 OPPO 01
+oppo36 44100 OPPO 36
+oppo72 44100 OPPO 72
+ambio1 44100 Ambiophonic 1
+dfx 44100 DFX Mega Bass
+bathroom 44100 Bathroom
+plate 44100 Plate-Decay
