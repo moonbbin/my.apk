@@ -1266,3 +1266,119 @@ grep -q '42v6' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayer
 grep -q '42v6' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v6 页面写入失败"; exit 1; }
 echo "OK 42 v6 推条已写入"
 echo "=== 42 v6 完成 ==="
+# === 42 v7: 锁定（用户 2026-10-29 调后值：湿声 0.25、高频扩展 1.05；推条卡片与下发删掉） ===
+python3 << 'PYEOF42V7ENG'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v7]" in s:
+    print("跳过（42 v7 引擎已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+rep1(r"""    var convWet = 0.20f // [42v5][42v6] 推条版：湿声改活量（推条拨动即时生效；起点仍 0.20，锁定版再写死；保留 [42v5]，不删旧标记）""",
+r"""    var convWet = 0.25f // [42v5][42v6][42v7] 锁定：湿声写死 0.25（用户 2026-10-29 调后值；推条已删，保留旧标记）""", "湿声锁定")
+
+rep1(r"""    var specExtAmount: Float = 1.0f // [42v6] 推条：高频扩展量活量（起点 1.0，锁定版再写死）""",
+r"""    var specExtAmount: Float = 1.05f // [42v6][42v7] 锁定：高频扩展量写死 1.05（用户 2026-10-29 调后值；推条已删）""", "高频扩展量锁定")
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v7 引擎已写")
+PYEOF42V7ENG
+echo "=== 42 v7 引擎完成 ==="
+
+python3 << 'PYEOF42V7MGR'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "convwet" not in s and "specext" not in s:
+    print("跳过（42 v7 下发已删）"); sys.exit(0)
+def delline(old, name):
+    global s
+    assert s.count(old) == 1, name
+    if (old + "\n") in s:
+        s = s.replace(old + "\n", "", 1)
+    else:
+        s = s.replace(old, "", 1)
+
+delline('            eqDspProcessor.convWet = try { p?.getFloat("convwet", 0.20f) ?: 0.20f } catch (_: Exception) { 0.20f } // [42v6] 推条：湿声下发', "湿声下发删")
+delline('            eqDspProcessor.specExtAmount = try { p?.getFloat("specext", 1.0f) ?: 1.0f } catch (_: Exception) { 1.0f } // [42v6] 推条：高频扩展量下发', "高频扩展量下发删")
+assert "convwet" not in s and "specext" not in s, "下发残留"
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v7 下发已删")
+PYEOF42V7MGR
+echo "=== 42 v7 下发完成 ==="
+
+python3 << 'PYEOF42V7PAGE'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "推条" not in s:
+    print("跳过（42 v7 页面已删）"); sys.exit(0)
+
+# --- 删状态变量块：从推条注释行到 [37eq16] 行之前（含末尾空行） ---
+anchor = "    // [42v6] 推条状态（临时调校，锁定后删掉）\n"
+assert s.count(anchor) == 1, "推条状态锚点"
+i = s.index(anchor)
+tail = "    // [37eq16] 两页 Pager：0=均衡"
+assert s.count(tail) == 1, "两页锚点"
+k = s.index(tail)
+seg = s[i:k]
+assert seg.count("by remember") == 2, "状态块两变量"
+assert "convWetSlider" in seg and "specExtSlider" in seg, "状态块变量名"
+assert seg.endswith("\n\n"), "状态块末尾空行"
+s = s[:i] + s[k:]
+
+# --- 删推条卡片：从 Card( // [42v6] 行起括号计数到卡片闭合，再加其后一个 Spacer 行 ---
+card = "                    Card( // [42v6] 推条：临时调校滑块区（调好锁定后删掉，成品不留）\n"
+assert s.count(card) == 1, "推条卡片锚点"
+i = s.index(card)
+depth = 0
+started = False
+j = i
+while j < len(s):
+    c = s[j]
+    if c == "{":
+        depth += 1; started = True
+    elif c == "}":
+        depth -= 1
+    j += 1
+    if started and depth == 0:
+        break
+assert started and depth == 0, "卡片括号未闭合"
+assert s[j] == "\n", "卡片闭合行尾"
+j += 1
+seg = s[i:j]
+assert "convWetSlider" in seg and "specExtSlider" in seg, "卡片含两滑块"
+assert "卷积湿声" in seg and "高频扩展量" in seg, "卡片两行"
+spacer = "                Spacer(Modifier.height(16.dp))\n"
+assert s[j:j+len(spacer)] == spacer, "卡片后 Spacer"
+j += len(spacer)
+assert s[i-len(spacer):i] == spacer, "卡片前原 Spacer"
+s = s[:i] + s[j:]
+assert s[i:i+len("                    Card(\n")] == "                    Card(\n", "删后接极致音质卡片"
+
+assert "推条" not in s, "页面推条残留"
+assert "convWetSlider" not in s and "specExtSlider" not in s, "页面滑块变量残留"
+assert "convwet" not in s and "specext" not in s, "页面存盘键残留"
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v7 页面已删")
+PYEOF42V7PAGE
+echo "=== 42 v7 页面完成 ==="
+
+grep -q '42v7' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v7 引擎写入失败"; exit 1; }
+grep -q '推条' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt && { echo "X 42 v7 页面残留推条"; exit 1; }
+grep -q 'convwet' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt && { echo "X 42 v7 下发残留湿声"; exit 1; }
+grep -q 'specext' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt && { echo "X 42 v7 下发残留高频扩展"; exit 1; }
+echo "OK 42 v7 锁定已写入"
+echo "=== 42 v7 完成 ==="
