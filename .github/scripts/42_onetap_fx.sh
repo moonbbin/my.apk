@@ -960,7 +960,88 @@ grep -q '42v3' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspPro
 echo "OK 42 v3 卷积自适应已写入"
 echo "=== 42 v3 完成 ==="
 
+# === 42 v5: 一键改手机专用（目标：手机上比原声稍好即过，不堆加工） ===
+python3 << 'PYEOF42V5ENG'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v5]" in s:
+    print("跳过（42 v5 引擎已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+def repAll(old, new, name, n):
+    global s
+    assert s.count(old) == n, name
+    s = s.replace(old, new)
+
+rep1(r"""    // [42v1] 一键音效总开关（页面一键卡片 + 21 下发）；开 = 三个新级 + BS2B 分支，关 = 全停""",
+r"""    // [42v1] 一键音效总开关（页面一键卡片 + 21 下发）；[42v5] 手机专用：开 = 卷积 + 高频扩展，一键低频/动态低音走 onetapBassEnabled（默认关），BS2B 需 cross 开关""", "总开关注释")
+
+rep1(r"""    var onetapEnabled: Boolean = false""",
+r"""    var onetapEnabled: Boolean = false
+    var onetapBassEnabled: Boolean = false // [42v5] 一键低频/动态低音门（手机专用一键默认关；代码保留，以后力量不够再开，不删）""", "一键低频门字段")
+
+rep1(r"""    private val convWet = 0.30f // [42v4] 湿声按案例人声/通用档 20-30% 取上限（原 0.5 属主导混响档）""",
+r"""    private val convWet = 0.20f // [42v5] 手机专用：湿声按案例微妙档 10-30% 取中（原 0.30 仍偏明显；目标稍好于原声，不抢戏）""", "湿声 0.20")
+
+repAll(r"""                    if (onetapEnabled) dynBassFrame() // [42v1]""",
+r"""                    if (onetapEnabled && onetapBassEnabled) dynBassFrame() // [42v5]""", "动态低音门控", 2)
+
+repAll(r"""                    if (onetapEnabled) viperBassFrame() // [42v1]""",
+r"""                    if (onetapEnabled && onetapBassEnabled) viperBassFrame() // [42v5]""", "一键低频门控", 2)
+
+rep1(r"""                StagePeak("动态低音", onetapEnabled, dbgDbPeak), // [42v1]""",
+r"""                StagePeak("动态低音", onetapEnabled && onetapBassEnabled, dbgDbPeak), // [42v5]""", "动态低音状态行门控")
+
+rep1(r"""                StagePeak("一键低频", onetapEnabled, dbgVbPeak), // [42v1]""",
+r"""                StagePeak("一键低频", onetapEnabled && onetapBassEnabled, dbgVbPeak), // [42v5]""", "一键低频状态行门控")
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v5 引擎已写")
+PYEOF42V5ENG
+echo "=== 42 v5 引擎完成 ==="
+
+python3 << 'PYEOF42V5PAGE'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v5]" in s:
+    print("跳过（42 v5 页面已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+rep1(r"""                                    "一键音效",""",
+r"""                                    "一键音效（手机）", // [42v5]""", "卡片标题手机专用")
+
+rep1(r"""                                    "调好的组合一键开/关：卷积空间 + 低频增强 + 动态低音 + 高频扩展 + 环绕；关就是原声", // [42v2][42v4]""",
+r"""                                    "手机专用一键开/关：卷积空间 + 高频扩展 + 默认档低频（Sub/低频起振/低频处理）；关就是原声", // [42v2][42v5]""", "卡片文案手机专用（保留 [42v2]：此行仍是页文件唯一的 v2 标记）")
+
+rep1(r"""                                        sub = true
+                                        cross = true
+                                        exc = false""",
+r"""                                        sub = true
+                                        cross = false // [42v5] 手机专用：手机扬声器自带声学串馈，不用 BS2B 环绕
+                                        exc = false""", "一键关环绕")
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v5 页面已写")
+PYEOF42V5PAGE
+echo "=== 42 v5 页面完成 ==="
+
 grep -q '42v4' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v4 清晰度写入失败"; exit 1; }
 grep -q '42v4' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v4 文案写入失败"; exit 1; }
 echo "OK 42 v4 清晰度包已写入"
 echo "=== 42 v4 完成 ==="
+
+grep -q '42v5' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v5 手机专用写入失败"; exit 1; }
+grep -q '42v5' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v5 文案写入失败"; exit 1; }
+echo "OK 42 v5 手机专用包已写入"
+echo "=== 42 v5 完成 ==="
