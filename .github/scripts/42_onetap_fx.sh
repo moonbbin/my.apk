@@ -1820,3 +1820,38 @@ if grep -q '卷积 IR' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/
 if grep -q 'convir' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt; then echo "X 42 v9 下发删除失败"; exit 1; fi
 echo "OK 42 v9 卷积 IR 锁定 Plate-Decay 已写入"
 echo "=== 42 v9 完成 ==="
+# === 42 v10: 一键开关与预设 chip 联动修复（声一直是对的，只修显示） ===
+python3 << 'PYEOF42V10PAGE'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v10]" in s:
+    print("跳过（42 v10 页面已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+rep1(r"""                                        gains = listOf(3f, -1f, 0f, 2f, 0f, 0f)""",
+r"""                                        presetName = "自定义" // [42v10] 一键开 = 非预设组合，chip 不亮任何预设（此前开一键时原声 chip 还亮着，声对、显示错）
+                                        savePresetName(context, "自定义") // [42v10] 持久化，防重进页又亮回旧预设
+                                        gains = listOf(3f, -1f, 0f, 2f, 0f, 0f)""", "一键开置自定义")
+
+rep1(r"""                                        gains = List(6) { 0f }""",
+r"""                                        presetName = "原声" // [42v10] 一键关 = 原声本声（全关+六段归零+lfproc/ta 归零），chip 亮回原声
+                                        savePresetName(context, "原声") // [42v10]
+                                        gains = List(6) { 0f }""", "一键关置原声")
+
+rep1(r"""    var presetName by remember { mutableStateOf(loadPresetName(context)) } // [37eq20] 预设名持久化""",
+r"""    var presetName by remember { mutableStateOf(if (try { context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE).getBoolean("onetap", false) } catch (_: Exception) { false }) "自定义" else loadPresetName(context)) } // [37eq20][42v10] 一键开着进页时不亮旧预设""", "进页初始纠偏")
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v10 页面已写")
+PYEOF42V10PAGE
+echo "=== 42 v10 页面完成 ==="
+
+grep -q '42v10' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v10 页面写入失败"; exit 1; }
+echo "OK 42 v10 一键预设联动已写入"
+echo "=== 42 v10 完成 ==="
