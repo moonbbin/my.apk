@@ -1677,3 +1677,146 @@ grep -q '42v8' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSett
 grep -q 'oppo01' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/ConvIrData.kt || { echo "X 42 v8 IR 数据写入失败"; exit 1; }
 echo "OK 42 v8 卷积 IR 试听已写入"
 echo "=== 42 v8 完成 ==="
+# === 42 v9: 卷积 IR 锁定 Plate-Decay（默认；选择卡片删掉；其余核的 .b64 留仓库，之后想换一行即回） ===
+python3 << 'PYEOF42V9GEN'
+import os, sys, base64
+out = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/ConvIrData.kt"
+if os.path.exists(out):
+    old = open(out, encoding="utf-8").read()
+    if "[42v9]" in old:
+        print("跳过（42 v9 IR 数据已锁定）"); sys.exit(0)
+man = ".github/irs/irs.txt"
+assert os.path.exists(man), "缺 .github/irs/irs.txt"
+sr = "44100"; label = "Plate-Decay"
+for line in open(man, encoding="utf-8"):
+    parts = line.strip().split(None, 2)
+    if len(parts) == 3 and parts[0] == "plate":
+        sr, label = parts[1], parts[2]
+b64path = ".github/irs/plate.b64"
+assert os.path.exists(b64path), b64path
+b64 = "".join(open(b64path, encoding="utf-8").read().split())
+raw = base64.b64decode(b64)
+assert len(raw) % 4 == 0 and len(raw) >= 256
+def chunks(s, n=30000):
+    return [s[i:i+n] for i in range(0, len(s), n)]
+expr = (" +\n        ").join('"%s"' % c for c in chunks(b64))
+esc = label.replace("\\", "\\\\").replace('"', '\\"')
+L = []
+L.append("package com.github.tvbox.osc.ui.activity")
+L.append("")
+L.append("// [42v9] 卷积 IR 锁定：仅 Plate-Decay（构建期由 42 脚本从 .github/irs/plate.b64 生成，勿手改）")
+L.append("internal object ConvIrData {")
+L.append("    val b64: Map<String, String> = mapOf(")
+L.append('        "plate" to %s,' % expr)
+L.append("    )")
+L.append("    val sr: Map<String, Int> = mapOf(")
+L.append('        "plate" to %s,' % sr)
+L.append("    )")
+L.append("    val label: Map<String, String> = mapOf(")
+L.append('        "plate" to "%s",' % esc)
+L.append("    )")
+L.append("}")
+open(out, "w", encoding="utf-8").write("\n".join(L) + "\n")
+print("OK 42 v9 IR 数据已锁定 Plate-Decay")
+PYEOF42V9GEN
+echo "=== 42 v9 数据完成 ==="
+
+python3 << 'PYEOF42V9ENG'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v9]" in s:
+    print("跳过（42 v9 引擎已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+rep1(r"""    var convIrId: String = "synthetic" // [42v8] 卷积 IR 选择（synthetic=合成；其余见 ConvIrData）""",
+r"""    var convIrId: String = "plate" // [42v8][42v9] 卷积 IR 锁定 Plate-Decay（默认；选择卡片已删）""", "卷积 IR 默认锁定")
+rep1(r"""    private var appliedConvIrId: String = "synthetic" // [42v8]""",
+r"""    private var appliedConvIrId: String = "plate" // [42v8][42v9]""", "卷积 IR 已应用锁定")
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v9 引擎已写")
+PYEOF42V9ENG
+echo "=== 42 v9 引擎完成 ==="
+
+python3 << 'PYEOF42V9MGR'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "convir" not in s:
+    print("跳过（42 v9 下发已删）"); sys.exit(0)
+old = '            eqDspProcessor.convIrId = try { p?.getString("convir", "synthetic") ?: "synthetic" } catch (_: Exception) { "synthetic" } // [42v8] 卷积 IR 选择下发'
+assert s.count(old) == 1, "卷积 IR 下发删"
+if (old + "\n") in s:
+    s = s.replace(old + "\n", "", 1)
+else:
+    s = s.replace(old, "", 1)
+assert "convir" not in s, "下发残留"
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v9 下发已删")
+PYEOF42V9MGR
+echo "=== 42 v9 下发完成 ==="
+
+python3 << 'PYEOF42V9PAGE'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "卷积 IR" not in s:
+    print("跳过（42 v9 页面已删）"); sys.exit(0)
+
+# --- 删状态变量块：从 [42v8] 状态注释行到 picker Card 行之前 ---
+anchor = "                    // [42v8] 卷积 IR 试听选择（临时，定稿后删掉；默认合成，紧贴卡片放、避开 [37eq16] 前的 v6 状态区，防重跑时 v7 状态段计数错位）\n"
+assert s.count(anchor) == 1, "IR 选择状态锚点"
+i = s.index(anchor)
+card = "                    Card( // [42v8] 卷积 IR 试听（临时，定稿后删掉；仅一键开时生效）\n"
+assert s.count(card) == 1, "IR 卡片锚点"
+k = s.index(card)
+seg = s[i:k]
+assert seg.count("by remember") == 1, "状态块一变量"
+assert "convirId" in seg, "状态块变量名"
+s = s[:i] + s[k:]
+
+# --- 删卡片：从 Card( // [42v8] 行起括号计数到卡片闭合，再加其后一个 Spacer 行 ---
+assert s.count(card) == 1, "IR 卡片锚点二"
+i = s.index(card)
+depth = 0
+started = False
+j = i
+while j < len(s):
+    c = s[j]
+    if c == "{":
+        depth += 1; started = True
+    elif c == "}":
+        depth -= 1
+    j += 1
+    if started and depth == 0:
+        break
+assert started and depth == 0, "卡片括号未闭合"
+assert s[j] == "\n", "卡片闭合行尾"
+j += 1
+spacer = "                Spacer(Modifier.height(16.dp))\n"
+assert s[j:j+len(spacer)] == spacer, "卡片后 Spacer"
+j += len(spacer)
+s = s[:i] + s[j:]
+assert "卷积 IR" not in s, "页面残留"
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v9 页面已删")
+PYEOF42V9PAGE
+echo "=== 42 v9 页面完成 ==="
+
+grep -q '42v9' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v9 引擎写入失败"; exit 1; }
+grep -q 'plate' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/ConvIrData.kt || { echo "X 42 v9 IR 数据写入失败"; exit 1; }
+if grep -q '卷积 IR' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt; then echo "X 42 v9 页面删除失败"; exit 1; fi
+if grep -q 'convir' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt; then echo "X 42 v9 下发删除失败"; exit 1; fi
+echo "OK 42 v9 卷积 IR 锁定 Plate-Decay 已写入"
+echo "=== 42 v9 完成 ==="
