@@ -90,6 +90,8 @@ jobs:
         run: bash .github/scripts/40_recommend.sh
       - name: 41_recommend_logic
         run: bash .github/scripts/41_recommend_logic.sh
+      - name: 42_onetap_fx
+        run: bash .github/scripts/42_onetap_fx.sh
       - name: 设置 JDK
         uses: actions/setup-java@v4
         with:
