@@ -93,7 +93,7 @@ jobs:
       - name: 42_onetap_fx
         run: bash .github/scripts/42_onetap_fx.sh
       - name: 设置 JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: '17'
