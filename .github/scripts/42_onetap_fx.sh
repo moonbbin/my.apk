@@ -1045,3 +1045,224 @@ grep -q '42v5' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspPro
 grep -q '42v5' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v5 文案写入失败"; exit 1; }
 echo "OK 42 v5 手机专用包已写入"
 echo "=== 42 v5 完成 ==="
+
+# === 42 v6: 推条（临时调校滑块：湿声/高频扩展量活量 + 下发，调好锁定后删掉） ===
+python3 << 'PYEOF42V6ENG'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v6]" in s:
+    print("跳过（42 v6 引擎已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+rep1(r"""    private val convWet = 0.20f // [42v5] 手机专用：湿声按案例微妙档 10-30% 取中（原 0.30 仍偏明显；目标稍好于原声，不抢戏）""",
+r"""    var convWet = 0.20f // [42v5][42v6] 推条版：湿声改活量（推条拨动即时生效；起点仍 0.20，锁定版再写死；保留 [42v5]，不删旧标记）""", "湿声活量")
+
+rep1(r"""    private fun specExtFrame() {""",
+r"""    var specExtAmount: Float = 1.0f // [42v6] 推条：高频扩展量活量（起点 1.0，锁定版再写死）
+
+    private fun specExtFrame() {""", "高频扩展量字段")
+
+rep1(r"""            frameSamples[ch] = y + lp""",
+r"""            frameSamples[ch] = y + lp * specExtAmount // [42v6]""", "高频扩展量混音")
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v6 引擎已写")
+PYEOF42V6ENG
+echo "=== 42 v6 引擎完成 ==="
+
+python3 << 'PYEOF42V6MGR'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v6]" in s:
+    print("跳过（42 v6 下发已应用）"); sys.exit(0)
+old = '            eqDspProcessor.onetapEnabled = try { p?.getBoolean("onetap", false) ?: false } catch (_: Exception) { false } // [42v1] 一键音效开关下发'
+assert s.count(old) == 1, "一键下发锚点"
+new = old + '\n            eqDspProcessor.convWet = try { p?.getFloat("convwet", 0.20f) ?: 0.20f } catch (_: Exception) { 0.20f } // [42v6] 推条：湿声下发'
+new = new + '\n            eqDspProcessor.specExtAmount = try { p?.getFloat("specext", 1.0f) ?: 1.0f } catch (_: Exception) { 1.0f } // [42v6] 推条：高频扩展量下发'
+s = s.replace(old, new, 1)
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v6 下发已加")
+PYEOF42V6MGR
+echo "=== 42 v6 下发完成 ==="
+
+python3 << 'PYEOF42V6PAGE'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v6]" in s:
+    print("跳过（42 v6 页面已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+rep1(r"""    // [42v1] 一键音效开关（默认关；开=固定组合，关=原声）
+    var onetap by remember {
+        mutableStateOf(
+            try {
+                context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE).getBoolean("onetap", false)
+            } catch (_: Exception) {
+                false
+            }
+        )
+    }""",
+r"""    // [42v1] 一键音效开关（默认关；开=固定组合，关=原声）
+    var onetap by remember {
+        mutableStateOf(
+            try {
+                context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE).getBoolean("onetap", false)
+            } catch (_: Exception) {
+                false
+            }
+        )
+    }
+
+    // [42v6] 推条状态（临时调校，锁定后删掉）
+    var convWetSlider by remember {
+        mutableStateOf(
+            try {
+                context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE).getFloat("convwet", 0.20f)
+            } catch (_: Exception) {
+                0.20f
+            }
+        )
+    }
+    var specExtSlider by remember {
+        mutableStateOf(
+            try {
+                context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE).getFloat("specext", 1.0f)
+            } catch (_: Exception) {
+                1.0f
+            }
+        )
+    }""", "推条状态")
+
+rep1(r"""                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large,
+                        colors = CardDefaults.cardColors(containerColor = musicColors().card)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "极致音质（DSP 引擎）",""",
+r"""                    Card( // [42v6] 推条：临时调校滑块区（调好锁定后删掉，成品不留）
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large,
+                        colors = CardDefaults.cardColors(containerColor = musicColors().card)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                "推条（临时调校，调好发数值锁定后删掉；仅一键开时生效）", // [42v6]
+                                style = MaterialTheme.typography.bodySmall,
+                                color = musicColors().textSecondary
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "卷积湿声",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = musicColors().textPrimary,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    String.format("%.2f", convWetSlider),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = musicColors().accent
+                                )
+                            }
+                            Slider(
+                                value = convWetSlider,
+                                onValueChange = { v ->
+                                    convWetSlider = v
+                                    try { context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE).edit().putFloat("convwet", v).commit() } catch (_: Exception) { }
+                                    try { LxPlayerManager.applyEqFromPrefs() } catch (_: Exception) { }
+                                },
+                                valueRange = 0f..0.5f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = musicColors().accent,
+                                    activeTrackColor = musicColors().accent,
+                                    inactiveTrackColor = musicColors().cardSecondary
+                                )
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "高频扩展量",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = musicColors().textPrimary,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    String.format("%.2f", specExtSlider),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = musicColors().accent
+                                )
+                            }
+                            Slider(
+                                value = specExtSlider,
+                                onValueChange = { v ->
+                                    specExtSlider = v
+                                    try { context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE).edit().putFloat("specext", v).commit() } catch (_: Exception) { }
+                                    try { LxPlayerManager.applyEqFromPrefs() } catch (_: Exception) { }
+                                },
+                                valueRange = 0f..2f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = musicColors().accent,
+                                    activeTrackColor = musicColors().accent,
+                                    inactiveTrackColor = musicColors().cardSecondary
+                                )
+                            )
+                        }
+                    }
+                Spacer(Modifier.height(16.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large,
+                        colors = CardDefaults.cardColors(containerColor = musicColors().card)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "极致音质（DSP 引擎）",""", "推条卡片")
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v6 页面已写")
+PYEOF42V6PAGE
+echo "=== 42 v6 页面完成 ==="
+
+grep -q '42v6' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v6 引擎写入失败"; exit 1; }
+grep -q '42v6' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 42 v6 下发写入失败"; exit 1; }
+grep -q '42v6' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v6 页面写入失败"; exit 1; }
+echo "OK 42 v6 推条已写入"
+echo "=== 42 v6 完成 ==="
