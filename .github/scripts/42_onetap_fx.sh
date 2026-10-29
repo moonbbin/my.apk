@@ -1,0 +1,461 @@
+#!/bin/bash
+set -e
+# 42 - 一键音效（蝰蛇味组合：参数调好、一键开/关；新系统，build.yml 调用行由用户手动加在 41 之后）
+cd "$(dirname "$0")/../.."
+echo "=== 42 一键音效 ==="
+
+# === 42 v1: 引擎：一键三新级 + BS2B 分支 + 系数 + 快照 + 复位 ===
+python3 << 'PYEOF42V1ENG'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v1]" in s:
+    print("跳过（42 v1 引擎已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+def rep2(old, new, name):
+    global s
+    assert s.count(old) == 2, name
+    s = s.replace(old, new)
+
+rep1(r"""    private var lfSlowCoef = 0.005f
+
+    // [38dsp10] Sub 谐波合成（参数=深空流光包：分频 90Hz、合成增益 +4dB、mix 0.30）：默认关""",
+r"""    private var lfSlowCoef = 0.005f
+
+    // [42v1] 一键音效总开关（页面一键卡片 + 21 下发）；开 = 三个新级 + BS2B 分支，关 = 全停
+    @Volatile
+    var onetapEnabled: Boolean = false
+
+    // [42v1] 一键低频（ViPER Subwoofer 式：PEAK 44Hz +7.96dB Q0.75、PEAK-low 80Hz -10.10dB Q0.2、LP 380Hz Q0.6；混合 = 干声 x0.5 + 残差 x0.6）
+    private val vbPk = Biquad()
+    private val vbPkLow = Biquad()
+    private val vbLp = Biquad()
+
+    // [42v1] 动态低音（DynamicBass 简模式：55Hz 低通单声道叠加，Q 跟增益走）
+    private val dbLp = Biquad()
+
+    // [42v1] 高频扩展（SpectrumExtend 式：HP 7600Hz -> Chebyshev 奇次谐波 -> LP(nyquist-2000)，激励量 1.0，加回干声）
+    private val seHp = Biquad()
+    private val seLp = Biquad()
+    private val seCoeffs = DoubleArray(11)
+    private val seLast = DoubleArray(2)
+    private val sePrevOut = DoubleArray(2)
+    private val seCounter = IntArray(2)
+
+    // [42v1] BS2B crossfeed 系数与状态（700Hz / 4.5dB 档；仅一键开时走此分支，手动 cross 仍走旧简化版）
+    private var bsA0Lo = 0f
+    private var bsB1Lo = 0f
+    private var bsA0Hi = 0f
+    private var bsA1Hi = 0f
+    private var bsB1Hi = 0f
+    private var bsGain = 1f
+    private val bsLo = FloatArray(2)
+    private val bsHi = FloatArray(2)
+    private val bsAsis = FloatArray(2)
+
+    // [38dsp10] Sub 谐波合成（参数=深空流光包：分频 90Hz、合成增益 +4dB、mix 0.30）：默认关""", "一键字段")
+
+rep1(r"""    var dbgLfprocPeak: Float = 0f""",
+r"""    var dbgLfprocPeak: Float = 0f
+    @Volatile
+    var dbgVbPeak: Float = 0f // [42v1]
+    @Volatile
+    var dbgDbPeak: Float = 0f // [42v1]
+    @Volatile
+    var dbgSePeak: Float = 0f // [42v1]""", "一键峰值字段")
+
+rep1(r"""    private var appliedVersion: Int = -1""",
+r"""    private var appliedVersion: Int = -1
+    private var appliedOnetap: Boolean = false // [42v1]""", "appliedOnetap 字段")
+
+rep1(r"""        // [38dsp12] 各级独立生效：十四级全关才旁路 [38dsp15][38dsp18][38dsp19][38dsp20][38dsp21][38dsp22]；主开关只管 PEQ 本身（runChain 内门控）""",
+r"""        // [38dsp12] 各级独立生效：各级全关才旁路 [38dsp15][38dsp18][38dsp19][38dsp20][38dsp21][38dsp22][42v1]；主开关只管 PEQ 本身（runChain 内门控）""", "旁路注释")
+
+rep1(r"""        val anyStageOn = dspEnabled || subEnabled || transEnabled || mbcEnabled || stereoWide || cfEnabled || excEnabled || loudEnabled || agEnabled || revEnabled || deessEnabled || taEnabled || punchEnabled || lfprocAmount > 0f""",
+r"""        val anyStageOn = dspEnabled || subEnabled || transEnabled || mbcEnabled || stereoWide || cfEnabled || excEnabled || loudEnabled || agEnabled || revEnabled || deessEnabled || taEnabled || punchEnabled || lfprocAmount > 0f || onetapEnabled // [42v1]""", "anyStageOn")
+
+rep1(r"""            if (appliedVersion != configVersion) {
+                updateCoefficients()
+                appliedVersion = configVersion
+            }""",
+r"""            if (appliedVersion != configVersion) {
+                updateCoefficients()
+                appliedVersion = configVersion
+            }
+            if (onetapEnabled != appliedOnetap) { // [42v1] 一键开关变了：重算一键级系数（与增益变化无关，防纯开关切换时系数未初始化）
+                updateCoefficients()
+                appliedOnetap = onetapEnabled
+            }""", "一键系数刷新")
+
+rep1(r"""            dbgLfprocPeak = 0f // [38dsp22]""",
+r"""            dbgLfprocPeak = 0f // [38dsp22]
+            dbgVbPeak = 0f // [42v1]
+            dbgDbPeak = 0f // [42v1]
+            dbgSePeak = 0f // [42v1]""", "一键峰值复位")
+
+rep2(r"""                    dbgPeqPeak = maxOf(dbgPeqPeak, abs(frameSamples[0]), abs(frameSamples[1])) // [38dsp18]
+                    if (subEnabled) subFrame() // [38dsp10]""",
+r"""                    dbgPeqPeak = maxOf(dbgPeqPeak, abs(frameSamples[0]), abs(frameSamples[1])) // [38dsp18]
+                    if (onetapEnabled) specExtFrame() // [42v1]
+                    dbgSePeak = maxOf(dbgSePeak, abs(frameSamples[0]), abs(frameSamples[1])) // [42v1]
+                    if (subEnabled) subFrame() // [38dsp10]""", "高频扩展调用点")
+
+rep2(r"""                    if (subEnabled) subFrame() // [38dsp10]
+                    dbgSubPeak = maxOf(dbgSubPeak, abs(frameSamples[0]), abs(frameSamples[1])) // [38dsp18]
+                    if (excEnabled) excFrame() // [38dsp15]""",
+r"""                    if (subEnabled) subFrame() // [38dsp10]
+                    dbgSubPeak = maxOf(dbgSubPeak, abs(frameSamples[0]), abs(frameSamples[1])) // [38dsp18]
+                    if (onetapEnabled) dynBassFrame() // [42v1]
+                    dbgDbPeak = maxOf(dbgDbPeak, abs(frameSamples[0]), abs(frameSamples[1])) // [42v1]
+                    if (onetapEnabled) viperBassFrame() // [42v1]
+                    dbgVbPeak = maxOf(dbgVbPeak, abs(frameSamples[0]), abs(frameSamples[1])) // [42v1]
+                    if (excEnabled) excFrame() // [38dsp15]""", "低频调用点")
+
+rep1(r"""    // [38dsp11] Crossfeed 一帧：对侧声道经一极低通 + 延迟后以 -6dB 混入（声道联动，帧级处理）
+    private fun crossFrame() {
+        val l = frameSamples[0]""",
+r"""    // [38dsp11] Crossfeed 一帧：对侧声道经一极低通 + 延迟后以 -6dB 混入（声道联动，帧级处理）；[42v1] 一键开时走 BS2B 分支（700Hz/4.5dB 公式版），手动 cross 仍走旧简化版
+    private fun crossFrame() {
+        if (onetapEnabled) { bs2bFrame(); return }
+        val l = frameSamples[0]""", "crossFrame 分支")
+
+rep1(r"""        frameSamples[0] = l + crossIntoL * 0.5f
+        frameSamples[1] = r + crossIntoR * 0.5f
+    }""",
+r"""        frameSamples[0] = l + crossIntoL * 0.5f
+        frameSamples[1] = r + crossIntoR * 0.5f
+    }
+
+    // [42v1] 一键低频一帧（ViPER Subwoofer 式）：PEAK 44Hz -> PEAK-low 80Hz -> LP 380Hz（残差 = 峰值链输出减干声再过低通）；混合 = 干声 x0.5 + 残差 x0.6
+    private fun viperBassFrame() {
+        for (ch in 0 until 2) {
+            val y = frameSamples[ch]
+            var tmp = vbPk.process(ch, y)
+            tmp = vbPkLow.process(ch, tmp)
+            tmp = vbLp.process(ch, tmp - y)
+            frameSamples[ch] = y * 0.5f + tmp * 0.6f
+        }
+    }
+
+    // [42v1] 动态低音一帧（DynamicBass 简模式）：55Hz 低通取左右声道和的单声道低频，叠加回双声道（低频单声道化 + 叠加）
+    private fun dynBassFrame() {
+        val sum = frameSamples[0] + frameSamples[1]
+        val avg = dbLp.process(0, sum)
+        frameSamples[0] += avg
+        frameSamples[1] += avg
+    }
+
+    // [42v1] 高频扩展一帧（SpectrumExtend 式）：HP 7600Hz -> Chebyshev 奇次谐波 -> LP(nyquist-2000)，激励量 1.0，加回干声
+    private fun specExtFrame() {
+        for (ch in 0 until 2) {
+            val y = frameSamples[ch]
+            var tmp = seHp.process(ch, y).toDouble()
+            tmp = seHarmonic(ch, tmp)
+            val lp = seLp.process(ch, tmp.toFloat())
+            frameSamples[ch] = y + lp
+        }
+    }
+
+    // [42v1] Chebyshev 谐波发生器（ViPER Harmonic 式）：系数经 Chebyshev 递推转幂级数后 Horner 求值，再过漏积分微分器；前 200 采样暖机静音（与原版一致）
+    private fun seHarmonic(ch: Int, x: Double): Double {
+        val prevLast = seLast[ch]
+        var v = seCoeffs[10]
+        for (i in 9 downTo 0) v = v * x + seCoeffs[i]
+        seLast[ch] = v
+        sePrevOut[ch] = (v + sePrevOut[ch] * 0.999) - prevLast
+        if (seCounter[ch] < 200) {
+            seCounter[ch]++
+            return 0.0
+        }
+        return sePrevOut[ch]
+    }
+
+    // [42v1] Chebyshev 系数换算（ViPER Harmonic::UpdateCoeffs 式）：10 个谐波系数（0.02 x T1/T3/T5/T7/T9）-> 11 阶幂级数系数
+    private fun seComputeCoeffs() {
+        val harm = doubleArrayOf(0.02, 0.0, 0.02, 0.0, 0.02, 0.0, 0.02, 0.0, 0.02, 0.0)
+        var absSum = 0.0
+        var biggest = 0.0
+        for (i in 0 until 10) {
+            val a = abs(harm[i])
+            absSum += a
+            if (a > biggest) biggest = a
+        }
+        val unk1 = DoubleArray(11)
+        var unk = 1.0
+        if (absSum > 1.0) unk = 1.0 / absSum
+        for (i in 1 until 11) unk1[i] = harm[i - 1] * unk
+        val unk2 = DoubleArray(11)
+        val c = DoubleArray(11)
+        c[10] = unk1[10]
+        for (i in 2 until 11) {
+            for (j in 0 until i) {
+                val tmp = unk2[i - j]
+                unk2[i - j] = c[i - j]
+                c[i - j] = c[i - j - 1] * 2.0 - tmp
+            }
+            val tmp = unk1[10 - i + 1] - unk2[0]
+            unk2[0] = c[0]
+            c[0] = tmp
+        }
+        for (i in 1 until 11) {
+            c[10 - i + 1] = c[10 - i] - unk2[10 - i + 1]
+        }
+        c[0] = unk1[0] / 2.0 - unk2[0]
+        for (i in 0 until 11) seCoeffs[i] = c[i]
+    }
+
+    // [42v1] BS2B crossfeed 一帧（Bauer 双耳滤波：低通支路 + 高架支路交叉混合，归一化增益）
+    private fun bs2bFrame() {
+        val l = frameSamples[0]
+        val r = frameSamples[1]
+        bsLo[0] = bsA0Lo * l + bsB1Lo * bsLo[0]
+        bsLo[1] = bsA0Lo * r + bsB1Lo * bsLo[1]
+        bsHi[0] = bsA0Hi * l + bsA1Hi * bsAsis[0] + bsB1Hi * bsHi[0]
+        bsHi[1] = bsA0Hi * r + bsA1Hi * bsAsis[1] + bsB1Hi * bsHi[1]
+        bsAsis[0] = l
+        bsAsis[1] = r
+        frameSamples[0] = (bsHi[0] + bsLo[1]) * bsGain
+        frameSamples[1] = (bsHi[1] + bsLo[0]) * bsGain
+    }""", "一键级函数")
+
+rep1(r"""        lfEnvF = 0f // [38dsp22]
+        lfEnvS = 0f // [38dsp22]
+        subLp1.reset() // [38dsp10]""",
+r"""        lfEnvF = 0f // [38dsp22]
+        lfEnvS = 0f // [38dsp22]
+        vbPk.reset() // [42v1]
+        vbPkLow.reset() // [42v1]
+        vbLp.reset() // [42v1]
+        dbLp.reset() // [42v1]
+        seHp.reset() // [42v1]
+        seLp.reset() // [42v1]
+        seLast.fill(0.0) // [42v1]
+        sePrevOut.fill(0.0) // [42v1]
+        seCounter.fill(0) // [42v1]
+        bsLo.fill(0f) // [42v1]
+        bsHi.fill(0f) // [42v1]
+        bsAsis.fill(0f) // [42v1]
+        subLp1.reset() // [38dsp10]""", "一键复位")
+
+rep1(r"""                StagePeak("PEQ", dspEnabled, dbgPeqPeak),""",
+r"""                StagePeak("PEQ", dspEnabled, dbgPeqPeak),
+                StagePeak("高频扩展", onetapEnabled, dbgSePeak), // [42v1]""", "快照高频扩展")
+
+rep1(r"""                StagePeak("Sub", subEnabled, dbgSubPeak),""",
+r"""                StagePeak("Sub", subEnabled, dbgSubPeak),
+                StagePeak("动态低音", onetapEnabled, dbgDbPeak), // [42v1]
+                StagePeak("一键低频", onetapEnabled, dbgVbPeak), // [42v1]""", "快照低频")
+
+rep1(r"""        updateLoudnessCoefficients()
+    }""",
+r"""        // [42v1] 一键低频滤波器（ViPER Subwoofer::SetBassGain，因子 1.0 -> PEAK 44Hz +7.96dB Q0.75、PEAK-low 80Hz -10.10dB Q0.2、LP 380Hz Q0.6）
+        setPeaking(vbPk, 44.0, 0.75, 20.0 * log10(2.5), sr)
+        setPeaking(vbPkLow, 80.0, 0.2, 20.0 * log10(2.5 / 8.0), sr)
+        setLowpass(vbLp, 380.0, 0.6, sr)
+        // [42v1] 动态低音 55Hz 低通（DynamicBass 简模式，gain=2.0 -> qPeak=80 -> Q 0.62）
+        setLowpass(dbLp, 55.0, 0.5 + 80.0 / 666.0, sr)
+        // [42v1] 高频扩展分频（SpectrumExtend 式：HP 7600Hz Q0.717 + LP(nyquist-2000) Q0.717）+ Chebyshev 系数
+        setHighpass(seHp, 7600.0, 0.717, sr)
+        setLowpass(seLp, sr / 2.0 - 2000.0, 0.717, sr)
+        seComputeCoeffs()
+        // [42v1] BS2B crossfeed 系数（700Hz / 4.5dB 档，公式见 ViPER Crossfeed::Reset）
+        val bsLevel = 4.5
+        val bsGbLo = bsLevel * -5.0 / 6.0 - 3.0
+        val bsGbHi = bsLevel / 6.0 - 3.0
+        val bsGLo = 10.0.pow(bsGbLo / 20.0)
+        val bsGHi = 1.0 - 10.0.pow(bsGbHi / 20.0)
+        val bsFcHi = 700.0 * 2.0.pow((bsGbLo - 20.0 * log10(bsGHi)) / 12.0)
+        var bsX = exp(-2.0 * PI * 700.0 / sr)
+        bsB1Lo = bsX.toFloat()
+        bsA0Lo = (bsGLo * (1.0 - bsX)).toFloat()
+        bsX = exp(-2.0 * PI * bsFcHi / sr)
+        bsB1Hi = bsX.toFloat()
+        bsA0Hi = (1.0 - bsGHi * (1.0 - bsX)).toFloat()
+        bsA1Hi = (-bsX).toFloat()
+        bsGain = (1.0 / (1.0 - bsGHi + bsGLo)).toFloat()
+        updateLoudnessCoefficients()
+    }""", "一键系数")
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v1 引擎已加")
+PYEOF42V1ENG
+echo "=== 42 v1 引擎完成 ==="
+
+# === 42 v1: 页面：一键卡片 + 状态变量 + 预设清一键 ===
+python3 << 'PYEOF42V1PAGE'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v1]" in s:
+    print("跳过（42 v1 页面已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+rep1(r"""        )
+    }
+
+    // [37eq16] 两页 Pager：0=均衡（总开关+预设+六段），1=音效（十二级独立开关 + 低频处理器滑块）[37eq18][37eq20][37eq22][37eq24][37eq25][37eq26]""",
+r"""        )
+    }
+
+    // [42v1] 一键音效开关（默认关；开=固定组合，关=原声）
+    var onetap by remember {
+        mutableStateOf(
+            try {
+                context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE).getBoolean("onetap", false)
+            } catch (_: Exception) {
+                false
+            }
+        )
+    }
+
+    // [37eq16] 两页 Pager：0=均衡（总开关+预设+六段），1=音效（十二级独立开关 + 低频处理器滑块）[37eq18][37eq20][37eq22][37eq24][37eq25][37eq26]""", "一键状态变量")
+
+rep1(r"""                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large,
+                        colors = CardDefaults.cardColors(containerColor = musicColors().card)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "极致音质（DSP 引擎）",""",
+r"""                    Card( // [42v1] 一键音效
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large,
+                        colors = CardDefaults.cardColors(containerColor = musicColors().card)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "一键音效",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = musicColors().textPrimary
+                                )
+                                Text(
+                                    "调好的组合一键开/关：低频增强 + 动态低音 + 高频扩展 + 环绕 + 混响；关就是原声",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = musicColors().textSecondary
+                                )
+                            }
+                            Switch(
+                                checked = onetap,
+                                onCheckedChange = {
+                                    onetap = it
+                                    try { context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE).edit().putBoolean("onetap", it).commit() } catch (_: Exception) { }
+                                    if (it) {
+                                        gains = listOf(3f, -1f, 0f, 2f, 0f, 0f)
+                                        dsp = true
+                                        wide = false
+                                        mbc = false
+                                        trans = false
+                                        sub = true
+                                        cross = true
+                                        exc = false
+                                        loud = false
+                                        ag = false
+                                        rev = true
+                                        deess = false
+                                        ta = false
+                                        punch = true
+                                        lfproc = 0.10f
+                                    } else {
+                                        gains = List(6) { 0f }
+                                        dsp = false
+                                        wide = false
+                                        mbc = false
+                                        trans = false
+                                        sub = false
+                                        cross = false
+                                        exc = false
+                                        loud = false
+                                        ag = false
+                                        rev = false
+                                        deess = false
+                                        ta = false
+                                        taL = 0f
+                                        taR = 0f
+                                        punch = false
+                                        lfproc = 0f
+                                    }
+                                    persistEq(context, dsp, wide, mbc, trans, sub, cross, exc, loud, ag, rev, deess, ta, taL, taR, punch, lfproc, gains)
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = musicColors().accentText,
+                                    checkedTrackColor = musicColors().accent,
+                                    uncheckedThumbColor = musicColors().textSecondary,
+                                    uncheckedTrackColor = musicColors().cardSecondary
+                                )
+                            )
+                        }
+                    }
+                Spacer(Modifier.height(16.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large,
+                        colors = CardDefaults.cardColors(containerColor = musicColors().card)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "极致音质（DSP 引擎）",""", "一键卡片")
+
+rep1(r"""                                    savePresetName(context, name) // [37eq20]
+                                    persistEq(context, dsp, wide, mbc, trans, sub, cross, exc, loud, ag, rev, deess, ta, taL, taR, punch, lfproc, gains)""",
+r"""                                    onetap = false // [42v1] 换预设 = 换整套组合，一键状态清掉
+                                    try { context.getSharedPreferences("eq_settings", Context.MODE_PRIVATE).edit().putBoolean("onetap", false).commit() } catch (_: Exception) { }
+                                    savePresetName(context, name) // [37eq20]
+                                    persistEq(context, dsp, wide, mbc, trans, sub, cross, exc, loud, ag, rev, deess, ta, taL, taR, punch, lfproc, gains)""", "预设清一键")
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v1 页面已加")
+PYEOF42V1PAGE
+echo "=== 42 v1 页面完成 ==="
+
+# === 42 v1: 下发：一键开关经 applyEqFromPrefs 到引擎 ===
+python3 << 'PYEOF42V1MGR'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v1]" in s:
+    print("跳过（42 v1 下发已应用）"); sys.exit(0)
+old = 'eqDspProcessor.lfprocAmount = try { p?.getFloat("lfproc", 0f) ?: 0f } catch (_: Exception) { 0f } // [21v50] 低频处理器力度下发'
+assert s.count(old) == 1, "lfproc 锚点"
+new = old + '\n            eqDspProcessor.onetapEnabled = try { p?.getBoolean("onetap", false) ?: false } catch (_: Exception) { false } // [42v1] 一键音效开关下发'
+s = s.replace(old, new, 1)
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v1 一键下发已加")
+PYEOF42V1MGR
+echo "=== 42 v1 下发完成 ==="
+
+grep -q 'onetapEnabled' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v1 引擎写入失败"; exit 1; }
+grep -q '一键音效' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v1 页面写入失败"; exit 1; }
+grep -q 'onetapEnabled' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 42 v1 下发写入失败"; exit 1; }
+echo "OK 42 v1 一键音效已写入"
+echo "=== 42 v1 完成 ==="
