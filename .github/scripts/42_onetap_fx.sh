@@ -454,8 +454,332 @@ print("OK 42 v1 一键下发已加")
 PYEOF42V1MGR
 echo "=== 42 v1 下发完成 ==="
 
+# === 42 v2: 卷积空间（分区 FFT 卷积，链首，仅一键） ===
+python3 << 'PYEOF42V2ENG'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v2]" in s:
+    print("跳过（42 v2 引擎已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+def rep2(old, new, name):
+    global s
+    assert s.count(old) == 2, name
+    s = s.replace(old, new)
+
+rep1(r"""    private val bsAsis = FloatArray(2)
+
+    // [38dsp10] Sub""",
+r"""    private val bsAsis = FloatArray(2)
+
+    // [42v2] 卷积空间（分区卷积，分区 256，FFT 512；湿声延迟一区作预延迟，干声直通；仅一键开）
+    private val convN = 256
+    private val convFftN = 512
+    private val convRingSize = 1024
+    private val convWet = 0.5f
+    private val convFft = Fft(512)
+    private var convSr = -1
+    private var convIrRe: Array<Array<FloatArray>> = emptyArray()
+    private var convIrIm: Array<Array<FloatArray>> = emptyArray()
+    private var convHistRe: Array<Array<FloatArray>> = emptyArray()
+    private var convHistIm: Array<Array<FloatArray>> = emptyArray()
+    private var convInBlock: Array<FloatArray> = emptyArray()
+    private var convTail: Array<FloatArray> = emptyArray()
+    private var convOutRing: Array<FloatArray> = emptyArray()
+    private var convInPos = IntArray(2)
+    private var convRd = IntArray(2)
+    private var convWr = 0
+    private var convBlock = 0
+    private var convTmpRe = FloatArray(convFftN)
+    private var convTmpIm = FloatArray(convFftN)
+    private var convAccRe = FloatArray(convFftN)
+    private var convAccIm = FloatArray(convFftN)
+
+    // [38dsp10] Sub""", "卷积字段")
+
+rep1(r"""    var dbgSePeak: Float = 0f // [42v1]""",
+r"""    var dbgSePeak: Float = 0f // [42v1]
+    @Volatile
+    var dbgConvPeak: Float = 0f // [42v2]""", "卷积峰值字段")
+
+rep2(r"""                        frameSamples[ch] = runChain(ch, s)""",
+r"""                        val cs = if (onetapEnabled) convSample(ch, s) else s // [42v2]
+                        frameSamples[ch] = runChain(ch, cs)""", "链首卷积调用")
+
+rep1(r"""            dbgSePeak = 0f // [42v1]""",
+r"""            dbgSePeak = 0f // [42v1]
+            dbgConvPeak = 0f // [42v2]""", "卷积峰值复位")
+
+rep1(r"""                appliedOnetap = onetapEnabled""",
+r"""                appliedOnetap = onetapEnabled
+                convReset() // [42v2] 一键开关变了：清卷积缓冲（防旧声残留混入）""", "一键切换清卷积")
+
+rep1(r"""        limiterGain = 1f
+    }""",
+r"""        convReset() // [42v2]
+        limiterGain = 1f
+    }""", "复位清卷积")
+
+rep1(r"""                StagePeak("PEQ", dspEnabled, dbgPeqPeak),""",
+r"""                StagePeak("卷积空间", onetapEnabled, dbgConvPeak), // [42v2]
+                StagePeak("PEQ", dspEnabled, dbgPeqPeak),""", "卷积状态行")
+
+rep1(r"""        updateLoudnessCoefficients()
+    }""",
+r"""        // [42v2] 卷积器 IR（采样率变化时重算；1.0 秒合成 IR，分区频谱）
+        if (sr > 0 && sr.toInt() != convSr) {
+            convGenerateIr(sr)
+            convSr = sr.toInt()
+        }
+        updateLoudnessCoefficients()
+    }""", "卷积 IR 重算")
+
+rep1(r"""        frameSamples[0] = (bsHi[0] + bsLo[1]) * bsGain
+        frameSamples[1] = (bsHi[1] + bsLo[0]) * bsGain
+    }""",
+r"""        frameSamples[0] = (bsHi[0] + bsLo[1]) * bsGain
+        frameSamples[1] = (bsHi[1] + bsLo[0]) * bsGain
+    }
+
+    // [42v2] 卷积一采样：干声直通 + 湿声（延迟一区，约 5.8ms 预延迟）x0.5；IR 未就绪时直通
+    private fun convSample(ch: Int, s: Float): Float {
+        if (convIrRe.isEmpty()) return s
+        convInBlock[ch][convInPos[ch]] = s
+        convInPos[ch]++
+        val w = convOutRing[ch][convRd[ch]]
+        convOutRing[ch][convRd[ch]] = 0f
+        convRd[ch] = (convRd[ch] + 1) % convRingSize
+        val aw = abs(w)
+        if (aw > dbgConvPeak) dbgConvPeak = aw
+        if (convInPos[0] >= convN && convInPos[1] >= convN) {
+            convProcessBlock()
+            convInPos[0] = 0
+            convInPos[1] = 0
+        }
+        return s + w * convWet
+    }
+
+    // [42v2] 卷积一区：输入区 FFT -> 历史谱环 -> 各分区谱乘累加 -> 逆 FFT -> 交叠相加（前半出环、后半存尾）
+    private fun convProcessBlock() {
+        if (convIrRe.isEmpty()) return
+        val pCount = convIrRe[0].size
+        for (ch in 0 until 2) {
+            for (i in 0 until convN) {
+                convTmpRe[i] = convInBlock[ch][i]
+                convTmpIm[i] = 0f
+            }
+            for (i in convN until convFftN) {
+                convTmpRe[i] = 0f
+                convTmpIm[i] = 0f
+            }
+            convFft.forward(convTmpRe, convTmpIm)
+            val wIdx = convBlock % pCount
+            for (i in 0 until convFftN) {
+                convHistRe[ch][wIdx][i] = convTmpRe[i]
+                convHistIm[ch][wIdx][i] = convTmpIm[i]
+            }
+            for (i in 0 until convFftN) {
+                convAccRe[i] = 0f
+                convAccIm[i] = 0f
+            }
+            for (p in 0 until pCount) {
+                var idx = wIdx - p
+                if (idx < 0) idx += pCount
+                val hr = convHistRe[ch][idx]
+                val hi = convHistIm[ch][idx]
+                val ir = convIrRe[ch][p]
+                val ii = convIrIm[ch][p]
+                for (i in 0 until convFftN) {
+                    convAccRe[i] += hr[i] * ir[i] - hi[i] * ii[i]
+                    convAccIm[i] += hr[i] * ii[i] + hi[i] * ir[i]
+                }
+            }
+            convFft.inverse(convAccRe, convAccIm)
+            for (i in 0 until convN) {
+                convOutRing[ch][(convWr + i) % convRingSize] = convAccRe[i] + convTail[ch][i]
+            }
+            for (i in 0 until convN) {
+                convTail[ch][i] = convAccRe[convN + i]
+            }
+        }
+        convWr = (convWr + convN) % convRingSize
+        convBlock++
+    }
+
+    // [42v2] 合成 IR：直达 0（干声另走直通）+ 早期反射 4 抽头 + 1.0 秒指数衰减噪声尾（能量归一到 1，采样率无关响度）；分段 FFT 存谱
+    private fun convGenerateIr(sr: Double) {
+        val len = sr.toInt().coerceAtLeast(4410)
+        val pCount = (len + convN - 1) / convN
+        convIrRe = Array(2) { Array(pCount) { FloatArray(convFftN) } }
+        convIrIm = Array(2) { Array(pCount) { FloatArray(convFftN) } }
+        convHistRe = Array(2) { Array(pCount) { FloatArray(convFftN) } }
+        convHistIm = Array(2) { Array(pCount) { FloatArray(convFftN) } }
+        convInBlock = Array(2) { FloatArray(convN) }
+        convTail = Array(2) { FloatArray(convN) }
+        convOutRing = Array(2) { FloatArray(convRingSize) }
+        val early = arrayOf(0.005 to 0.3f, 0.011 to 0.2f, 0.019 to 0.15f, 0.029 to 0.1f)
+        for (ch in 0 until 2) {
+            val ir = FloatArray(len)
+            var seed = 0x12345678L + ch * 0x9E3779B9L
+            for (i in 1 until len) {
+                seed = seed * 6364136223846793005L + 1442695040888963407L
+                val noise = ((seed ushr 33) and 0xFFFFFFL).toFloat() / 16777216f * 2f - 1f
+                val t = i / sr
+                ir[i] = noise * (0.3f * 10.0.pow(-3.0 * t).toFloat())
+            }
+            var energy = 0.0
+            for (i in 1 until len) {
+                val v = ir[i].toDouble()
+                energy += v * v
+            }
+            val scale = if (energy > 0.0) (1.0 / sqrt(energy)).toFloat() else 1f
+            for (i in 1 until len) {
+                ir[i] *= scale
+            }
+            for ((t, g) in early) {
+                val pos = ((t * sr).toInt() + ch * (0.0003 * sr).toInt()).coerceIn(1, len - 1)
+                ir[pos] += g
+            }
+            for (p in 0 until pCount) {
+                for (i in 0 until convFftN) {
+                    val src = p * convN + i
+                    convTmpRe[i] = if (i < convN && src < len) ir[src] else 0f
+                    convTmpIm[i] = 0f
+                }
+                convFft.forward(convTmpRe, convTmpIm)
+                for (i in 0 until convFftN) {
+                    convIrRe[ch][p][i] = convTmpRe[i]
+                    convIrIm[ch][p][i] = convTmpIm[i]
+                }
+            }
+        }
+        convReset()
+    }
+
+    // [42v2] 清卷积音频缓冲（IR 频谱不动；采样率未变时重算系数也不丢 IR）
+    private fun convReset() {
+        for (ch in 0 until 2) {
+            if (ch < convInBlock.size) convInBlock[ch].fill(0f)
+            if (ch < convTail.size) convTail[ch].fill(0f)
+            if (ch < convOutRing.size) convOutRing[ch].fill(0f)
+            if (ch < convHistRe.size) {
+                for (p in convHistRe[ch].indices) {
+                    convHistRe[ch][p].fill(0f)
+                    convHistIm[ch][p].fill(0f)
+                }
+            }
+        }
+        convInPos.fill(0)
+        for (ch in 0 until 2) {
+            convRd[ch] = convRingSize - convN
+        }
+        convWr = 0
+        convBlock = 0
+    }
+
+    // [42v2] 基 2 迭代 FFT（分区卷积用，定长 512；正变换不缩放，逆变换除以 N）
+    private class Fft(private val n: Int) {
+        private val rev = IntArray(n)
+        init {
+            var j = 0
+            for (i in 1 until n) {
+                var bit = n shr 1
+                while (j and bit != 0) {
+                    j = j xor bit
+                    bit = bit shr 1
+                }
+                j = j xor bit
+                rev[i] = j
+            }
+        }
+        fun forward(re: FloatArray, im: FloatArray) {
+            transform(re, im, false)
+        }
+        fun inverse(re: FloatArray, im: FloatArray) {
+            transform(re, im, true)
+        }
+        private fun transform(re: FloatArray, im: FloatArray, inverse: Boolean) {
+            for (i in 0 until n) {
+                val j = rev[i]
+                if (j > i) {
+                    val tr = re[i]
+                    re[i] = re[j]
+                    re[j] = tr
+                    val ti = im[i]
+                    im[i] = im[j]
+                    im[j] = ti
+                }
+            }
+            var len = 2
+            while (len <= n) {
+                val ang = 2.0 * PI / len * (if (inverse) 1.0 else -1.0)
+                val wr = cos(ang)
+                val wi = sin(ang)
+                var i = 0
+                while (i < n) {
+                    var wRe = 1.0
+                    var wIm = 0.0
+                    for (k in 0 until len / 2) {
+                        val uRe = re[i + k].toDouble()
+                        val uIm = im[i + k].toDouble()
+                        val vRe = re[i + k + len / 2].toDouble() * wRe - im[i + k + len / 2].toDouble() * wIm
+                        val vIm = re[i + k + len / 2].toDouble() * wIm + im[i + k + len / 2].toDouble() * wRe
+                        re[i + k] = (uRe + vRe).toFloat()
+                        im[i + k] = (uIm + vIm).toFloat()
+                        re[i + k + len / 2] = (uRe - vRe).toFloat()
+                        im[i + k + len / 2] = (uIm - vIm).toFloat()
+                        val nWRe = wRe * wr - wIm * wi
+                        val nWIm = wRe * wi + wIm * wr
+                        wRe = nWRe
+                        wIm = nWIm
+                    }
+                    i += len
+                }
+                len *= 2
+            }
+            if (inverse) {
+                for (i in 0 until n) {
+                    re[i] /= n.toFloat()
+                    im[i] /= n.toFloat()
+                }
+            }
+        }
+    }""", "卷积函数组")
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v2 引擎已写")
+PYEOF42V2ENG
+echo "=== 42 v2 引擎完成 ==="
+
+python3 << 'PYEOF42V2PAGE'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v2]" in s:
+    print("跳过（42 v2 页面已应用）"); sys.exit(0)
+old = r"""                                    "调好的组合一键开/关：低频增强 + 动态低音 + 高频扩展 + 环绕 + 混响；关就是原声","""
+assert s.count(old) == 1, "一键卡片文案"
+new = r"""                                    "调好的组合一键开/关：卷积空间 + 低频增强 + 动态低音 + 高频扩展 + 环绕 + 混响；关就是原声", // [42v2]"""
+s = s.replace(old, new, 1)
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v2 页面已写")
+PYEOF42V2PAGE
+echo "=== 42 v2 页面完成 ==="
+
 grep -q 'onetapEnabled' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v1 引擎写入失败"; exit 1; }
 grep -q '一键音效' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v1 页面写入失败"; exit 1; }
 grep -q 'onetapEnabled' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 42 v1 下发写入失败"; exit 1; }
 echo "OK 42 v1 一键音效已写入"
 echo "=== 42 v1 完成 ==="
+
+grep -q 'convSample' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v2 卷积写入失败"; exit 1; }
+grep -q '卷积空间' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v2 文案写入失败"; exit 1; }
+echo "OK 42 v2 卷积空间已写入"
+echo "=== 42 v2 完成 ==="
