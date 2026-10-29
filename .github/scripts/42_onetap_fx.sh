@@ -866,6 +866,85 @@ print("OK 42 v3 引擎已写")
 PYEOF42V3ENG
 echo "=== 42 v3 引擎完成 ==="
 
+# === 42 v4: 清晰度包（按案例：双混响去一 + 湿声 0.30 + 尾巴双频段阻尼） ===
+python3 << 'PYEOF42V4ENG'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v4]" in s:
+    print("跳过（42 v4 引擎已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+rep1(r"""    private val convWet = 0.5f""",
+r"""    private val convWet = 0.30f // [42v4] 湿声按案例人声/通用档 20-30% 取上限（原 0.5 属主导混响档）""", "湿声 0.30")
+
+rep1(r"""            var seed = 0x12345678L + ch * 0x9E3779B9L
+            val decayStep = 10.0.pow(-3.0 / sr)
+            var decay = 0.3 * decayStep // [42v3] 迭代衰减（等价 0.3 x 10^(-3t)，免每采样 pow）
+            for (i in 1 until len) {
+                seed = seed * 6364136223846793005L + 1442695040888963407L
+                val noise = ((seed ushr 33) and 0xFFFFFFL).toFloat() / 16777216f * 2f - 1f
+                ir[i] = (noise * decay).toFloat()
+                decay *= decayStep
+            }""",
+r"""            var seed = 0x12345678L + ch * 0x9E3779B9L
+            val decayStepSlow = 10.0.pow(-3.0 / sr) // [42v4] 双频段阻尼：低频段 -60dB/1 秒，高频段 -60dB/0.5 秒（HF damping，越往后高频越少）
+            val decayStepFast = 10.0.pow(-6.0 / sr)
+            var decaySlow = 0.3 * decayStepSlow
+            var decayFast = 0.3 * decayStepFast
+            var lp = 0.0
+            val lpAlpha = 1.0 - exp(-2.0 * PI * 3000.0 / sr)
+            for (i in 1 until len) {
+                seed = seed * 6364136223846793005L + 1442695040888963407L
+                val noise = ((seed ushr 33) and 0xFFFFFFL).toFloat() / 16777216f * 2f - 1f
+                lp += lpAlpha * (noise.toDouble() - lp)
+                val low = lp
+                val high = noise.toDouble() - lp
+                ir[i] = (low * decaySlow + high * decayFast).toFloat()
+                decaySlow *= decayStepSlow
+                decayFast *= decayStepFast
+            }""", "双频段阻尼尾")
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v4 引擎已写")
+PYEOF42V4ENG
+echo "=== 42 v4 引擎完成 ==="
+
+python3 << 'PYEOF42V4PAGE'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v4]" in s:
+    print("跳过（42 v4 页面已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+rep1(r"""                                        rev = true
+                                        deess = false
+                                        ta = false
+                                        punch = true""",
+r"""                                        rev = false // [42v4] 一键开时关 Freeverb（卷积已供空间，双混响糊）
+                                        deess = false
+                                        ta = false
+                                        punch = true""", "一键关 Freeverb")
+
+rep1(r"""                                    "调好的组合一键开/关：卷积空间 + 低频增强 + 动态低音 + 高频扩展 + 环绕 + 混响；关就是原声", // [42v2]""",
+r"""                                    "调好的组合一键开/关：卷积空间 + 低频增强 + 动态低音 + 高频扩展 + 环绕；关就是原声", // [42v2][42v4]""", "一键卡片文案去混响（保留 [42v2]：此行是页文件唯一的 v2 标记，删掉会导致 v2 页块重跑时守卫失效）")
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v4 页面已写")
+PYEOF42V4PAGE
+echo "=== 42 v4 页面完成 ==="
+
 grep -q 'onetapEnabled' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v1 引擎写入失败"; exit 1; }
 grep -q '一键音效' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v1 页面写入失败"; exit 1; }
 grep -q 'onetapEnabled' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 42 v1 下发写入失败"; exit 1; }
@@ -880,3 +959,8 @@ echo "=== 42 v2 完成 ==="
 grep -q '42v3' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v3 自适应写入失败"; exit 1; }
 echo "OK 42 v3 卷积自适应已写入"
 echo "=== 42 v3 完成 ==="
+
+grep -q '42v4' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v4 清晰度写入失败"; exit 1; }
+grep -q '42v4' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v4 文案写入失败"; exit 1; }
+echo "OK 42 v4 清晰度包已写入"
+echo "=== 42 v4 完成 ==="
