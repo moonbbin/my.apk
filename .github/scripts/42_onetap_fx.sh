@@ -773,6 +773,99 @@ print("OK 42 v2 页面已写")
 PYEOF42V2PAGE
 echo "=== 42 v2 页面完成 ==="
 
+# === 42 v3: 卷积开销自适应（修超时闩锁：开销随采样率平方涨） ===
+python3 << 'PYEOF42V3ENG'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+s = open(P, encoding="utf-8").read()
+if "[42v3]" in s:
+    print("跳过（42 v3 引擎已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+rep1(r"""    // [42v2] 卷积空间（分区卷积，分区 256，FFT 512；湿声延迟一区作预延迟，干声直通；仅一键开）
+    private val convN = 256
+    private val convFftN = 512
+    private val convRingSize = 1024
+    private val convWet = 0.5f
+    private val convFft = Fft(512)""",
+r"""    // [42v3] 卷积开销自适应：分区 N 跟采样率走（≤48k 用 256，>48k 用 1024），IR 封顶 65536 采样；FFT 改 float
+    private var convN = 256
+    private var convFftN = 512
+    private var convRingSize = 1024
+    private val convWet = 0.5f
+    private var convFft = Fft(512)""", "卷积字段改自适应")
+
+rep1(r"""    private fun convGenerateIr(sr: Double) {
+        val len = sr.toInt().coerceAtLeast(4410)
+        val pCount = (len + convN - 1) / convN""",
+r"""    private fun convGenerateIr(sr: Double) {
+        convN = if (sr <= 48000.0) 256 else 1024 // [42v3] 分区跟采样率走：96k 下 1024 分区，MAC 量压回 44.1k 水平
+        convFftN = convN * 2
+        convFft = Fft(convFftN)
+        convRingSize = convN * 4
+        val len = minOf(sr.toInt(), 65536).coerceAtLeast(4410) // [42v3] IR 封顶 65536 采样（96k 下约 0.68 秒）
+        val pCount = (len + convN - 1) / convN
+        convTmpRe = FloatArray(convFftN)
+        convTmpIm = FloatArray(convFftN)
+        convAccRe = FloatArray(convFftN)
+        convAccIm = FloatArray(convFftN)""", "自适应分区与封顶")
+
+rep1(r"""            var seed = 0x12345678L + ch * 0x9E3779B9L
+            for (i in 1 until len) {
+                seed = seed * 6364136223846793005L + 1442695040888963407L
+                val noise = ((seed ushr 33) and 0xFFFFFFL).toFloat() / 16777216f * 2f - 1f
+                val t = i / sr
+                ir[i] = noise * (0.3f * 10.0.pow(-3.0 * t).toFloat())
+            }""",
+r"""            var seed = 0x12345678L + ch * 0x9E3779B9L
+            val decayStep = 10.0.pow(-3.0 / sr)
+            var decay = 0.3 * decayStep // [42v3] 迭代衰减（等价 0.3 x 10^(-3t)，免每采样 pow）
+            for (i in 1 until len) {
+                seed = seed * 6364136223846793005L + 1442695040888963407L
+                val noise = ((seed ushr 33) and 0xFFFFFFL).toFloat() / 16777216f * 2f - 1f
+                ir[i] = (noise * decay).toFloat()
+                decay *= decayStep
+            }""", "迭代衰减")
+
+rep1(r"""                val ang = 2.0 * PI / len * (if (inverse) 1.0 else -1.0)
+                val wr = cos(ang)
+                val wi = sin(ang)""",
+r"""                val ang = 2.0 * PI / len * (if (inverse) 1.0 else -1.0)
+                val wr = cos(ang).toFloat() // [42v3] FFT 改 float 运算（精度够音频用，开销降）
+                val wi = sin(ang).toFloat()""", "FFT float 系数")
+
+rep1(r"""                    var wRe = 1.0
+                    var wIm = 0.0""",
+r"""                    var wRe = 1f
+                    var wIm = 0f""", "FFT float 旋转因子")
+
+rep1(r"""                        val uRe = re[i + k].toDouble()
+                        val uIm = im[i + k].toDouble()
+                        val vRe = re[i + k + len / 2].toDouble() * wRe - im[i + k + len / 2].toDouble() * wIm
+                        val vIm = re[i + k + len / 2].toDouble() * wIm + im[i + k + len / 2].toDouble() * wRe
+                        re[i + k] = (uRe + vRe).toFloat()
+                        im[i + k] = (uIm + vIm).toFloat()
+                        re[i + k + len / 2] = (uRe - vRe).toFloat()
+                        im[i + k + len / 2] = (uIm - vIm).toFloat()""",
+r"""                        val uRe = re[i + k]
+                        val uIm = im[i + k]
+                        val vRe = re[i + k + len / 2] * wRe - im[i + k + len / 2] * wIm
+                        val vIm = re[i + k + len / 2] * wIm + im[i + k + len / 2] * wRe
+                        re[i + k] = uRe + vRe
+                        im[i + k] = uIm + vIm
+                        re[i + k + len / 2] = uRe - vRe
+                        im[i + k + len / 2] = uIm - vIm""", "FFT float 蝶形")
+
+open(P, "w", encoding="utf-8").write(s)
+print("OK 42 v3 引擎已写")
+PYEOF42V3ENG
+echo "=== 42 v3 引擎完成 ==="
+
 grep -q 'onetapEnabled' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v1 引擎写入失败"; exit 1; }
 grep -q '一键音效' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v1 页面写入失败"; exit 1; }
 grep -q 'onetapEnabled' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 42 v1 下发写入失败"; exit 1; }
@@ -783,3 +876,7 @@ grep -q 'convSample' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/Eq
 grep -q '卷积空间' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v2 文案写入失败"; exit 1; }
 echo "OK 42 v2 卷积空间已写入"
 echo "=== 42 v2 完成 ==="
+
+grep -q '42v3' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v3 自适应写入失败"; exit 1; }
+echo "OK 42 v3 卷积自适应已写入"
+echo "=== 42 v3 完成 ==="
