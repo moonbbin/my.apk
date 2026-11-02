@@ -2813,3 +2813,157 @@ open(P, "w", encoding="utf-8").write(s)
 print("OK 21 v50 低频处理器下发已加")
 PYEOF21V50
 echo "=== 21 v50 完成 ==="
+
+# === 21 v51: 车载蓝牙 MediaSession（车机 AVRCP 显示歌名/歌手） ===
+python3 << 'PYEOF21V51'
+import sys
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(path, encoding="utf-8").read()
+if "[21v51]" in s:
+    print("跳过（21 v51 MediaSession 已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+# 1) 会话本体：插在管理器对象末尾（cancelSleepTimer 之后、对象右花括号之前）
+rep1("""    fun cancelSleepTimer() = setSleepTimer(0)
+}""", """    fun cancelSleepTimer() = setSleepTimer(0)
+
+    // [21v51] 车载蓝牙：MediaSession 上报歌名/歌手，车机 AVRCP 才能显示（通知不走 AVRCP，故此前车机屏空白；框架 API，无新依赖）
+    private var mediaSession: android.media.session.MediaSession? = null
+    private fun ensureMediaSession() {
+        try {
+            val c = appContext ?: return
+            if (mediaSession == null) {
+                mediaSession = android.media.session.MediaSession(c, "LxPlayer").apply {
+                    setFlags(android.media.session.MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or android.media.session.MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
+                    setCallback(object : android.media.session.MediaSession.Callback() {
+                        override fun onPlay() { try { if (player?.isPlaying != true) togglePlayPause() } catch (_: Exception) { } ; try { updateMediaSessionState() } catch (_: Exception) { } }
+                        override fun onPause() { try { pause() } catch (_: Exception) { } ; try { updateMediaSessionState() } catch (_: Exception) { } }
+                        override fun onSkipToNext() { try { playNextInQueue() } catch (_: Exception) { } }
+                        override fun onSkipToPrevious() { try { playPreviousInQueue() } catch (_: Exception) { } }
+                        override fun onSeekTo(pos: Long) { try { seekTo(pos) } catch (_: Exception) { } }
+                    })
+                }
+                try { LxMediaNotification.sessionToken = mediaSession?.sessionToken } catch (_: Exception) { }
+            }
+            try { mediaSession?.isActive = true } catch (_: Exception) { }
+        } catch (_: Exception) { }
+    }
+    private fun updateMediaSessionMetadata() {
+        try {
+            val s = mediaSession ?: return
+            val dur = try { val d = player?.duration ?: -1L; if (d > 0) d else _duration.value } catch (_: Exception) { _duration.value }
+            s.setMetadata(android.media.MediaMetadata.Builder()
+                .putString(android.media.MediaMetadata.METADATA_KEY_TITLE, _currentTitle.value.ifEmpty { "未知歌曲" })
+                .putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, _currentArtist.value.ifEmpty { "未知歌手" })
+                .putLong(android.media.MediaMetadata.METADATA_KEY_DURATION, if (dur > 0) dur else 0L)
+                .build())
+        } catch (_: Exception) { }
+    }
+    private fun updateMediaSessionState() {
+        try {
+            val s = mediaSession ?: return
+            val playing = try { player?.isPlaying == true } catch (_: Exception) { false }
+            val pos = try { player?.currentPosition ?: _position.value } catch (_: Exception) { _position.value }
+            s.setPlaybackState(android.media.session.PlaybackState.Builder()
+                .setState(if (playing) android.media.session.PlaybackState.STATE_PLAYING else android.media.session.PlaybackState.STATE_PAUSED, pos, if (playing) 1.0f else 0.0f)
+                .setActions(android.media.session.PlaybackState.ACTION_PLAY or android.media.session.PlaybackState.ACTION_PAUSE or android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT or android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS or android.media.session.PlaybackState.ACTION_SEEK_TO)
+                .build())
+        } catch (_: Exception) { }
+    }
+    private fun updateMediaSessionAll() {
+        try { ensureMediaSession() } catch (_: Exception) { }
+        try { updateMediaSessionMetadata() } catch (_: Exception) { }
+        try { updateMediaSessionState() } catch (_: Exception) { }
+    }
+    private fun releaseMediaSession() {
+        try { mediaSession?.isActive = false } catch (_: Exception) { }
+        try { mediaSession?.release() } catch (_: Exception) { }
+        mediaSession = null
+        try { LxMediaNotification.sessionToken = null } catch (_: Exception) { }
+    }
+}""", "会话本体")
+
+# 2) play()：通知行后全量上报（元数据+状态；此时标题/歌手已 set，player 已 play）
+rep1("""            try { appContext?.let { LxMediaNotification.show(it, title, artist, true) } } catch (e: Exception) { }""",
+"""            try { appContext?.let { LxMediaNotification.show(it, title, artist, true) } } catch (e: Exception) { }
+            try { updateMediaSessionAll() } catch (_: Exception) { } // [21v51]""", "play 上报")
+
+# 3) setCurrentSong / setCurrentInfo：仅刷新元数据（会话不存在时空操作，不提前建会话）
+rep1("""    fun setCurrentSong(title: String, artist: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist""",
+"""    fun setCurrentSong(title: String, artist: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist
+        try { updateMediaSessionMetadata() } catch (_: Exception) { } // [21v51]""", "setCurrentSong 元数据")
+
+rep1("""    fun setCurrentInfo(title: String, artist: String, picUrl: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist""",
+"""    fun setCurrentInfo(title: String, artist: String, picUrl: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist
+        try { updateMediaSessionMetadata() } catch (_: Exception) { } // [21v51]""", "setCurrentInfo 元数据")
+
+# 4) toggle/pause：通知行后刷新状态
+rep1("""        try { appContext?.let { LxMediaNotification.show(it, _currentTitle.value, _currentArtist.value, player?.isPlaying == true) } } catch (e: Exception) { }""",
+"""        try { appContext?.let { LxMediaNotification.show(it, _currentTitle.value, _currentArtist.value, player?.isPlaying == true) } } catch (e: Exception) { }
+        try { updateMediaSessionState() } catch (_: Exception) { } // [21v51]""", "toggle 状态")
+
+rep1("""        try { appContext?.let { LxMediaNotification.show(it, _currentTitle.value, _currentArtist.value, false) } } catch (e: Exception) { }""",
+"""        try { appContext?.let { LxMediaNotification.show(it, _currentTitle.value, _currentArtist.value, false) } } catch (e: Exception) { }
+        try { updateMediaSessionState() } catch (_: Exception) { } // [21v51]""", "pause 状态")
+
+# 5) seekTo：位置变了刷新状态
+rep1("""    fun seekTo(positionMs: Long) {
+        player?.seekTo(positionMs)
+        _position.value = positionMs
+    }""",
+"""    fun seekTo(positionMs: Long) {
+        player?.seekTo(positionMs)
+        _position.value = positionMs
+        try { updateMediaSessionState() } catch (_: Exception) { } // [21v51]
+    }""", "seekTo 状态")
+
+# 6) stop：停后报暂停态（位置归零）
+rep1("""    fun stop() {
+        player?.stop()
+        _isPlaying.value = false
+        _position.value = 0L
+    }""",
+"""    fun stop() {
+        player?.stop()
+        _isPlaying.value = false
+        _position.value = 0L
+        try { updateMediaSessionState() } catch (_: Exception) { } // [21v51]
+    }""", "stop 状态")
+
+# 7) release：释放会话
+rep1("""        player?.release()
+        player = null
+        Log.i(TAG, "ExoPlayer 已释放")
+    }""",
+"""        player?.release()
+        player = null
+        Log.i(TAG, "ExoPlayer 已释放")
+        try { releaseMediaSession() } catch (_: Exception) { } // [21v51]
+    }""", "release 会话")
+
+# 8) 通知 MediaStyle 挂 token（锁屏控制顺带好用；车机显示不依赖它）
+rep1("""    private var notificationManager: android.app.NotificationManager? = null""",
+"""    private var notificationManager: android.app.NotificationManager? = null
+    var sessionToken: android.media.session.MediaSession.Token? = null // [21v51]""", "通知 token 字段")
+
+rep1("""                val style = android.app.Notification.MediaStyle()""",
+"""                val style = android.app.Notification.MediaStyle()
+                try { sessionToken?.let { style.setMediaSessionToken(it) } } catch (e: Exception) { } // [21v51]""", "通知挂 token")
+
+open(path, "w", encoding="utf-8").write(s)
+print("OK 21 v51 MediaSession 已写")
+PYEOF21V51
+echo "=== 21 v51 完成 ==="
+grep -q '21v51' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v51 写入失败"; exit 1; }
+echo "OK 21 v51 车载蓝牙 MediaSession 已写入"
