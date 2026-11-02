@@ -2967,3 +2967,28 @@ PYEOF21V51
 echo "=== 21 v51 完成 ==="
 grep -q '21v51' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v51 写入失败"; exit 1; }
 echo "OK 21 v51 车载蓝牙 MediaSession 已写入"
+
+# === 21 v52: 通知 token 方法名修正（CI 1754 行报错修复） ===
+python3 << 'PYEOF21V52'
+import sys
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(path, encoding="utf-8").read()
+if "[21v52]" in s:
+    print("跳过（21 v52 方法名修正已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+# 框架 MediaStyle 的方法叫 setMediaSession，旧名是 androidx 的、框架没有，致 CI 1754 行 Unresolved reference；车机显示本身不依赖 token，此处只改名、不删功能
+rep1("""                try { sessionToken?.let { style.setMediaSessionToken(it) } } catch (e: Exception) { } // [21v51]""",
+"""                try { sessionToken?.let { style.setMediaSession(it) } } catch (e: Exception) { } // [21v51][21v52] 框架方法名修正""", "token 方法名")
+
+assert s.count("setMediaSessionToken") == 0, "旧方法名仍有残留"
+assert s.count("style.setMediaSession(it)") == 1, "新方法名未落位"
+open(path, "w", encoding="utf-8").write(s)
+print("OK 21 v52 方法名修正已写")
+PYEOF21V52
+echo "=== 21 v52 完成 ==="
+grep -q '21v52' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v52 写入失败"; exit 1; }
+echo "OK 21 v52 通知 token 方法名修正已写入"
