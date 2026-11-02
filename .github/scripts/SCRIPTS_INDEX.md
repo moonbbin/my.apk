@@ -60,7 +60,7 @@
 
 | # | 脚本 | 干嘛的 |
 |---|------|--------|
-| 21 | `21_music_bitrate_guard.sh` | **播放器音质验货（防糊）**<br>补丁目标：`LxPlayerManager.kt`（13 生成）<br>版本历史见脚本头部 v1→v10 导航注释。<br>关键锚点：`QUALITY_ORDER`（请求顺序）、`tierOfQuality()`（档位映射）、`verifyQuality()`（验货入口）<br>v44：激励器 + 等响度开关下发 + 音量刷新（系统音乐音量，换歌/广播跟随）<br>v45：Sub 下发键改 subfx（同 v19）<br>v46：Autogain 下发 + 调试快照<br>v47：混响下发<br>v48：去齿音 + 延时对齐下发<br>v49：低频起振开关下发（punch 键）<br>v50：低频处理器力度下发（lfproc 键，0=关） |
+| 21 | `21_music_bitrate_guard.sh` | **播放器音质验货（防糊）**<br>补丁目标：`LxPlayerManager.kt`（13 生成）<br>版本历史见脚本头部 v1→v10 导航注释。<br>关键锚点：`QUALITY_ORDER`（请求顺序）、`tierOfQuality()`（档位映射）、`verifyQuality()`（验货入口）<br>v44：激励器 + 等响度开关下发 + 音量刷新（系统音乐音量，换歌/广播跟随）<br>v45：Sub 下发键改 subfx（同 v19）<br>v46：Autogain 下发 + 调试快照<br>v47：混响下发<br>v48：去齿音 + 延时对齐下发<br>v49：低频起振开关下发（punch 键）<br>v50：低频处理器力度下发（lfproc 键，0=关） |<br>v51（2026-11-01，用户确认，车载蓝牙歌名）：MediaSession 补车机 AVRCP 显示——此前全仓无 MediaSession（通知在手机上显示歌名，但蓝牙 AVRCP 不读通知，只读活动会话，故车机屏空白）；修法：框架 android.media.session.MediaSession（无新依赖、不改通知结构）：管理器末加会话本体（ensure/元数据/状态/全量/释放，回调复用通知接收器同款路由：播放/暂停/上一首/下一首/拖进度）；钩子：play() 全量上报、setCurrentSong/setCurrentInfo 只刷元数据（会话不存在时空操作）、toggle/pause/seekTo/stop 刷状态、release() 释放；会话 token 顺带挂通知 MediaStyle（锁屏控制，车机显示不依赖它）；只做歌名/歌手，不做封面（异步拉图+各车机支持不一，下一版再说）；车机屏歌词仍传不过去（AVRCP 无歌词字段）
 | 22 | `22_music_bitrate_display.sh` | **播放页音质徽标**（已退役）<br>2026-10-22 C 结案：徽标已固化进 35 号基线，build.yml 调用步已删除，文件保留备查。 |
 
 ### 21/22 版本速查
