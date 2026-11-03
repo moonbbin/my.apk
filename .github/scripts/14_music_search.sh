@@ -493,3 +493,70 @@ print("OK 14v7 pagination signatures")
 PYEOF
 
 echo "=== 14 v7 done ==="
+
+# === 14 v8: 歌单详情空图搜索补图 ===
+
+echo "=== 14 v8 ==="
+
+python3 << 'PYEOF'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicSearchApi.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [14v8]"
+if MARK in src:
+    print("skip: 14v8 already present")
+    sys.exit(0)
+
+
+def rep(old, new, cnt=1):
+    global src
+    assert src.count(old) == cnt, f"anchor count {src.count(old)}: {old[:70]!r}"
+    src = src.replace(old, new, cnt)
+
+
+helper = """    // [14v8] 空图补图：详情歌单里没封面的歌，按歌名在本平台搜一次，标题+歌手精确匹配才填图
+    private fun normCoverKey(s: String): String = s.replace("\\\\s+".toRegex(), "").lowercase()
+    private suspend fun supplementCovers(list: List<SongInfo>): List<SongInfo> = coroutineScope {
+        if (list.isEmpty()) return@coroutineScope list
+        val jobs = list.map { song ->
+            async(Dispatchers.IO) {
+                if (song.picUrl.isNotBlank()) return@async song
+                try {
+                    val candidates = when (song.platform) {
+                        "kg" -> searchKugou(song.title)
+                        "tx" -> searchQQ(song.title)
+                        "wy" -> searchNetease(song.title)
+                        "kw" -> searchKuwo(song.title)
+                        "mg" -> searchMigu(song.title)
+                        else -> emptyList()
+                    }
+                    val hit = candidates.firstOrNull { c ->
+                        c.picUrl.isNotBlank() && normCoverKey(c.title) == normCoverKey(song.title) &&
+                            (normCoverKey(c.artist).isEmpty() || normCoverKey(song.artist).isEmpty() || normCoverKey(c.artist) == normCoverKey(song.artist))
+                    }
+                    if (hit != null) song.copy(picUrl = hit.picUrl) else song
+                } catch (e: Exception) {
+                    song
+                }
+            }
+        }
+        jobs.awaitAll()
+    }
+
+"""
+rep("    private suspend fun enrichKgCovers", helper + "    private suspend fun enrichKgCovers")
+rep(
+    "        return if (results.isEmpty()) results else enrichKgCovers(results)",
+    "        return if (results.isEmpty()) results else supplementCovers(enrichKgCovers(results))  // [14v8]",
+)
+assert src.count("{") == src.count("}")
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("OK 14v8")
+
+PYEOF
+
+echo "=== 14 v8 done ==="
