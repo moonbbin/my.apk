@@ -815,3 +815,37 @@ print("OK 14v10")
 PYEOF
 
 echo "=== 14 v10 done ==="
+# === 14 v11: 补 JSONArray 导入（v10 er.s 分支漏导，致 CI 735/740/741 三连错） ===
+
+echo "=== 14 v11 ==="
+
+python3 << 'PYEOF'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicSearchApi.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [14v11]"
+if MARK in src:
+    print("skip: 14v11 already present")
+    sys.exit(0)
+
+
+def rep(old, new, cnt=1):
+    global src
+    assert src.count(old) == cnt, f"anchor count {src.count(old)}: {old[:70]!r}"
+    src = src.replace(old, new, cnt)
+
+
+rep("import org.json.JSONObject",
+    "import org.json.JSONObject\nimport org.json.JSONArray // [14v11]")
+assert src.count("import org.json.JSONArray") == 1
+assert src.count("{") == src.count("}")
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("OK 14v11")
+
+PYEOF
+
+echo "=== 14 v11 done ==="
