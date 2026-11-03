@@ -98,6 +98,8 @@ jobs:
         run: bash .github/scripts/44_lyric_fallback.sh
       - name: 45_kuwo_playlist_wire
         run: bash .github/scripts/45_kuwo_playlist_wire.sh
+      - name: 46_sub_music_bridge
+        run: bash .github/scripts/46_sub_music_bridge.sh
 
       - name: 设置 JDK
         uses: actions/setup-java@v4
