@@ -128,6 +128,7 @@
 | 43 | `43_car_lyric_wire.sh` | **车载蓝牙歌词接线（播放页侧，35 后补丁，42 之后执行）**<br>v1（2026-11-03，用户确认）：行切换时把当前歌词行推给管理器，管理器写进 MediaSession ARTIST（歌手位置），歌名不动；无行时推 null 回落歌手；页面销毁清行；更多弹窗加“车载蓝牙歌词”开关（默认开，写 lyric_settings 的 car_lyric）；管理器侧见 21 v53。
 | 44 | `44_lyric_fallback.sh` | **播放页歌词跨平台兜底（35 后补丁，43 之后执行）**<br>v1（2026-11-03，用户确认）：本平台取空后，按歌名+歌手在其他平台搜一次（searchFull，20 秒封顶），标题+歌手精确匹配才取词，顺序网易→QQ→酷狗→酷我→咪咕（跳过本平台）；ID 缺失但歌名有效时也走兜底；全空即无词（纯音乐属此）；失败静默，不改主取逻辑。
 | 45 | `45_kuwo_playlist_wire.sh` | **歌单页放行酷我（MusicHomeActivity 接线，14 v10 之后执行）**<br>v1（2026-11-03）：三处平台 gate 放行 kw、列表分发加 getKuwoPlaylists、分类分发加 getKuwoCategories、详情分发加 getKuwoPlaylist；平台名小蜗已在壳里，无需改平台选择 UI。
+| 46 | `46_sub_music_bridge.sh` | **订阅源内音乐桥接（新系统，45 之后执行）**<br>v1（2026-11-03）：只读主体 ApiConfig 订阅列表，按 ┆ 切段筛 ┆音乐┆ 分类源（+ searchable=1），独立底栏“源内”入口 + 独立搜索页；链路 searchContent -> detailContent -> playerContent（vip 标志按主体传 getVipParseFlags）；播走 LxPlayerManager.play 裸地址，不进落雪队列、不走音质探针与歌词；开关在音乐设置页（默认关）；需解析（parse=1）的源 v1 暂不支持，提示明说。
 
 ## 约束速查
 
