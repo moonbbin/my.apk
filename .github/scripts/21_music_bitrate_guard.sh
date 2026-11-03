@@ -2992,3 +2992,268 @@ PYEOF21V52
 echo "=== 21 v52 完成 ==="
 grep -q '21v52' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v52 写入失败"; exit 1; }
 echo "OK 21 v52 通知 token 方法名修正已写入"
+
+# === 21 v53: 车载蓝牙歌词（歌手位置） ===
+python3 << 'PYEOF21V53'
+import sys
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(path, encoding="utf-8").read()
+if "[21v53]" in s:
+    print("跳过（21 v53 车载蓝牙歌词已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+# 切歌清行：play() 在 updateMediaSessionAll 之前清
+rep1("""            try { updateMediaSessionAll() } catch (_: Exception) { } // [21v51]""",
+"""            carLyricLine = null // [21v53] 切歌清车载歌词行
+            try { updateMediaSessionAll() } catch (_: Exception) { } // [21v51]""", "play 清行")
+# setCurrentSong 清行（整块锚点，区别于 setCurrentInfo）
+rep1("""    fun setCurrentSong(title: String, artist: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist
+        try { updateMediaSessionMetadata() } catch (_: Exception) { } // [21v51]""",
+"""    fun setCurrentSong(title: String, artist: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist
+        carLyricLine = null // [21v53] 切歌清车载歌词行
+        try { updateMediaSessionMetadata() } catch (_: Exception) { } // [21v51]""", "setCurrentSong 清行")
+# setCurrentInfo 清行（整块锚点）
+rep1("""    fun setCurrentInfo(title: String, artist: String, picUrl: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist
+        try { updateMediaSessionMetadata() } catch (_: Exception) { } // [21v51]""",
+"""    fun setCurrentInfo(title: String, artist: String, picUrl: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist
+        carLyricLine = null // [21v53] 切歌清车载歌词行
+        try { updateMediaSessionMetadata() } catch (_: Exception) { } // [21v51]""", "setCurrentInfo 清行")
+# 会话块：歌词行字段 + 对外推送函数 + 开关读取
+rep1("""    private var mediaSession: android.media.session.MediaSession? = null""",
+"""    private var mediaSession: android.media.session.MediaSession? = null
+    // [21v53] 车载蓝牙歌词（歌手位置）：播放页按行推来的当前歌词行；有行且开关开时 ARTIST 写歌词行，歌名不动；无行时回落歌手
+    private var carLyricLine: String? = null
+    fun updateCarLyricLine(line: String?) {
+        try {
+            if (line == carLyricLine) return
+            carLyricLine = line
+            updateMediaSessionMetadata()
+        } catch (_: Exception) { }
+    }
+    private fun isCarLyricOn(): Boolean {
+        return try {
+            val c = appContext ?: return true
+            c.getSharedPreferences("lyric_settings", android.content.Context.MODE_PRIVATE).getBoolean("car_lyric", true)
+        } catch (_: Exception) { true }
+    }""", "歌词行字段与函数")
+# 元数据：ARTIST 在开且有行时写歌词行，否则写歌手
+rep1(""".putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, _currentArtist.value.ifEmpty { "未知歌手" })""",
+""".putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, if (isCarLyricOn() && !carLyricLine.isNullOrBlank()) carLyricLine!! else _currentArtist.value.ifEmpty { "未知歌手" }) // [21v53]""", "ARTIST 写歌词行")
+# 释放会话时清行
+rep1("""        mediaSession = null
+        try { LxMediaNotification.sessionToken = null } catch (_: Exception) { }""",
+"""        mediaSession = null
+        carLyricLine = null // [21v53]
+        try { LxMediaNotification.sessionToken = null } catch (_: Exception) { }""", "释放清行")
+
+assert s.count("carLyricLine") == 9, "carLyricLine 出现次数异常"
+assert s.count("21v53") == 6, "21v53 标记数异常"
+open(path, "w", encoding="utf-8").write(s)
+print("OK 21 v53 车载蓝牙歌词已写")
+PYEOF21V53
+echo "=== 21 v53 完成 ==="
+grep -q '21v53' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v53 写入失败"; exit 1; }
+echo "OK 21 v53 车载蓝牙歌词已写入"
+
+# === 21 v54: 切歌预取（URL 预加载，后台顺序预取往后地址，切歌缓存命中秒起） ===
+python3 << 'PYEOF21V54'
+import sys
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(path, encoding="utf-8").read()
+if "[21v54]" in s:
+    print("跳过（21 v54 切歌预取已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+def repAll(old, new, n, name):
+    global s
+    assert s.count(old) == n, name
+    s = s.replace(old, new)
+
+# play() 加缓存来源参数（默认 null，老调用方一律不受影响）
+rep1('    fun play(url: String, title: String = "", artist: String = "", picUrl: String = "") {',
+     '    fun play(url: String, title: String = "", artist: String = "", picUrl: String = "", fromCacheKey: String? = null) {', "play 签名")
+# play() 记下本次是否缓存起播；缓存起播时把回落旗复位（同一首歌日后重预取后回落能力恢复）
+rep1("""        try {
+            _error.value = null
+            _isLoading.value = true
+            _currentTitle.value = title""",
+"""        try {
+            lastPlayFromCacheKey = fromCacheKey
+            if (fromCacheKey != null) cacheFallbackKey = null
+            _error.value = null
+            _isLoading.value = true
+            _currentTitle.value = title""", "play 记缓存来源")
+# 起播后触发预取（不阻塞起播）
+rep1("""            Log.i(TAG, "开始播放: $title - $url")
+        } catch (e: Exception) {""",
+"""            Log.i(TAG, "开始播放: $title - $url")
+            try { prefetchAroundCurrent() } catch (_: Exception) { } // [21v54] 起播后预取往后地址
+        } catch (e: Exception) {""", "起播后预取")
+# 上一首/下一首：先查缓存，命中直接播、不走解析钩子；未命中走老路（两处同文，一并替换）
+repAll("""            val song = playQueue[queueIndex]
+            setChangingTrack(true) // [21v43]
+            onResolveQueueSong?.invoke(song) ?: resolveAndPlay(song)""",
+"""            val song = playQueue[queueIndex]
+            setChangingTrack(true) // [21v43]
+            if (!playCachedOrResolve(song)) {
+                onResolveQueueSong?.invoke(song) ?: resolveAndPlay(song)
+            }""", 2, "上下首查缓存")
+# 播完自动下一首：同样先查缓存
+rep1("""                                        val song = playQueue[queueIndex]
+                                        Log.i(TAG, "自动下一首: ${song["title"]}")
+                                        try {
+                                            onResolveQueueSong?.invoke(song) ?: resolveAndPlay(song)
+                                        } catch (e: Exception) {
+                                            Log.e(TAG,"解析失败",e)
+                                            resolveAndPlay(song)
+                                        }""",
+"""                                        val song = playQueue[queueIndex]
+                                        Log.i(TAG, "自动下一首: ${song["title"]}")
+                                        if (!playCachedOrResolve(song)) {
+                                            try {
+                                                onResolveQueueSong?.invoke(song) ?: resolveAndPlay(song)
+                                            } catch (e: Exception) {
+                                                Log.e(TAG,"解析失败",e)
+                                                resolveAndPlay(song)
+                                            }
+                                        }""", "自动下一首查缓存")
+# 播错：缓存地址开播 5 秒内失败（多为过期），清缓存、给本首重解析一次，不直接报错/切歌
+rep1("""                        if (isNetworkError) {
+                            _error.value = "网络异常，请检查连接后重试\"""",
+"""                        // [21v54] 缓存地址开播失败（多为过期）：清缓存、给本首重解析一次，不直接报错/切歌；仅限开播 5 秒内且未对该 key 回落过
+                        val ck = lastPlayFromCacheKey
+                        val cpos = try { player?.currentPosition ?: 0L } catch (_: Exception) { 0L }
+                        if (ck != null && cacheFallbackKey != ck && cpos < 5000L) {
+                            prefetchCache.remove(ck)
+                            cacheFallbackKey = ck
+                            lastPlayFromCacheKey = null
+                            try {
+                                val cur = playQueue.getOrNull(queueIndex)
+                                if (cur != null) { onResolveQueueSong?.invoke(cur) ?: resolveAndPlay(cur) }
+                            } catch (_: Exception) { }
+                        } else if (isNetworkError) {
+                            _error.value = "网络异常，请检查连接后重试\"""", "缓存失效回落")
+# 预取字段与函数：插在会话元数据函数之前
+rep1("    private fun updateMediaSessionMetadata() {",
+"""    // [21v54] 切歌预取：后台顺序解析往后地址并缓存，切歌先查缓存秒起；缓存地址开播失败时回落重解析（见 onPlayerError）
+    private val prefetchCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val prefetchGenRef = java.util.concurrent.atomic.AtomicInteger(0)
+    @Volatile private var lastPlayFromCacheKey: String? = null
+    @Volatile private var cacheFallbackKey: String? = null
+    private fun prefetchKey(song: Map<String, String>): String = (song["platform"] ?: "wy") + "|" + (song["songId"] ?: "")
+    private fun playCachedOrResolve(song: Map<String, String>): Boolean {
+        return try {
+            val key = prefetchKey(song)
+            val url = prefetchCache[key] ?: return false
+            val title = song["title"] ?: ""
+            val artist = song["artist"] ?: ""
+            val pic = song["picUrl"] ?: ""
+            play(url, title, artist, pic, fromCacheKey = key)
+            try { Thread { probeAndSetQuality(url) }.start() } catch (_: Exception) { }
+            true
+        } catch (_: Exception) { false }
+    }
+    private fun resolveUrlOnly(song: Map<String, String>): String? {
+        return try {
+            val ctx = appContext ?: return null
+            try { if (!com.github.tvbox.osc.ui.activity.LxEngineHolder.isReady) com.github.tvbox.osc.ui.activity.LxEngineHolder.warmUp(ctx) } catch (_: Exception) { }
+            val engine = com.github.tvbox.osc.ui.activity.LxEngineHolder.get()
+            val songId = song["songId"] ?: return null
+            val platform = song["platform"] ?: "wy"
+            val musicInfo = mapOf(
+                "id" to songId,
+                "songId" to songId,
+                "songmid" to songId,
+                "name" to (song["title"] ?: ""),
+                "singer" to (song["artist"] ?: ""),
+                "source" to platform,
+                "hash" to ((song["hash"]?.ifEmpty { songId }) ?: songId),
+                "albumAudioId" to (song["albumAudioId"] ?: "")
+            )
+            for (q in qualityTryOrder()) {
+                val latch = java.util.concurrent.CountDownLatch(1)
+                var found: String? = null
+                try {
+                    engine.requestMusicUrl(platform, musicInfo, q) { result ->
+                        try { found = result.getOrNull()?.takeIf { it.isNotBlank() } } catch (_: Exception) { }
+                        latch.countDown()
+                    }
+                } catch (_: Exception) { latch.countDown() }
+                latch.await(10, java.util.concurrent.TimeUnit.SECONDS)
+                if (found != null) return found
+            }
+            null
+        } catch (_: Exception) { null }
+    }
+    private fun prefetchAroundCurrent() {
+        try {
+            if (playQueue.isEmpty()) return
+            val mode = _playMode.value
+            if (mode == MODE_SHUFFLE || mode == MODE_LOOP_ONE) return
+            val gen = prefetchGenRef.incrementAndGet()
+            val size = playQueue.size
+            val cur = queueIndex
+            val targets = ArrayList<Map<String, String>>()
+            val seen = HashSet<String>()
+            fun addIdx(idx: Int) {
+                if (idx == cur) return
+                val song = playQueue.getOrNull(idx) ?: return
+                val key = prefetchKey(song)
+                if ((song["songId"] ?: "").isBlank()) return
+                if (!seen.add(key)) return
+                targets.add(song)
+            }
+            if (mode == MODE_LOOP_ALL) {
+                addIdx((cur + 1) % size)
+                addIdx((cur + 2) % size)
+                addIdx((cur + 3) % size)
+                addIdx((cur - 1 + size) % size)
+            } else {
+                if (cur + 1 < size) addIdx(cur + 1)
+                if (cur + 2 < size) addIdx(cur + 2)
+                if (cur + 3 < size) addIdx(cur + 3)
+                if (cur - 1 >= 0) addIdx(cur - 1)
+            }
+            if (targets.isEmpty()) return
+            Thread {
+                for (song in targets) {
+                    try {
+                        if (gen != prefetchGenRef.get()) return@Thread
+                        val key = prefetchKey(song)
+                        if (prefetchCache.containsKey(key)) continue
+                        val url = resolveUrlOnly(song) ?: continue
+                        if (gen != prefetchGenRef.get()) return@Thread
+                        prefetchCache[key] = url
+                    } catch (_: Exception) { }
+                }
+            }.start()
+        } catch (_: Exception) { }
+    }
+    private fun updateMediaSessionMetadata() {""", "预取字段与函数")
+
+assert s.count("21v54") == 3, "21v54 标记数异常"
+assert s.count("prefetchCache") == 5, "prefetchCache 出现次数异常"
+assert s.count("playCachedOrResolve") == 4, "playCachedOrResolve 出现次数异常"
+assert s.count("fromCacheKey") == 4, "fromCacheKey 出现次数异常"
+assert s.count("prefetchAroundCurrent") == 2, "prefetchAroundCurrent 出现次数异常"
+assert s.count("lastPlayFromCacheKey") == 4, "lastPlayFromCacheKey 出现次数异常"
+assert s.count("cacheFallbackKey") == 4, "cacheFallbackKey 出现次数异常"
+open(path, "w", encoding="utf-8").write(s)
+print("OK 21 v54 切歌预取已写")
+PYEOF21V54
+echo "=== 21 v54 完成 ==="
+grep -q '21v54' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v54 写入失败"; exit 1; }
+echo "OK 21 v54 切歌预取已写入"
