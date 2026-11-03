@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout 本仓库
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: 克隆源码（从自己的 Fork）
         run: git clone --depth 1 https://github.com/moonbbin/AVBox.git avbox
       - name: 设置版本号
