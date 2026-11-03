@@ -560,3 +560,258 @@ print("OK 14v8")
 PYEOF
 
 echo "=== 14 v8 done ==="
+
+# === 14 v9: QQ 详情空图阻塞版补图 ===
+
+echo "=== 14 v9 ==="
+
+python3 << 'PYEOF'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicSearchApi.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [14v9]"
+if MARK in src:
+    print("skip: 14v9 already present")
+    sys.exit(0)
+
+
+def rep(old, new, cnt=1):
+    global src
+    assert src.count(old) == cnt, f"anchor count {src.count(old)}: {old[:70]!r}"
+    src = src.replace(old, new, cnt)
+
+
+# v8 的 normCoverKey 必须已在（同脚本先行块）；缺失则大声失败，不静默重定义
+assert src.count("fun normCoverKey") == 1, "normCoverKey missing: 14v8 required before 14v9"
+
+helper = """    // [14v9] QQ 详情空图补图（阻塞版：getQQPlaylist 本身是阻塞函数，详情调用在 IO 线程）
+    private fun supplementTxCovers(list: List<SongInfo>): List<SongInfo> {
+        if (list.isEmpty()) return list
+        return list.map { song ->
+            if (song.picUrl.isNotBlank()) return@map song
+            try {
+                val hit = searchQQ(song.title).firstOrNull { c ->
+                    c.picUrl.isNotBlank() && normCoverKey(c.title) == normCoverKey(song.title) &&
+                        (normCoverKey(c.artist).isEmpty() || normCoverKey(song.artist).isEmpty() || normCoverKey(c.artist) == normCoverKey(song.artist))
+                }
+                if (hit != null) song.copy(picUrl = hit.picUrl) else song
+            } catch (e: Exception) {
+                song
+            }
+        }
+    }
+
+"""
+rep("    fun getQQPlaylist(playlistId: String): List<SongInfo> {", helper + "    fun getQQPlaylist(playlistId: String): List<SongInfo> {")
+rep(
+    "        return results\n    }\n\n    // [14v6] ---- Kugou playlists",
+    "        return supplementTxCovers(results)\n    }\n\n    // [14v6] ---- Kugou playlists",
+)
+assert src.count("{") == src.count("}")
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("OK 14v9")
+
+PYEOF
+
+echo "=== 14 v9 done ==="
+
+# === 14 v10: 酷我歌单分类/列表/详情 ===
+
+echo "=== 14 v10 ==="
+
+python3 << 'PYEOF'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicSearchApi.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [14v10]"
+if MARK in src:
+    print("skip: 14v10 already present")
+    sys.exit(0)
+
+
+def rep(old, new, cnt=1):
+    global src
+    assert src.count(old) == cnt, f"anchor count {src.count(old)}: {old[:70]!r}"
+    src = src.replace(old, new, cnt)
+
+
+section = """    // [14v10] 酷我歌单：分类/列表/详情（wapi + nplserver，无需登录与 csrf；沙箱实测 2026-11-03）
+    private data class KwTag(val name: String, val id: String, val digest: String)
+    private var kwTagCache: List<KwTag>? = null
+    private fun kwTags(): List<KwTag> {
+        kwTagCache?.let { return it }
+        val out = mutableListOf<KwTag>()
+        try {
+            val req = Request.Builder()
+                .url("http://wapi.kuwo.cn/api/pc/classify/playlist/getTagList")
+                .header("Referer", "https://www.kuwo.cn/")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    val groups = JSONObject(resp.body?.string() ?: "").optJSONArray("data")
+                    if (groups != null) {
+                        for (g in 0 until groups.length()) {
+                            val items = groups.optJSONObject(g)?.optJSONArray("data")
+                            if (items != null) {
+                                for (i in 0 until items.length()) {
+                                    val t = items.optJSONObject(i)
+                                    val name = t?.optString("name") ?: ""
+                                    val id = t?.optString("id") ?: ""
+                                    if (name.isNotBlank() && id.isNotBlank()) {
+                                        out.add(KwTag(name, id, t.optString("digest", "")))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+        }
+        val deduped = out.distinctBy { it.name }
+        kwTagCache = deduped
+        return deduped
+    }
+    fun getKuwoCategories(): List<String> {
+        val names = kwTags().map { it.name }
+        return if (names.isEmpty()) listOf("推荐") else listOf("推荐") + names
+    }
+    private fun parseKwBriefs(obj: JSONObject?): List<PlaylistBrief> {
+        val out = mutableListOf<PlaylistBrief>()
+        val arr = obj?.optJSONArray("data") ?: return out
+        for (i in 0 until arr.length()) {
+            val it = arr.optJSONObject(i) ?: continue
+            val id = it.optString("id")
+            val name = it.optString("name")
+            if (id.isBlank() || name.isBlank()) continue
+            out.add(PlaylistBrief(id, name, it.optString("img"), it.optString("listencnt").toLongOrNull() ?: 0L))
+        }
+        return out
+    }
+    fun getKuwoPlaylists(cat: String, offset: Int = 0): List<PlaylistBrief> {
+        val results = mutableListOf<PlaylistBrief>()
+        try {
+            val page = offset / 30 + 1
+            if (cat == "全部" || cat == "推荐") {
+                val url = "http://wapi.kuwo.cn/api/pc/classify/playlist/getRcmPlayList?loginUid=0&loginSid=0&appUid=38668888&pn=$page&rn=30&order=new"
+                val req = Request.Builder().url(url)
+                    .header("Referer", "https://www.kuwo.cn/")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .build()
+                client.newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        results.addAll(parseKwBriefs(JSONObject(resp.body?.string() ?: "").optJSONObject("data")))
+                    }
+                }
+            } else {
+                val tag = kwTags().firstOrNull { it.name == cat } ?: return results
+                if (tag.digest == "43") {
+                    val url = "http://mobileinterfaces.kuwo.cn/er.s?type=get_pc_qz_data&f=web&id=${tag.id}&prod=pc"
+                    val req = Request.Builder().url(url)
+                        .header("Referer", "https://www.kuwo.cn/")
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                        .build()
+                    client.newCall(req).execute().use { resp ->
+                        if (resp.isSuccessful) {
+                            val groups = JSONArray(resp.body?.string() ?: "[]")
+                            val flat = mutableListOf<PlaylistBrief>()
+                            for (g in 0 until groups.length()) {
+                                val items = groups.optJSONObject(g)?.optJSONArray("list")
+                                if (items != null) {
+                                    for (i in 0 until items.length()) {
+                                        val it = items.optJSONObject(i) ?: continue
+                                        val id = it.optString("id")
+                                        val name = it.optString("name")
+                                        if (id.isBlank() || name.isBlank()) continue
+                                        flat.add(PlaylistBrief(id, name, it.optString("img"), 0L))
+                                    }
+                                }
+                            }
+                            results.addAll(flat.drop(offset).take(30))
+                        }
+                    }
+                } else {
+                    val url = "http://wapi.kuwo.cn/api/pc/classify/playlist/getTagPlayList?loginUid=0&loginSid=0&appUid=38668888&id=${tag.id}&pn=$page&rn=30"
+                    val req = Request.Builder().url(url)
+                        .header("Referer", "https://www.kuwo.cn/")
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                        .build()
+                    client.newCall(req).execute().use { resp ->
+                        if (resp.isSuccessful) {
+                            results.addAll(parseKwBriefs(JSONObject(resp.body?.string() ?: "").optJSONObject("data")))
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+        }
+        return results
+    }
+    fun getKuwoPlaylist(playlistId: String): List<SongInfo> {
+        val results = mutableListOf<SongInfo>()
+        try {
+            val url = "http://nplserver.kuwo.cn/pl.svc?op=getlistinfo&pid=$playlistId&pn=0&rn=100&encode=utf8&keyset=pl2012&vipver=MUSIC_9.1.1.2_BCS2&newver=1"
+            val req = Request.Builder().url(url)
+                .header("Referer", "https://www.kuwo.cn/")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return results
+                val list = JSONObject(resp.body?.string() ?: return results).optJSONArray("musiclist") ?: return results
+                for (i in 0 until list.length()) {
+                    try {
+                        val item = list.getJSONObject(i)
+                        val id = item.optString("id")
+                        val name = item.optString("name")
+                        if (id.isBlank() || name.isBlank()) continue
+                        val rawPic = item.optString("albumpic")
+                        val pic = when {
+                            rawPic.endsWith(".") -> rawPic + "jpg"
+                            rawPic.isNotBlank() -> rawPic
+                            else -> item.optString("musicPic")
+                        }
+                        val minfo = item.optString("MINFO")
+                        val quality = when {
+                            "format:flac" in minfo -> "SQ"
+                            "bitrate:320" in minfo -> "HQ"
+                            else -> ""
+                        }
+                        results.add(
+                            SongInfo(
+                                id = id,
+                                title = name,
+                                artist = item.optString("artist"),
+                                album = item.optString("album"),
+                                duration = item.optString("duration").toLongOrNull() ?: 0L,
+                                platform = "kw",
+                                picUrl = pic,
+                                quality = quality
+                            )
+                        )
+                    } catch (e: Exception) {
+                    }
+                }
+            }
+        } catch (e: Exception) {
+        }
+        return results
+    }
+
+"""
+rep("    // [14v6] ---- Kugou playlists", section + "    // [14v6] ---- Kugou playlists")
+assert src.count("{") == src.count("}")
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("OK 14v10")
+
+PYEOF
+
+echo "=== 14 v10 done ==="
