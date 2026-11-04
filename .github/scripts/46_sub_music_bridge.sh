@@ -2,9 +2,9 @@
 set -e
 cd "$(dirname "$0")/../.." 2>/dev/null || true
 
-# === 46 v3: 订阅源内音乐桥接（修 v2 设置页锚点：25 已把设置页换成 SettingsScreen，旧 LazyColumn 尾巴不存在；开关改走 SettingsScreen 开关行 + 状态提升到底栏门控） ===
+# === 46 v4: 订阅源内音乐桥接（修 v3 行尾锚点：32 全局换色已把行尾 chevron 的 tint 换成 musicColors().textSecondary，v3 的 onSurfaceVariant 锚点已不存在；Switch import 改为缺失才补，因 v104 已加过） ===
 
-echo "=== 46 v3 ==="
+echo "=== 46 v4 ==="
 
 cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt << 'KOTEOF'
 package com.github.tvbox.osc.ui.activity
@@ -403,10 +403,11 @@ python3 << 'PYEOF_S'
 spath = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
 with open(spath, encoding="utf-8") as f:
     s = f.read()
-if "// [46v3]" not in s:
+if "// [46v4]" not in s:
     a = "import androidx.compose.material3.Surface"
     assert s.count(a) == 1, f"settings Surface import count {s.count(a)}"
-    s = s.replace(a, a + "\nimport androidx.compose.material3.Switch", 1)
+    if "import androidx.compose.material3.Switch" not in s:
+        s = s.replace(a, a + "\nimport androidx.compose.material3.Switch", 1)
     b = """data class SettingItem(
     val title: String,
     val subtitle: String,
@@ -417,22 +418,22 @@ if "// [46v3]" not in s:
     val title: String,
     val subtitle: String,
     val action: () -> Unit,
-    val isSwitch: Boolean = false, // [46v3]
-    val switchChecked: () -> Boolean = { false }, // [46v3]
-    val onSwitchChange: ((Boolean) -> Unit)? = null, // [46v3]
+    val isSwitch: Boolean = false, // [46v4]
+    val switchChecked: () -> Boolean = { false }, // [46v4]
+    val onSwitchChange: ((Boolean) -> Unit)? = null, // [46v4]
 )""", 1)
     c = "onClick = item.action, // 细节4：整行点击，直接调现有 action"
     assert s.count(c) == 1, f"row onClick count {s.count(c)}"
-    s = s.replace(c, "onClick = { if (item.isSwitch && item.onSwitchChange != null) item.onSwitchChange(!item.switchChecked()) else item.action() }, // [46v3] 开关行点整行也切换", 1)
+    s = s.replace(c, "onClick = { if (item.isSwitch && item.onSwitchChange != null) item.onSwitchChange(!item.switchChecked()) else item.action() }, // [46v4] 开关行点整行也切换", 1)
     d = """        // 右侧：小箭头 20dp，onSurfaceVariant（稍缩小更精致）
         Icon(
             imageVector = Icons.Filled.ChevronRight,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = musicColors().textSecondary,
             modifier = Modifier.size(20.dp),
         )"""
     assert s.count(d) == 1, f"row trailing count {s.count(d)}"
-    s = s.replace(d, """        // 右侧：开关行画 Switch，其余行画小箭头 // [46v3]
+    s = s.replace(d, """        // 右侧：开关行画 Switch，其余行画小箭头 // [46v4]
         if (item.isSwitch && item.onSwitchChange != null) {
             Switch(
                 checked = item.switchChecked(),
@@ -449,9 +450,9 @@ if "// [46v3]" not in s:
     assert s.count("{") == s.count("}"), "settings brace imbalance"
     with open(spath, "w", encoding="utf-8") as f:
         f.write(s)
-    print("OK SettingsScreen 46v3")
+    print("OK SettingsScreen 46v4")
 else:
-    print("skip: SettingsScreen 已有 [46v3]")
+    print("skip: SettingsScreen 已有 [46v4]")
 PYEOF_S
 
 python3 << 'PYEOF'
@@ -462,9 +463,9 @@ path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivi
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
-MARK = "// [46v3]"
+MARK = "// [46v4]"
 if MARK in src:
-    print("skip: 46v3 already present")
+    print("skip: 46v4 already present")
     sys.exit(0)
 
 # 1. 枚举：容忍 40/41 已加过的表项，往 enum 块尾追加 SUBMUSIC
@@ -510,27 +511,27 @@ for i, ln in enumerate(lines):
 assert done, "SETTINGS content branch anchor not found"
 src = "\n".join(lines)
 
-# 4. [46v3] 开关状态提升到 MusicHomeScreen（底栏门控 + 设置开关共用同一状态）
+# 4. [46v4] 开关状态提升到 MusicHomeScreen（底栏门控 + 设置开关共用同一状态）
 anchor_state = "    var selectedTab by remember { mutableStateOf(MusicTab.SEARCH) }"
 assert src.count(anchor_state) == 1, f"selectedTab anchor count {src.count(anchor_state)}"
-src = src.replace(anchor_state, anchor_state + "\n    var subMusicOn by remember { mutableStateOf(SubMusicBridge.isEnabled(context)) } // [46v3]", 1)
+src = src.replace(anchor_state, anchor_state + "\n    var subMusicOn by remember { mutableStateOf(SubMusicBridge.isEnabled(context)) } // [46v4]", 1)
 
-# 5. [46v3] 底栏门控：开关关时 tabDefs97 里滤掉 SUBMUSIC
+# 5. [46v4] 底栏门控：开关关时 tabDefs97 里滤掉 SUBMUSIC
 anchor_gate = "tabDefs97.forEach { (tab, label) ->"
 assert src.count(anchor_gate) == 1, f"tabDefs97 forEach count {src.count(anchor_gate)}"
 src = src.replace(anchor_gate, "(if (subMusicOn) tabDefs97 else tabDefs97.filter { it.first != MusicTab.SUBMUSIC }).forEach { (tab, label) ->", 1)
 
-# 6. [46v3] SETTINGS 分支调用点：把开关状态与回写传进设置页
+# 6. [46v4] SETTINGS 分支调用点：把开关状态与回写传进设置页
 anchor_call = "MusicSettingsList(onComingSoon = ::comingSoon)"
 assert src.count(anchor_call) == 1, f"settings call count {src.count(anchor_call)}"
-src = src.replace(anchor_call, "MusicSettingsList(onComingSoon = ::comingSoon, subMusicOn = subMusicOn, onSubMusicChange = { v -> subMusicOn = v; SubMusicBridge.setEnabled(context, v); if (!v && selectedTab == MusicTab.SUBMUSIC) selectedTab = MusicTab.SEARCH }) // [46v3]", 1)
+src = src.replace(anchor_call, "MusicSettingsList(onComingSoon = ::comingSoon, subMusicOn = subMusicOn, onSubMusicChange = { v -> subMusicOn = v; SubMusicBridge.setEnabled(context, v); if (!v && selectedTab == MusicTab.SUBMUSIC) selectedTab = MusicTab.SEARCH }) // [46v4]", 1)
 
-# 7. [46v3] MusicSettingsList 签名：接开关状态与回写（默认保持老调用可编译）
+# 7. [46v4] MusicSettingsList 签名：接开关状态与回写（默认保持老调用可编译）
 anchor_sig = "fun MusicSettingsList(onComingSoon: (String) -> Unit)"
 assert src.count(anchor_sig) == 1, f"settings sig count {src.count(anchor_sig)}"
-src = src.replace(anchor_sig, "fun MusicSettingsList(onComingSoon: (String) -> Unit, subMusicOn: Boolean = false, onSubMusicChange: ((Boolean) -> Unit)? = null) // [46v3]", 1)
+src = src.replace(anchor_sig, "fun MusicSettingsList(onComingSoon: (String) -> Unit, subMusicOn: Boolean = false, onSubMusicChange: ((Boolean) -> Unit)? = null) // [46v4]", 1)
 
-# 8. [46v3] 旧 SettingItem 数据类：加开关三字段（默认保持老行不变）
+# 8. [46v4] 旧 SettingItem 数据类：加开关三字段（默认保持老行不变）
 anchor_item = """    data class SettingItem(
         val title: String,
         val subtitle: String,
@@ -541,23 +542,23 @@ src = src.replace(anchor_item, """    data class SettingItem(
         val title: String,
         val subtitle: String,
         val action: () -> Unit,
-        val isSwitch: Boolean = false, // [46v3]
-        val switchChecked: () -> Boolean = { false }, // [46v3]
-        val onSwitchChange: ((Boolean) -> Unit)? = null // [46v3]
+        val isSwitch: Boolean = false, // [46v4]
+        val switchChecked: () -> Boolean = { false }, // [46v4]
+        val onSwitchChange: ((Boolean) -> Unit)? = null // [46v4]
     )""", 1)
 
-# 9. [46v3] 映射转发：旧项 -> 新项时把开关字段带过去
+# 9. [46v4] 映射转发：旧项 -> 新项时把开关字段带过去
 anchor_map = "NewSettingItem(title = i.title, subtitle = i.subtitle, action = i.action)"
 assert src.count(anchor_map) == 1, f"settings map count {src.count(anchor_map)}"
-src = src.replace(anchor_map, "NewSettingItem(title = i.title, subtitle = i.subtitle, action = i.action, isSwitch = i.isSwitch, switchChecked = i.switchChecked, onSwitchChange = i.onSwitchChange) // [46v3]", 1)
+src = src.replace(anchor_map, "NewSettingItem(title = i.title, subtitle = i.subtitle, action = i.action, isSwitch = i.isSwitch, switchChecked = i.switchChecked, onSwitchChange = i.onSwitchChange) // [46v4]", 1)
 
-# 10. [46v3] 新分组：groups 列表末尾加“源内音乐”开关组
+# 10. [46v4] 新分组：groups 列表末尾加“源内音乐”开关组
 anchor_groups = "    )\n    // NAV_WIRE_V1: 设置新版 UI"
 assert src.count(anchor_groups) == 1, f"groups tail count {src.count(anchor_groups)}"
 src = src.replace(anchor_groups, """        SettingGroup(
             "源内音乐",
             listOf(
-                SettingItem("源内音乐", "识别订阅源里 ┆音乐┆ 分类的源，与落雪分开", {}, isSwitch = true, switchChecked = { subMusicOn }, onSwitchChange = onSubMusicChange) // [46v3]
+                SettingItem("源内音乐", "识别订阅源里 ┆音乐┆ 分类的源，与落雪分开", {}, isSwitch = true, switchChecked = { subMusicOn }, onSwitchChange = onSubMusicChange) // [46v4]
             )
         ),
     )
@@ -568,8 +569,8 @@ assert src.count("{") == src.count("}"), "brace imbalance after 46v1"
 assert src.count("SUBMUSIC") == 5, f"SUBMUSIC count {src.count('SUBMUSIC')}  # enum+pair+branch+gate filter+call-site reset"
 with open(path, "w", encoding="utf-8") as f:
     f.write(src)
-print("OK 46v3")
+print("OK 46v4")
 
 PYEOF
 
-echo "=== 46 v3 done ==="
+echo "=== 46 v4 done ==="
