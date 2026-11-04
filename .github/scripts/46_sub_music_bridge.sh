@@ -2,14 +2,14 @@
 set -e
 cd "$(dirname "$0")/../.." 2>/dev/null || true
 
-# === 46 v1: 订阅源内音乐桥接（读 ApiConfig 订阅列表，按 ┆音乐┆ 切段筛源，独立入口/搜索/播放，与落雪分开） ===
+# === 46 v2: 订阅源内音乐桥接（修 v1 底栏锚点）（读 ApiConfig 订阅列表，按 ┆音乐┆ 切段筛源，独立入口/搜索/播放，与落雪分开） ===
 
-echo "=== 46 v1 ==="
+echo "=== 46 v2 ==="
 
 cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt << 'KOTEOF'
 package com.github.tvbox.osc.ui.activity
 
-// [46v1] 订阅源内音乐桥接：只读主体 ApiConfig 订阅列表，不改主体代码。
+// [46v2] 订阅源内音乐桥接：只读主体 ApiConfig 订阅列表，不改主体代码。
 // 筛源规则：源名按 ┆ 切段含“音乐”段 + searchable=1；播链：searchContent -> detailContent -> playerContent。
 
 import com.github.tvbox.osc.api.ApiConfig
@@ -145,7 +145,7 @@ KOTEOF
 cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt << 'KOTEOF'
 package com.github.tvbox.osc.ui.activity
 
-// [46v1] 源内音乐独立页：与落雪搜索/歌单/播放页完全分开；播走 LxPlayerManager.play 裸地址，不进落雪队列。
+// [46v2] 源内音乐独立页：与落雪搜索/歌单/播放页完全分开；播走 LxPlayerManager.play 裸地址，不进落雪队列。
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -407,9 +407,9 @@ path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivi
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
-MARK = "// [46v1]"
+MARK = "// [46v2]"
 if MARK in src:
-    print("skip: 46v1 already present")
+    print("skip: 46v2 already present")
     sys.exit(0)
 
 # 1. 枚举：容忍 40/41 已加过的表项，往 enum 块尾追加 SUBMUSIC
@@ -420,38 +420,39 @@ assert "SUBMUSIC" not in body, "SUBMUSIC already in enum"
 new_body = body.rstrip() + ", SUBMUSIC\n"
 src = src[:m.start(1)] + new_body + src[m.end(1):]
 
-# 2. 底栏：在 PLAYLIST 表项后插源内表项；若 PLAYLIST 行已变，退到 SETTINGS 行后
+# 2. 底栏（32v97 胶囊 tabDefs97，to-pair 形）：在 PLAYLIST 对子后插源内对子；若已变，退到 SETTINGS 对子后
 lines = src.split("\n")
 done = False
 for i, ln in enumerate(lines):
-    if "Triple(MusicTab.PLAYLIST," in ln:
-        lines.insert(i + 1, '                        Triple(MusicTab.SUBMUSIC, "源内", "📻"),')
+    if 'MusicTab.PLAYLIST to "歌单",' in ln:
+        lines.insert(i + 1, '                            MusicTab.SUBMUSIC to "源内",')
         done = True
         break
 if not done:
     for i, ln in enumerate(lines):
-        if "Triple(MusicTab.SETTINGS," in ln:
-            lines.insert(i, '                        Triple(MusicTab.SUBMUSIC, "源内", "📻"),')
+        if 'MusicTab.SETTINGS to "设置",' in ln:
+            lines.insert(i + 1, '                            MusicTab.SUBMUSIC to "源内",')
             done = True
             break
-assert done, "no PLAYLIST/SETTINGS Triple anchor for tabDefs"
+assert done, "no PLAYLIST/SETTINGS pair anchor for tabDefs97"
 src = "\n".join(lines)
 
-# 3. when 分支：SETTINGS 分支闭合后插 SUBMUSIC 分支
+# 3. when 分支：内容区 SETTINGS 分支（下一行是 MusicSettingsList 调用）闭合后插 SUBMUSIC 分支；
+# 32v97 的线条图标 when 里也有 SETTINGS 分支，必须跳过（它下一行是 drawCircle，不是 MusicSettingsList）
 lines = src.split("\n")
 done = False
 for i, ln in enumerate(lines):
-    if "MusicTab.SETTINGS -> {" in ln:
+    if "MusicTab.SETTINGS -> {" in ln and i + 1 < len(lines) and "MusicSettingsList" in lines[i + 1]:
         j = i + 1
         while j < len(lines) and lines[j].strip() != "}":
             j += 1
         assert j < len(lines), "SETTINGS branch close not found"
         lines.insert(j + 1, "                MusicTab.SUBMUSIC -> {")
-        lines.insert(j + 2, "                    SubMusicScreen(onOpenSettings = { selectedTab = MusicTab.SETTINGS }) // [46v1]")
+        lines.insert(j + 2, "                    SubMusicScreen(onOpenSettings = { selectedTab = MusicTab.SETTINGS }) // [46v2]")
         lines.insert(j + 3, "                }")
         done = True
         break
-assert done, "SETTINGS branch anchor not found"
+assert done, "SETTINGS content branch anchor not found"
 src = "\n".join(lines)
 
 # 4. 设置页开关行：LazyColumn 尾（groups.forEach 闭合后、LazyColumn 闭合前）插源内音乐开关
@@ -468,7 +469,7 @@ switch_block = """            item {
             }
         }
         item {
-            // [46v1] 源内音乐开关
+            // [46v2] 源内音乐开关
             Text(
                 text = "源内音乐",
                 style = MaterialTheme.typography.titleSmall,
@@ -515,8 +516,8 @@ assert src.count("{") == src.count("}"), "brace imbalance after 46v1"
 assert src.count("SUBMUSIC") == 3, f"SUBMUSIC count {src.count('SUBMUSIC')}"
 with open(path, "w", encoding="utf-8") as f:
     f.write(src)
-print("OK 46v1")
+print("OK 46v2")
 
 PYEOF
 
-echo "=== 46 v1 done ==="
+echo "=== 46 v2 done ==="
