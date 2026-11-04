@@ -2,9 +2,9 @@
 set -e
 cd "$(dirname "$0")/../.." 2>/dev/null || true
 
-# === 46 v6: 订阅源内音乐桥接（修 v5 两处注释吞码：40 在枚举末行留了 // [40rec]，v5 往行尾追 SUBMUSIC 被注释吃掉致编译报 SUBMUSIC 未解析；签名行尾的 // [46v6] 吃掉了 { 致 MusicSettingsList 无函数体；v6 枚举改为注释前插入、签名标记移到 { 之后，并加注释吞码后验） ===
+# === 46 v7: 订阅源内音乐桥接（修 v6 三处编译错：①TabLineIcon97 的 when 缺 SUBMUSIC 分支致非穷尽；②数据类新函数参跟在 action 后抢走全部尾随 lambda 调用点的 action，改把三字段挪到 action 之前、源内项 action 改具名；③桥接 PlayResult 子类在对象成员函数里须 PlayResult. 限定，裸 Ok/Fail 不解析） ===
 
-echo "=== 46 v6 ==="
+echo "=== 46 v7 ==="
 
 cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt << 'KOTEOF'
 package com.github.tvbox.osc.ui.activity
@@ -114,29 +114,29 @@ object SubMusicBridge {
     suspend fun resolvePlay(track: SubTrack): PlayResult = withContext(Dispatchers.IO) {
         try {
             val bean = ApiConfig.get().getSource(track.sourceKey)
-                ?: return@withContext Fail("源已不存在")
+                ?: return@withContext PlayResult.Fail("源已不存在")
             val sp = ApiConfig.get().getCSP(bean)
             val detail = sp.detailContent(listOf(track.id))
-                ?: return@withContext Fail("详情为空")
+                ?: return@withContext PlayResult.Fail("详情为空")
             val d = JSONObject(detail)
             val item = d.optJSONArray("list")?.optJSONObject(0) ?: d
             val from = item.optString("vod_play_from")
             val urls = item.optString("vod_play_url")
-            if (from.isBlank() || urls.isBlank()) return@withContext Fail("该条目无播放地址")
+            if (from.isBlank() || urls.isBlank()) return@withContext PlayResult.Fail("该条目无播放地址")
             val flag = from.split("$$$")[0]
             val firstGroup = urls.split("$$$")[0]
             val firstEp = firstGroup.split("#")[0]
             val playId = firstEp.substringAfter("$", firstEp)
             val pr = sp.playerContent(flag, playId, ApiConfig.get().getVipParseFlags())
-                ?: return@withContext Fail("取播放地址失败")
+                ?: return@withContext PlayResult.Fail("取播放地址失败")
             val pj = JSONObject(pr)
             val parse = pj.optInt("parse", 0)
             val url = pj.optString("url")
-            if (url.isBlank()) return@withContext Fail("播放地址为空")
-            if (parse == 1) return@withContext Fail("该源需要解析，源内音乐 v1 暂不支持解析播放")
-            Ok(url)
+            if (url.isBlank()) return@withContext PlayResult.Fail("播放地址为空")
+            if (parse == 1) return@withContext PlayResult.Fail("该源需要解析，源内音乐 v1 暂不支持解析播放")
+            PlayResult.Ok(url)
         } catch (e: Exception) {
-            Fail("播放失败：${e.message}")
+            PlayResult.Fail("播放失败：${e.message}")
         }
     }
 }
@@ -600,4 +600,61 @@ print("OK 46v6")
 
 PYEOF
 
-echo "=== 46 v6 done ==="
+
+python3 << 'PYEOF7'
+import sys
+
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+if "// [46v7]" in src:
+    print("skip: 46v7 already present")
+    sys.exit(0)
+
+# 1. 图标 when（TabLineIcon97，Canvas 内 8 格缩进）：补 SUBMUSIC 空分支（只出文字标签、无配套线条图标，属已知待润色项）；否则枚举多一项即非穷尽
+a = """                drawLine(color = tint, start = off(6.6f, 19.5f), end = off(17.4f, 19.5f), strokeWidth = sw, cap = cap)
+            }
+        }"""
+assert src.count(a) == 1, f"icon HOME close count {src.count(a)}"
+src = src.replace(a, """                drawLine(color = tint, start = off(6.6f, 19.5f), end = off(17.4f, 19.5f), strokeWidth = sw, cap = cap)
+            }
+            MusicTab.SUBMUSIC -> { } // [46v7]
+        }""", 1)
+
+# 2. 旧 SettingItem 数据类：尾随 lambda 劫持——新函数参跟在 action 后面会抢走全部尾随 lambda 调用点的 action，致“缺 action”；改把三字段挪到 action 之前，尾随 lambda 仍归 action
+b = """    data class SettingItem(
+        val title: String,
+        val subtitle: String,
+        val action: () -> Unit,
+        val isSwitch: Boolean = false, // [46v6]
+        val switchChecked: () -> Boolean = { false }, // [46v6]
+        val onSwitchChange: ((Boolean) -> Unit)? = null // [46v6]
+    )"""
+assert src.count(b) == 1, f"v6 dataclass count {src.count(b)}"
+src = src.replace(b, """    data class SettingItem(
+        val title: String,
+        val subtitle: String,
+        val isSwitch: Boolean = false, // [46v7]
+        val switchChecked: () -> Boolean = { false }, // [46v7]
+        val onSwitchChange: ((Boolean) -> Unit)? = null, // [46v7]
+        val action: () -> Unit
+    )""", 1)
+
+# 3. 源内音乐项：重排后位置参变了，action 改具名，免得 {} 落到 isSwitch 上
+c = 'SettingItem("源内音乐", "识别订阅源里 ┆音乐┆ 分类的源，与落雪分开", {}, isSwitch = true, switchChecked = { subMusicOn }, onSwitchChange = onSubMusicChange) // [46v6]'
+assert src.count(c) == 1, f"submusic item count {src.count(c)}"
+src = src.replace(c, 'SettingItem("源内音乐", "识别订阅源里 ┆音乐┆ 分类的源，与落雪分开", action = {}, isSwitch = true, switchChecked = { subMusicOn }, onSwitchChange = onSubMusicChange) // [46v7]', 1)
+
+# 后验：[46v7] 行 // 之后不得有代码界符
+for _ln in src.split("\n"):
+    if "[46v7]" in _ln and "//" in _ln:
+        _tail = _ln.split("//", 1)[1]
+        assert not any(_c in _tail for _c in "{}()"), "marker ate code: " + _ln
+assert src.count("{") == src.count("}"), "MH brace imbalance"
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("OK 46v7")
+PYEOF7
+echo "=== 46 v7 done ==="
