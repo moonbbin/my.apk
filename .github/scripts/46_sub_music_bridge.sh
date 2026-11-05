@@ -3672,3 +3672,274 @@ grep -q "46v14" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubSear
 grep -q "46v14" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMineScreen.kt || { echo "X 46v14 mine"; exit 1; }
 echo "OK 46v14"
 echo "=== 46 v14 done ==="
+
+# === 46 v15: 歌手过滤＋榜单只拉有用分类 ===
+
+echo "=== 46 v15 ==="
+
+python3 - << 'PYEOF46V15A'
+import sys
+
+# 46 v15 桥接：杂项名过滤＋合作歌手拆分（歌手页去乱 + 榜单只拉有用分类共用）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v15]" in src:
+    print("bridge already 46v15, skip")
+    sys.exit(0)
+
+old_fn = """    fun artistOf(track: SubTrack): String? { // [46v12] 歌手推导：合集备注→标题即歌手；否则 vod_actor；否则不含 > 的备注
+        if (track.remark.contains("合集") || track.remark.contains("专辑")) return track.title.ifBlank { null }
+        if (track.actor.isNotBlank()) return track.actor
+        if (track.remark.isNotBlank() && !track.remark.contains(">")) return track.remark
+        return null
+    }"""
+assert src.count(old_fn) == 1, "artistOf anchor count %d" % src.count(old_fn)
+new_fn = """    private val JUNK_HINTS = listOf("点击", "上移", "下移", "调整", "恢复", "默认", "分类", "设置") // [46v15] 杂项信号词：源自带的导航/操作项标题里有这些词
+
+    fun isJunkName(name: String): Boolean { // [46v15] 杂项名：空白、纯数字（榜单名次备注）、含杂项信号词
+        val n = name.trim()
+        return n.isEmpty() || n.all { it.isDigit() } || JUNK_HINTS.any { n.contains(it) }
+    }
+
+    fun artistsOf(track: SubTrack): List<String> { // [46v15] 歌手推导（多名）：合集备注→标题、否则 vod_actor、否则不含 > 的备注；合作歌手按 &/、/，拆；杂项名过滤
+        val raw: String? = when {
+            track.remark.contains("合集") || track.remark.contains("专辑") -> track.title.ifBlank { null }
+            track.actor.isNotBlank() -> track.actor
+            track.remark.isNotBlank() && !track.remark.contains(">") -> track.remark
+            else -> null
+        } ?: return emptyList()
+        return raw.split("&", "＆", "、", "，", ",").map { it.trim() }.filter { it.isNotEmpty() && !isJunkName(it) }
+    }
+
+    fun artistOf(track: SubTrack): String? = artistsOf(track).firstOrNull() // [46v15] 兼容旧调用"""
+src = src.replace(old_fn, new_fn, 1)
+
+assert src.count("fun artistsOf") == 1
+assert src.count("fun isJunkName") == 1
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v15 bridge")
+PYEOF46V15A
+
+python3 - << 'PYEOF46V15B'
+import sys
+
+# 46 v15 曲库页：歌手过滤（拆合作歌手、去杂项、合集图优先）＋榜单只拉有用分类（杂项分类不拉、段内杂项条目过滤）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v15]" in src:
+    print("screen already 46v15, skip")
+    sys.exit(0)
+
+old_head = "有壁纸时页底透明、卡片磨砂（同设置页）。"
+assert src.count(old_head) == 1, "head anchor count %d" % src.count(old_head)
+src = src.replace(old_head, "有壁纸时页底透明、卡片磨砂（同设置页）；[46v15] 歌手过滤＋榜单只拉有用分类。", 1)
+
+old_artists = """    val artists = remember(home, chartItems) { // [46v12] 歌手推导：首页＋榜单条目去重
+        val seen = LinkedHashMap<String, String>()
+        for (t in (home?.items ?: emptyList()) + chartItems) {
+            val name = SubMusicBridge.artistOf(t) ?: continue
+            if (!seen.containsKey(name)) seen[name] = t.pic
+        }
+        seen.map { (name, pic) -> name to pic }
+    }"""
+assert src.count(old_artists) == 1, "artists anchor count %d" % src.count(old_artists)
+new_artists = """    val artists = remember(home, chartItems) { // [46v15] 歌手推导：拆合作歌手、去杂项、合集图优先
+        val classNames = home?.classes?.map { it.name } ?: emptyList()
+        val sectionWords = listOf("歌手", "热门", "歌单", "榜单", "全部", "更多")
+        fun okName(n: String) = !SubMusicBridge.isJunkName(n) && sectionWords.none { n.contains(it) } && !classNames.contains(n)
+        val seen = LinkedHashMap<String, String>()
+        val all = (home?.items ?: emptyList()) + chartItems
+        val ordered = all.filter { it.remark.contains("合集") || it.remark.contains("专辑") } + all.filter { !(it.remark.contains("合集") || it.remark.contains("专辑")) }
+        for (t in ordered) {
+            for (name in SubMusicBridge.artistsOf(t)) {
+                if (!okName(name)) continue
+                if (!seen.containsKey(name)) seen[name] = t.pic
+            }
+        }
+        seen.map { (name, pic) -> name to pic }
+    }"""
+src = src.replace(old_artists, new_artists, 1)
+
+old_loop = """                for (cls in h.classes) { // [46v13] 全量分类逐段拉第 1 页，有数据的段先出
+                    try {
+                        val items = SubMusicBridge.category(src.key, cls.id)"""
+assert src.count(old_loop) == 1, "loop anchor count %d" % src.count(old_loop)
+new_loop = """                for (cls in h.classes) { // [46v15] 只拉有用的分类：杂项分类、歌手类分类跳过不拉
+                    if (SubMusicBridge.isJunkName(cls.name) || cls.name.contains("歌手")) continue
+                    try {
+                        val items = SubMusicBridge.category(src.key, cls.id).filter { !SubMusicBridge.isJunkName(it.title) } // [46v15] 段内杂项条目过滤"""
+src = src.replace(old_loop, new_loop, 1)
+
+assert src.count("fun artistsOf") == 0  # screen must not define it, only call it
+assert src.count("SubMusicBridge.artistsOf(t)") == 1
+assert src.count("isJunkName(cls.name)") == 1
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v15 screen")
+PYEOF46V15B
+
+grep -q "46v15" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v15 bridge"; exit 1; }
+grep -q "46v15" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v15 screen"; exit 1; }
+echo "OK 46v15"
+echo "=== 46 v15 done ==="
+
+# === 46 v16: 分桶整理（歌手/歌单/榜单三分） ===
+
+echo "=== 46 v16 ==="
+
+python3 - << 'PYEOF46V16A'
+import sys
+
+# 46 v16 桥接：分桶信号（人名、歌单型）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v16]" in src:
+    print("bridge already 46v16, skip")
+    sys.exit(0)
+
+old_fn = '    fun artistOf(track: SubTrack): String? = artistsOf(track).firstOrNull() // [46v15] 兼容旧调用'
+assert src.count(old_fn) == 1, "artistOf anchor count %d" % src.count(old_fn)
+new_fn = old_fn + """
+
+    fun isPersonName(title: String): Boolean { // [46v16] 人名信号：短（≤4 字）、无分隔符/括号/书名号、无歌单类词（“伤感歌单”4 字不是人名）
+        val n = title.trim()
+        if (n.isEmpty() || n.length > 4) return false
+        if (listOf("歌单", "合集", "专辑", "精选", "榜单", "排行", "热门", "推荐").any { n.contains(it) }) return false
+        return !n.contains("&") && !n.contains("＆") && !n.contains("、") && !n.contains("，") && !n.contains(",") && !n.contains(" ") && !n.contains("-") && !n.contains("《") && !n.contains("》") && !n.contains("(") && !n.contains("（")
+    }
+
+    fun isCollection(track: SubTrack): Boolean { // [46v16] 歌单型：备注合集/专辑/歌单，且标题不像人名（人名合集归歌手 tab）
+        val remark = track.remark
+        return (remark.contains("合集") || remark.contains("专辑") || remark.contains("歌单")) && !isPersonName(track.title)
+    }"""
+src = src.replace(old_fn, new_fn, 1)
+
+# 补：artistsOf 规则一加“歌单”（备注“歌单”且标题是人名时，标题即歌手；标题是歌单名时由 okName 滤掉）
+old_rule1 = '            track.remark.contains("合集") || track.remark.contains("专辑") -> track.title.ifBlank { null }'
+assert src.count(old_rule1) == 1, "rule1 anchor count %d" % src.count(old_rule1)
+src = src.replace(old_rule1, '            track.remark.contains("合集") || track.remark.contains("专辑") || track.remark.contains("歌单") -> track.title.ifBlank { null } // [46v16] 规则一加歌单', 1)
+
+assert src.count("fun isPersonName") == 1
+assert src.count("fun isCollection") == 1
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v16 bridge")
+PYEOF46V16A
+
+python3 - << 'PYEOF46V16B'
+import sys
+
+# 46 v16 曲库页：分桶整理——歌手/歌单/榜单三分（歌手=推导歌手，歌单=合集型条目，榜单=按分类分段）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v16]" in src:
+    print("screen already 46v16, skip")
+    sys.exit(0)
+
+old_head = "；[46v15] 歌手过滤＋榜单只拉有用分类。"
+assert src.count(old_head) == 1, "head anchor count %d" % src.count(old_head)
+src = src.replace(old_head, "；[46v15] 歌手过滤＋榜单只拉有用分类；[46v16] 分桶整理（歌手/歌单/榜单三分）。", 1)
+
+# 1. 分桶原料 pool（放 artists 之前，artists 改用 pool）
+old_artists_head = "    val artists = remember(home, chartItems) { // [46v15] 歌手推导：拆合作歌手、去杂项、合集图优先"
+assert src.count(old_artists_head) == 1, "artists head count %d" % src.count(old_artists_head)
+src = src.replace(old_artists_head, """    val pool = remember(home, chartItems) { // [46v16] 分桶原料：首页＋全部分段，去杂项、去重
+        val names = home?.classes?.map { it.name } ?: emptyList()
+        ((home?.items ?: emptyList()) + chartItems)
+            .filter { !SubMusicBridge.isJunkName(it.title) && !names.contains(it.title.trim()) && it.title.trim() != "热门歌曲" }
+            .distinctBy { it.sourceKey + ":" + it.id }
+    }
+
+""" + old_artists_head, 1)
+
+old_all = "        val all = (home?.items ?: emptyList()) + chartItems"
+assert src.count(old_all) == 1, "all anchor count %d" % src.count(old_all)
+src = src.replace(old_all, "        val all = pool", 1)
+
+old_artists_tail = """        seen.map { (name, pic) -> name to pic }
+    }"""
+assert src.count(old_artists_tail) == 1, "artists tail count %d" % src.count(old_artists_tail)
+src = src.replace(old_artists_tail, old_artists_tail + """
+
+    val playlists = remember(pool) { // [46v16] 歌单桶：合集型条目（人名合集除外，归歌手）
+        pool.filter { SubMusicBridge.isCollection(it) }
+    }""", 1)
+
+# 2. Tab 标签三分
+old_tabs = 'listOf("歌手", "榜单").forEachIndexed { i, label -> // [46v12] 歌单改歌手'
+assert src.count(old_tabs) == 1, "tabs anchor count %d" % src.count(old_tabs)
+src = src.replace(old_tabs, 'listOf("歌手", "歌单", "榜单").forEachIndexed { i, label -> // [46v16] 分桶三分', 1)
+
+# 3. applyTab：t==1 歌单为派生视图，不拉数据
+old_t0 = """        if (t == 0) {
+            gridItems = emptyList()
+            gridNote = ""
+            return
+        }"""
+assert src.count(old_t0) == 1, "t0 anchor count %d" % src.count(old_t0)
+src = src.replace(old_t0, old_t0 + """
+        if (t == 1) { // [46v16] 歌单 tab：派生视图，不拉数据
+            gridItems = emptyList()
+            gridNote = ""
+            return
+        }""", 1)
+
+# 4. 分段视图改 tab==2
+old_sec = "            if (tab == 1 && chartDetail == null) { // [46v13] 榜单分段视图"
+assert src.count(old_sec) == 1, "sec anchor count %d" % src.count(old_sec)
+src = src.replace(old_sec, "            if (tab == 2 && chartDetail == null) { // [46v13] 榜单分段视图", 1)
+
+# 5. 歌单分支插在歌手分支之后、兜底网格之前
+old_grid_branch = """                        items(artists, key = { it.first }) { a ->
+                            SubArtistCard(name = a.first, pic = a.second, onClick = { openArtist(a.first) })
+                        }
+                    }
+                }
+            } else {"""
+assert src.count(old_grid_branch) == 1, "grid branch anchor count %d" % src.count(old_grid_branch)
+new_grid_branch = """                        items(artists, key = { it.first }) { a ->
+                            SubArtistCard(name = a.first, pic = a.second, onClick = { openArtist(a.first) })
+                        }
+                    }
+                }
+            } else if (tab == 1) { // [46v16] 歌单 tab：合集型条目网格
+                if (playlists.isEmpty()) {
+                    Text(
+                        text = "该源暂无歌单",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(playlists, key = { it.sourceKey + ":" + it.id }) { track ->
+                            SubGridCard(track = track, onPlay = { playTrack(track, playlists) })
+                        }
+                    }
+                }
+            } else {"""
+src = src.replace(old_grid_branch, new_grid_branch, 1)
+
+# 6. 返回榜单与名次改 tab==2
+old_back = "                if (tab == 1 && chartDetail != null) { // [46v13] 从分类整页回分段视图"
+assert src.count(old_back) == 1, "back anchor count %d" % src.count(old_back)
+src = src.replace(old_back, "                if (tab == 2 && chartDetail != null) { // [46v13] 从分类整页回分段视图", 1)
+
+old_rank = "rank = if (tab == 1) idx + 1 else null"
+assert src.count(old_rank) == 1, "rank anchor count %d" % src.count(old_rank)
+src = src.replace(old_rank, "rank = if (tab == 2) idx + 1 else null", 1)
+
+assert src.count('listOf("歌手", "歌单", "榜单")') == 1
+assert src.count("fun isCollection") == 0  # screen must not define it, only call it
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v16 screen")
+PYEOF46V16B
+
+grep -q "46v16" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v16 bridge"; exit 1; }
+grep -q "46v16" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v16 screen"; exit 1; }
+echo "OK 46v16"
+echo "=== 46 v16 done ==="
