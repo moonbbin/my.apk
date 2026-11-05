@@ -6655,3 +6655,123 @@ python3 /tmp/patch_screen46v26.py
 grep -q "46v26" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v26 screen"; exit 1; }
 echo "OK 46v26"
 echo "=== 46 v26 done ==="
+
+echo "=== 46 v27 ==="
+cat > /tmp/patch_screen46v27.py << 'PYEOF46V27'
+import sys
+
+# 46 v27（桥接＋曲库屏）：订阅带头播放（主体能播、专区报网络异常的根因修法；配 21 v56）——
+# 探针用浏览器 UA＋Range 能拿到文件头（498kbps 已量出），ExoPlayer 用默认 UA、什么头都不带，被源站挡了→onPlayerError 网络类分支报网络异常；
+# 主体在 PlayLoader.mergeSiteHeaders＋PlayUrlResolver.jsonParse 把源站 header 与结果里的 UA/Referer 带上。
+# 修法：resolvePlay 从 playerContent 返回里取头（header/headers 对象＋user-agent/referer，data 包裹也认；源站 header 只补没有的键），随 Ok 一起带出；
+# 曲库 playTrack 把头传进 LxPlayerManager.play()（headers 参数，21 v56 接）；切歌/自动下一首走 21 v55 的 resolveAndPlay，同样带头（21 v56 改）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v27]" in src:
+    print("bridge already 46v27, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+# 1) Ok 带头返回（默认空 map，老调用点不用改）
+rep(
+    "        data class Ok(val url: String) : PlayResult",
+    "        data class Ok(val url: String, val headers: Map<String, String> = emptyMap()) : PlayResult // [46v27] 订阅带头播放：playerContent 返回的头一起带出",
+    "ok-with-headers",
+)
+
+# 2) resolvePlay 之前插入 extractPlayHeaders
+rep(
+    "    suspend fun resolvePlay(track: SubTrack): PlayResult = withContext(Dispatchers.IO) {",
+    """    // [46v27] 订阅带头播放：取 playerContent 返回里的头（主体 PlayUrlResolver.jsonParse＋mergeSiteHeaders 口径：结果里的 header/headers 对象＋user-agent/referer，data 包裹也认；源站 header 只补没有的键）
+    private fun extractPlayHeaders(pj: JSONObject, siteHeader: Map<String, String>?): Map<String, String> {
+        val map = LinkedHashMap<String, String>()
+        val data = pj.optJSONObject("data")
+        for (o in listOf(pj, data)) {
+            if (o == null) continue
+            val h = o.optJSONObject("header") ?: o.optJSONObject("headers")
+            if (h != null) {
+                val keys = h.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    val v = h.optString(k)
+                    if (v.isNotBlank()) map[k] = v
+                }
+            }
+            val ua = o.optString("user-agent")
+            if (ua.isNotBlank()) map["User-Agent"] = ua
+            val ref = o.optString("referer")
+            if (ref.isNotBlank()) map["Referer"] = ref
+        }
+        siteHeader?.forEach { (k, v) -> if (!map.containsKey(k) && v.isNotBlank()) map[k] = v }
+        return map
+    }
+
+    suspend fun resolvePlay(track: SubTrack): PlayResult = withContext(Dispatchers.IO) {""",
+    "insert-extractPlayHeaders",
+)
+
+# 3) resolvePlay 返回带头
+rep(
+    "            PlayResult.Ok(url)",
+    "            PlayResult.Ok(url, extractPlayHeaders(pj, bean.header)) // [46v27] 带头返回",
+    "ok-return-headers",
+)
+
+# 后验：标记在位，括号平衡，标记注释不吞码
+assert src.count("[46v27]") >= 3
+assert src.count("(") - src.count(")") == 0
+assert src.count("{") - src.count("}") == 0
+assert src.count("[") - src.count("]") == 0
+for line in src.splitlines():
+    if "// [46v27]" in line:
+        after = line.split("// [46v27]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 46v27 bridge")
+
+PYEOF46V27
+python3 /tmp/patch_screen46v27.py
+grep -q "46v27" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v27 bridge"; exit 1; }
+echo "OK 46v27 bridge"
+
+cat > /tmp/patch_screen46v27b.py << 'PYEOF46V27B'
+import sys
+
+# 46 v27（曲库屏）：playTrack 把桥接返回的头传进播放器
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v27]" in src:
+    print("screen already 46v27, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+rep(
+    "                    LxPlayerManager.play(r.url, track.title, track.sourceName, track.pic)",
+    "                    LxPlayerManager.play(r.url, track.title, track.sourceName, track.pic, headers = r.headers) // [46v27] 订阅带头播放",
+    "playTrack-headers",
+)
+
+assert src.count("[46v27]") >= 1
+assert src.count("(") - src.count(")") == 0
+assert src.count("{") - src.count("}") == 0
+assert src.count("[") - src.count("]") == 0
+for line in src.splitlines():
+    if "// [46v27]" in line:
+        after = line.split("// [46v27]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 46v27 screen")
+
+PYEOF46V27B
+python3 /tmp/patch_screen46v27b.py
+grep -q "46v27" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v27 screen"; exit 1; }
+echo "OK 46v27 screen"
+echo "=== 46 v27 done ==="
