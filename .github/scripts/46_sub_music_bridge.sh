@@ -7403,3 +7403,63 @@ python3 /tmp/patch_bridge46v34.py
 grep -q "46v34" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v34 bridge"; exit 1; }
 echo "OK 46v34 bridge"
 echo "=== 46 v34 done ==="
+
+echo "=== 46 v35 ==="
+cat > /tmp/patch_bridge46v35.py << 'PYEOF46V35'
+import sys
+
+# 46 v35：数组拆包只认 http 地址——用户装 v34 后日志钉死：v34 已装（报错从 2001 变 2005），但拆包取了第一项“立体声无损”
+# （纯音质标签，不是地址），播放器把它当文件路径、报 code=2005 FILE_NOT_FOUND。根因：酷我蜘蛛的 url 数组第一项是音质标签，
+# 真地址在后面某项（00:34 日志里数组尾就是一条真地址 …&loginUid$）。v34 只取第一项是错的。
+# 修法：拆包时跳过纯标签，只认以 http 开头的项；项若是“标签$地址”格式，先取 $ 后的地址（只在项不以 http 开头时切，地址本身含 $ 不受影响）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+src = open(path, encoding="utf-8").read()
+if "[46v35]" in src:
+    print("bridge already 46v35, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+rep(
+    """                    for (i in 0 until arr.length()) {
+                        var s = arr.optString(i, "")
+                        if (s.startsWith("video://")) s = s.substring(8)
+                        if (s.startsWith("proxy://") || s.isBlank()) continue
+                        found = s
+                        break
+                    }
+                    if (found.isNotBlank()) { url = found; normParse = 0 }""",
+    """                    for (i in 0 until arr.length()) {
+                        var s = arr.optString(i, "")
+                        if (!s.startsWith("http") && s.contains('$')) s = s.substringAfter('$') // [46v35] 项可能是标签加美元符加地址，取美元符后的地址
+                        if (s.startsWith("video://")) s = s.substring(8)
+                        if (s.startsWith("proxy://") || s.isBlank()) continue
+                        if (!s.startsWith("http")) continue // [46v35] 只认 http 地址，跳过纯标签
+                        found = s
+                        break
+                    }
+                    try { LxRuntimeLog.add("[46v35] 数组共" + arr.length() + "项，首项=" + arr.optString(0, "").take(24) + "，选中=" + found.take(40)) } catch (_: Exception) { } // [46v35] 诊断：数组结构
+                    if (found.isNotBlank()) { url = found; normParse = 0 }""",
+    "array-pick-http-only",
+)
+
+# 后验：标记在位，括号平衡，标记注释不吞码
+assert src.count("[46v35]") >= 3
+assert src.count("(") - src.count(")") == 0
+assert src.count("{") - src.count("}") == 0
+assert src.count("[") - src.count("]") == 0
+for line in src.splitlines():
+    if "// [46v35]" in line:
+        after = line.split("// [46v35]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 46v35 bridge")
+
+PYEOF46V35
+python3 /tmp/patch_bridge46v35.py
+grep -q "46v35" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v35 bridge"; exit 1; }
+echo "OK 46v35 bridge"
+echo "=== 46 v35 done ==="
