@@ -1315,3 +1315,1152 @@ private fun SubTrackRow(track: SubMusicBridge.SubTrack, onPlay: () -> Unit) {
 KOTEOF8
 echo "OK 46v8"
 echo "=== 46 v8 done ==="
+
+# === 46 v9: 整区源内化（底栏曲库/搜索/我的/设置/首页；顶栏源内源 Sheet；曲库卡片网格；搜索/我的新页；源内 Tab 与开关删除；空源四数诊断） ===
+
+echo "=== 46 v9 ==="
+
+cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt << 'KOTEOF9'
+package com.github.tvbox.osc.ui.activity
+
+// [46v8] 订阅源内音乐桥接：只读主体 ApiConfig 订阅列表，不改主体代码。
+// 筛源规则：源名按 ┆ 切段含“音乐”段 + searchable=1；播链：searchContent -> detailContent -> playerContent。
+// 浏览链（Peek 式）：homeContent -> class/list；categoryContent(tid, "1") -> list；榜单类优先含 榜/排行/热 的分类。
+
+import com.github.tvbox.osc.api.ApiConfig
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+
+object SubMusicBridge {
+
+    const val PREFS = "sub_music_settings"
+    const val KEY_ENABLED = "sub_music_enabled"
+
+    fun isEnabled(context: android.content.Context): Boolean {
+        return context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+            .getBoolean(KEY_ENABLED, false)
+    }
+
+    fun setEnabled(context: android.content.Context, on: Boolean) {
+        context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_ENABLED, on).apply()
+    }
+
+    data class SubSource(val key: String, val displayName: String)
+
+    data class SubTrack(
+        val sourceKey: String,
+        val sourceName: String,
+        val id: String,
+        val title: String,
+        val pic: String,
+        val remark: String
+    )
+
+    data class SubClass(val id: String, val name: String)
+
+    data class SubHome(val classes: List<SubClass>, val items: List<SubTrack>)
+
+    fun isMusicSource(name: String): Boolean {
+        return name.split("┆").any { it.contains("音乐") }
+    }
+
+    fun displayName(raw: String): String {
+        val segs = raw.split("┆").map { it.trim() }.filter { it.isNotEmpty() }
+        val idx = segs.indexOfFirst { it.contains("音乐") }
+        return when {
+            idx > 0 -> segs[idx - 1]
+            idx == 0 && segs.size > 1 -> segs[1]
+            else -> raw
+        }
+    }
+
+    private fun musicBeans(): List<com.github.tvbox.osc.bean.SourceBean> {
+        return try {
+            ApiConfig.get().getSwitchSourceBeanList()
+                .filter { it.isSearchable() && isMusicSource(it.name ?: "") }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun loadMusicSources(): List<SubSource> {
+        return musicBeans().map { SubSource(it.key ?: "", displayName(it.name ?: "")) }
+    }
+
+    data class SourceDiag(val total: Int, val visible: Int, val nameMatched: Int, val finalCount: Int)
+
+    fun diagnoseSources(): SourceDiag? { // [46v9] 空源诊断：四数定位筛源哪一步掉光
+        return try {
+            val all = ApiConfig.get().getSourceBeanList()
+            val vis = ApiConfig.get().getSwitchSourceBeanList()
+            val named = vis.filter { isMusicSource(it.name ?: "") }
+            val fin = named.filter { it.isSearchable() }
+            SourceDiag(all.size, vis.size, named.size, fin.size)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun parseTrackList(arr: JSONArray?, sourceKey: String, sourceName: String): List<SubTrack> {
+        if (arr == null) return emptyList()
+        val out = mutableListOf<SubTrack>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val id = o.optString("vod_id")
+            val title = o.optString("vod_name")
+            if (id.isBlank() || title.isBlank()) continue
+            out.add(
+                SubTrack(
+                    sourceKey,
+                    sourceName,
+                    id,
+                    title,
+                    o.optString("vod_pic"),
+                    o.optString("vod_remarks")
+                )
+            )
+        }
+        return out
+    }
+
+    suspend fun search(keyword: String): List<SubTrack> = withContext(Dispatchers.IO) {
+        val beans = musicBeans()
+        if (beans.isEmpty()) return@withContext emptyList()
+        beans.map { bean ->
+            async {
+                try {
+                    val sp = ApiConfig.get().getCSP(bean)
+                    val json = sp.searchContent(keyword, false) ?: return@async emptyList<SubTrack>()
+                    val arr = JSONObject(json).optJSONArray("list") ?: return@async emptyList<SubTrack>()
+                    parseTrackList(arr, bean.key ?: "", displayName(bean.name ?: ""))
+                } catch (e: Exception) {
+                    emptyList()
+                }
+            }
+        }.awaitAll().flatten()
+    }
+
+    suspend fun searchInSource(sourceKey: String, keyword: String): List<SubTrack> = withContext(Dispatchers.IO) { // [46v9]
+        try {
+            val bean = ApiConfig.get().getSource(sourceKey) ?: return@withContext emptyList()
+            val sp = ApiConfig.get().getCSP(bean)
+            val json = sp.searchContent(keyword, false) ?: return@withContext emptyList()
+            val arr = JSONObject(json).optJSONArray("list") ?: return@withContext emptyList()
+            parseTrackList(arr, sourceKey, displayName(bean.name ?: ""))
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun home(sourceKey: String): SubHome = withContext(Dispatchers.IO) {
+        try {
+            val bean = ApiConfig.get().getSource(sourceKey) ?: return@withContext SubHome(emptyList(), emptyList())
+            val sp = ApiConfig.get().getCSP(bean)
+            val json = sp.homeContent(false) ?: return@withContext SubHome(emptyList(), emptyList())
+            val jo = JSONObject(json)
+            val classes = mutableListOf<SubClass>()
+            val carr = jo.optJSONArray("class")
+            if (carr != null) {
+                for (i in 0 until carr.length()) {
+                    val o = carr.optJSONObject(i) ?: continue
+                    val id = o.optString("type_id").ifBlank { o.optString("id") }
+                    val name = o.optString("type_name").ifBlank { o.optString("name") }
+                    if (id.isNotBlank() && name.isNotBlank()) classes.add(SubClass(id, name))
+                }
+            }
+            val items = parseTrackList(jo.optJSONArray("list"), sourceKey, displayName(bean.name ?: ""))
+            SubHome(classes, items)
+        } catch (e: Exception) {
+            SubHome(emptyList(), emptyList())
+        }
+    }
+
+    fun chartClass(classes: List<SubClass>): SubClass? {
+        return classes.firstOrNull {
+            it.name.contains("榜") || it.name.contains("排行") || it.name.contains("热")
+        } ?: classes.firstOrNull()
+    }
+
+    suspend fun category(sourceKey: String, tid: String): List<SubTrack> = withContext(Dispatchers.IO) {
+        try {
+            val bean = ApiConfig.get().getSource(sourceKey) ?: return@withContext emptyList()
+            val sp = ApiConfig.get().getCSP(bean)
+            val json = sp.categoryContent(tid, "1", false, HashMap()) ?: return@withContext emptyList()
+            val jo = JSONObject(json)
+            parseTrackList(jo.optJSONArray("list"), sourceKey, displayName(bean.name ?: ""))
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    sealed interface PlayResult {
+        data class Ok(val url: String) : PlayResult
+        data class Fail(val msg: String) : PlayResult
+    }
+
+    suspend fun resolvePlay(track: SubTrack): PlayResult = withContext(Dispatchers.IO) {
+        try {
+            val bean = ApiConfig.get().getSource(track.sourceKey)
+                ?: return@withContext PlayResult.Fail("源已不存在")
+            val sp = ApiConfig.get().getCSP(bean)
+            val detail = sp.detailContent(listOf(track.id))
+                ?: return@withContext PlayResult.Fail("详情为空")
+            val d = JSONObject(detail)
+            val item = d.optJSONArray("list")?.optJSONObject(0) ?: d
+            val from = item.optString("vod_play_from")
+            val urls = item.optString("vod_play_url")
+            if (from.isBlank() || urls.isBlank()) return@withContext PlayResult.Fail("该条目无播放地址")
+            val flag = from.split("$$$")[0]
+            val firstGroup = urls.split("$$$")[0]
+            val firstEp = firstGroup.split("#")[0]
+            val playId = firstEp.substringAfter("$", firstEp)
+            val pr = sp.playerContent(flag, playId, ApiConfig.get().getVipParseFlags())
+                ?: return@withContext PlayResult.Fail("取播放地址失败")
+            val pj = JSONObject(pr)
+            val parse = pj.optInt("parse", 0)
+            val url = pj.optString("url")
+            if (url.isBlank()) return@withContext PlayResult.Fail("播放地址为空")
+            if (parse == 1) return@withContext PlayResult.Fail("该源需要解析，源内音乐 v1 暂不支持解析播放")
+            PlayResult.Ok(url)
+        } catch (e: Exception) {
+            PlayResult.Fail("播放失败：${e.message}")
+        }
+    }
+}
+KOTEOF9
+
+cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt << 'KOTEOF9'
+package com.github.tvbox.osc.ui.activity
+
+// [46v9] 曲库页：Peek 式（顶栏源驱动 + 搜索框入口 + 歌单/榜单 Tab + 卡片网格）；播走 LxPlayerManager.play 裸地址，不进落雪队列；源选择由顶栏 Sheet 驱动，本页只读。
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
+
+@Composable
+fun SubMusicScreen(
+    sources: List<SubMusicBridge.SubSource>,
+    selectedKey: String?,
+    diag: SubMusicBridge.SourceDiag?,
+    onSearchClick: () -> Unit
+) {
+    val selected = sources.firstOrNull { it.key == selectedKey } ?: sources.firstOrNull()
+    var tab by remember { mutableStateOf(0) }
+    var home by remember { mutableStateOf<SubMusicBridge.SubHome?>(null) }
+    var gridItems by remember { mutableStateOf<List<SubMusicBridge.SubTrack>>(emptyList()) }
+    var gridLoading by remember { mutableStateOf(false) }
+    var gridNote by remember { mutableStateOf("") }
+    var notice by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+
+    fun applyTab(src: SubMusicBridge.SubSource, t: Int, h: SubMusicBridge.SubHome?) {
+        if (t == 0) {
+            gridItems = h?.items ?: emptyList()
+            gridNote = if (h == null || h.items.isEmpty()) "该源暂无浏览内容" else ""
+            return
+        }
+        val cls = h?.let { SubMusicBridge.chartClass(it.classes) }
+        if (cls == null) {
+            gridItems = emptyList()
+            gridNote = "该源暂无分类"
+            return
+        }
+        gridLoading = true
+        scope.launch {
+            try {
+                gridItems = SubMusicBridge.category(src.key, cls.id)
+                gridNote = if (gridItems.isEmpty()) "该分类暂无内容" else ""
+            } catch (e: Exception) {
+                gridItems = emptyList()
+                gridNote = "加载失败：${e.message}"
+            } finally {
+                gridLoading = false
+            }
+        }
+    }
+
+    fun loadBrowse(src: SubMusicBridge.SubSource) {
+        gridLoading = true
+        gridNote = ""
+        scope.launch {
+            try {
+                val h = SubMusicBridge.home(src.key)
+                home = h
+                gridLoading = false
+                applyTab(src, tab, h)
+            } catch (e: Exception) {
+                gridLoading = false
+                home = null
+                gridItems = emptyList()
+                gridNote = "加载失败：${e.message}"
+            }
+        }
+    }
+
+    LaunchedEffect(selected?.key) {
+        val src = selected
+        if (src != null) loadBrowse(src)
+    }
+
+    fun playTrack(track: SubMusicBridge.SubTrack) {
+        notice = "正在取播放地址…"
+        scope.launch {
+            when (val r = SubMusicBridge.resolvePlay(track)) {
+                is SubMusicBridge.PlayResult.Ok -> {
+                    LxPlayerManager.play(r.url, track.title, track.sourceName, track.pic)
+                    notice = ""
+                }
+                is SubMusicBridge.PlayResult.Fail -> {
+                    notice = r.msg
+                }
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(musicColors().background)
+    ) {
+        if (selected == null) {
+            Text(
+                text = "暂无音乐源：请先在主体订阅里添加带┆音乐┆分类的源",
+                style = MaterialTheme.typography.bodyMedium,
+                color = musicColors().textSecondary,
+                modifier = Modifier.padding(16.dp)
+            )
+            if (diag != null) {
+                Text(
+                    text = "诊断：订阅源共 " + diag.total + " 个，其中未隐藏 " + diag.visible + " 个，名字带┆音乐┆的 " + diag.nameMatched + " 个，可搜索 " + diag.finalCount + " 个",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = musicColors().textSecondary,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSearchClick() }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val searchTint = musicColors().textSecondary
+                Canvas(modifier = Modifier.size(20.dp)) {
+                    val sw = 2.dp.toPx()
+                    drawCircle(
+                        color = searchTint,
+                        radius = 6.dp.toPx(),
+                        center = androidx.compose.ui.geometry.Offset(8.dp.toPx(), 8.dp.toPx()),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw)
+                    )
+                    drawLine(
+                        color = searchTint,
+                        start = androidx.compose.ui.geometry.Offset(12.5.dp.toPx(), 12.5.dp.toPx()),
+                        end = androidx.compose.ui.geometry.Offset(17.dp.toPx(), 17.dp.toPx()),
+                        strokeWidth = sw,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "搜索歌曲、歌手…",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = musicColors().textSecondary
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                listOf("歌单", "榜单").forEachIndexed { i, label ->
+                    Column(
+                        modifier = Modifier
+                            .clickable {
+                                if (tab != i) {
+                                    tab = i
+                                    val src = selected
+                                    if (src != null) applyTab(src, i, home)
+                                }
+                            }
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (tab == i) FontWeight.Bold else FontWeight.Normal,
+                            color = if (tab == i) musicColors().accent else musicColors().textSecondary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .width(20.dp)
+                                .height(2.dp)
+                                .background(if (tab == i) musicColors().accent else musicColors().background)
+                        )
+                    }
+                }
+            }
+            if (notice.isNotBlank()) {
+                Text(
+                    text = notice,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = musicColors().textSecondary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
+            if (gridLoading) {
+                Text(
+                    text = "正在加载浏览内容…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = musicColors().textSecondary,
+                    modifier = Modifier.padding(16.dp)
+                )
+            } else if (gridNote.isNotBlank()) {
+                Text(
+                    text = gridNote,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = musicColors().textSecondary,
+                    modifier = Modifier.padding(16.dp)
+                )
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(gridItems, key = { it.sourceKey + ":" + it.id }) { track ->
+                        SubGridCard(track = track, onPlay = { playTrack(track) })
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SubGridCard(track: SubMusicBridge.SubTrack, onPlay: () -> Unit) {
+    val accent = musicColors().accent
+    val accentText = musicColors().accentText
+    val cardBg = musicColors().card
+    Column(modifier = Modifier.clickable { onPlay() }) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(MaterialTheme.shapes.medium)
+                .background(cardBg)
+        ) {
+            if (track.pic.isNotBlank()) {
+                AsyncImage(
+                    model = track.pic,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = track.title.take(1),
+                        color = musicColors().textSecondary
+                    )
+                }
+            }
+            if (track.remark.isNotBlank()) {
+                Text(
+                    text = track.remark,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = musicColors().textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .clip(MaterialTheme.shapes.small)
+                        .background(cardBg.copy(alpha = 0.8f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(8.dp)
+                    .size(32.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(accent)
+                    .clickable { onPlay() },
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(modifier = Modifier.size(14.dp)) {
+                    val p = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(4.dp.toPx(), 2.dp.toPx())
+                        lineTo(4.dp.toPx(), 12.dp.toPx())
+                        lineTo(12.dp.toPx(), 7.dp.toPx())
+                        close()
+                    }
+                    drawPath(path = p, color = accentText)
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = track.title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = musicColors().textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+KOTEOF9
+
+cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubSearchScreen.kt << 'KOTEOF9'
+package com.github.tvbox.osc.ui.activity
+
+// [46v9] 搜索页：搜当前源内源（顶栏 Sheet 选源）；播走 LxPlayerManager.play 裸地址，不进落雪队列。
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
+
+@Composable
+fun SubSearchScreen(
+    sources: List<SubMusicBridge.SubSource>,
+    selectedKey: String?,
+    diag: SubMusicBridge.SourceDiag?
+) {
+    val selected = sources.firstOrNull { it.key == selectedKey } ?: sources.firstOrNull()
+    var keyword by remember { mutableStateOf("") }
+    var searching by remember { mutableStateOf(false) }
+    var searched by remember { mutableStateOf(false) }
+    var results by remember { mutableStateOf<List<SubMusicBridge.SubTrack>>(emptyList()) }
+    var notice by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+
+    fun doSearch() {
+        val kw = keyword.trim()
+        val src = selected
+        if (kw.isEmpty() || searching || src == null) return
+        searching = true
+        searched = false
+        notice = ""
+        scope.launch {
+            try {
+                results = SubMusicBridge.searchInSource(src.key, kw)
+                searched = true
+            } catch (e: Exception) {
+                notice = "搜索失败：${e.message}"
+            } finally {
+                searching = false
+            }
+        }
+    }
+
+    fun playTrack(track: SubMusicBridge.SubTrack) {
+        notice = "正在取播放地址…"
+        scope.launch {
+            when (val r = SubMusicBridge.resolvePlay(track)) {
+                is SubMusicBridge.PlayResult.Ok -> {
+                    LxPlayerManager.play(r.url, track.title, track.sourceName, track.pic)
+                    notice = ""
+                }
+                is SubMusicBridge.PlayResult.Fail -> {
+                    notice = r.msg
+                }
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(musicColors().background)
+    ) {
+        if (selected == null) {
+            Text(
+                text = "暂无音乐源：请先在主体订阅里添加带┆音乐┆分类的源",
+                style = MaterialTheme.typography.bodyMedium,
+                color = musicColors().textSecondary,
+                modifier = Modifier.padding(16.dp)
+            )
+            if (diag != null) {
+                Text(
+                    text = "诊断：订阅源共 " + diag.total + " 个，其中未隐藏 " + diag.visible + " 个，名字带┆音乐┆的 " + diag.nameMatched + " 个，可搜索 " + diag.finalCount + " 个",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = musicColors().textSecondary,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextField(
+                    value = keyword,
+                    onValueChange = { keyword = it },
+                    label = { Text(text = "搜当前源：" + selected.displayName) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { doSearch() }),
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(onClick = { doSearch() }, enabled = !searching) {
+                    Text(text = if (searching) "搜…" else "搜索")
+                }
+            }
+            if (notice.isNotBlank()) {
+                Text(
+                    text = notice,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = musicColors().textSecondary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
+            if (searching) {
+                Text(
+                    text = "正在搜索…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = musicColors().textSecondary,
+                    modifier = Modifier.padding(16.dp)
+                )
+            } else if (searched) {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(results, key = { it.sourceKey + ":" + it.id }) { track ->
+                        SubTrackRow(track = track, onPlay = { playTrack(track) })
+                    }
+                    if (results.isEmpty()) {
+                        item {
+                            Text(
+                                text = "没有搜到结果",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = musicColors().textSecondary,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
+                    }
+                }
+            } else {
+                Text(
+                    text = "在上方输入关键词，搜当前源：" + selected.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = musicColors().textSecondary,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SubTrackRow(track: SubMusicBridge.SubTrack, onPlay: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onPlay() }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (track.pic.isNotBlank()) {
+            AsyncImage(
+                model = track.pic,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                    .background(musicColors().card),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = track.title.take(1),
+                    color = musicColors().textSecondary
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = track.title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = musicColors().textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = track.sourceName + if (track.remark.isNotBlank()) " · " + track.remark else "",
+                style = MaterialTheme.typography.bodySmall,
+                color = musicColors().textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+KOTEOF9
+
+cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMineScreen.kt << 'KOTEOF9'
+package com.github.tvbox.osc.ui.activity
+
+// [46v9] 我的页：先放我的喜欢 + 播放历史两块现成的（与设置页同一入口）。
+
+import android.content.Intent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+
+@Composable
+fun SubMineScreen() {
+    val context = LocalContext.current
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(musicColors().background)
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "我的",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = musicColors().textPrimary
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    context.startActivity(Intent(context, com.github.tvbox.osc.ui.activity.LxFavoritesActivity::class.java))
+                }
+                .padding(vertical = 14.dp)
+        ) {
+            Text(
+                text = "我的喜欢",
+                style = MaterialTheme.typography.bodyLarge,
+                color = musicColors().textPrimary
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "收藏的歌曲",
+                style = MaterialTheme.typography.bodySmall,
+                color = musicColors().textSecondary
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    context.startActivity(Intent(context, com.github.tvbox.osc.ui.activity.LxHistoryActivity::class.java))
+                }
+                .padding(vertical = 14.dp)
+        ) {
+            Text(
+                text = "播放历史",
+                style = MaterialTheme.typography.bodyLarge,
+                color = musicColors().textPrimary
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "最近播放的歌曲",
+                style = MaterialTheme.typography.bodySmall,
+                color = musicColors().textSecondary
+            )
+        }
+    }
+}
+KOTEOF9
+
+python3 - << 'PYEOF46V9'
+import sys
+
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v9]" in src:
+    print("MH already 46v9, skip")
+    sys.exit(0)
+
+
+def rep(old, new, n=1):
+    global src
+    assert src.count(old) == n, "anchor count %d != %d: %r" % (src.count(old), n, old[:100])
+    src = src.replace(old, new, n)
+
+
+# ---- 1. 枚举：QUKU / MINE 加在注释前（注释吞码教训：插在 // 之前）----
+lines = src.split("\n")
+enum_idx = [i for i, ln in enumerate(lines) if ln.strip() == "SEARCH, RANKING, RECOMMEND, PLAYLIST, SETTINGS, HOME, SUBMUSIC // [40rec]"]
+assert len(enum_idx) == 1, "enum line not found"
+lines[enum_idx[0]] = "    SEARCH, RANKING, RECOMMEND, PLAYLIST, SETTINGS, HOME, SUBMUSIC, QUKU, MINE // [40rec] // [46v9]"
+src = "\n".join(lines)
+
+# ---- 2. 状态块：删落雪平台状态 + 源内开关状态，换成源内源状态 ----
+old_state = """    var selectedTab by remember { mutableStateOf(initialTab) }
+    var subMusicOn by remember { mutableStateOf(SubMusicBridge.isEnabled(context)) } // [46v6]
+    // 源选择记忆：读上次的源，没有用 kg
+    var selectedPlatform by remember {
+        mutableStateOf(
+            context.getSharedPreferences("lx_music", Context.MODE_PRIVATE)
+                .getString("lx_last_source_id", "kg") ?: "kg"
+        )
+    }
+    var showPlatformMenu by remember { mutableStateOf(false) }
+    // 搜索 tab 分类卡点击后，要在排行 tab 预选的榜单
+    var pendingChartId by remember { mutableStateOf<String?>(null) }"""
+new_state = """    var selectedTab by remember { mutableStateOf(initialTab) }
+    // [46v9] 整区源内化：源内源状态由顶栏 Sheet 与曲库/搜索共用
+    var subSources by remember { mutableStateOf<List<SubMusicBridge.SubSource>>(emptyList()) }
+    var selectedSubKey by remember { mutableStateOf<String?>(null) }
+    var showSourceSheet by remember { mutableStateOf(false) }
+    var sourceDiag by remember { mutableStateOf<SubMusicBridge.SourceDiag?>(null) } // [46v9] 空源诊断四数
+    LaunchedEffect(Unit) {
+        try {
+            val list = SubMusicBridge.loadMusicSources()
+            subSources = list
+            if (selectedSubKey == null) selectedSubKey = list.firstOrNull()?.key
+            sourceDiag = SubMusicBridge.diagnoseSources()
+        } catch (_: Exception) { }
+    }"""
+rep(old_state, new_state)
+
+# ---- 3. 平台列表块删除 ----
+old_plat = """    // 平台列表：固定 5 大平台（用户要求）
+    val platforms = remember { listOf("wy", "tx", "kg", "kw", "mg") }
+    val platformNames = mapOf("wy" to "小芸", "tx" to "小秋", "kg" to "小枸", "kw" to "小蜗", "mg" to "小蜜")
+    if (selectedPlatform !in platforms) {
+        selectedPlatform = platforms.firstOrNull() ?: "kg"
+    }"""
+rep(old_plat, "")
+
+# ---- 4. 底栏 tabDefs97：5 Tab ----
+old_tabs = """                        val tabDefs97 = listOf(
+                            MusicTab.SEARCH to "搜索",
+                            MusicTab.RANKING to "排行",
+                            MusicTab.RECOMMEND to "推荐", // [40rec]
+                            MusicTab.PLAYLIST to "歌单",
+                            MusicTab.SUBMUSIC to "源内",
+                            MusicTab.SETTINGS to "设置",
+                            MusicTab.HOME to "首页",
+                        )"""
+new_tabs = """                        val tabDefs97 = listOf(
+                            MusicTab.QUKU to "曲库",
+                            MusicTab.SEARCH to "搜索",
+                            MusicTab.MINE to "我的",
+                            MusicTab.SETTINGS to "设置",
+                            MusicTab.HOME to "首页",
+                        )"""
+rep(old_tabs, new_tabs)
+
+# ---- 5. 门控删除 ----
+rep(
+    "                        (if (subMusicOn) tabDefs97 else tabDefs97.filter { it.first != MusicTab.SUBMUSIC }).forEach { (tab, label) ->",
+    "                        tabDefs97.forEach { (tab, label) ->",
+)
+
+# ---- 6. 设置页调用：去开关参数 ----
+rep(
+    "                    MusicSettingsList(onComingSoon = ::comingSoon, subMusicOn = subMusicOn, onSubMusicChange = { v -> subMusicOn = v; SubMusicBridge.setEnabled(context, v); if (!v && selectedTab == MusicTab.SUBMUSIC) selectedTab = MusicTab.SEARCH }) // [46v6] // 新版 SettingsScreen",
+    "                    MusicSettingsList(onComingSoon = ::comingSoon) // [46v9]",
+)
+
+# ---- 7. 设置页签名：去开关参数 ----
+rep(
+    "fun MusicSettingsList(onComingSoon: (String) -> Unit, subMusicOn: Boolean = false, onSubMusicChange: ((Boolean) -> Unit)? = null) { // [46v6]",
+    "fun MusicSettingsList(onComingSoon: (String) -> Unit) { // [46v9]",
+)
+
+# ---- 8. 源内音乐分组删除 ----
+lines = src.split("\n")
+item_idx = [i for i, ln in enumerate(lines) if 'SettingItem("源内音乐"' in ln]
+assert len(item_idx) == 1, "源内音乐 row not found"
+i = item_idx[0]
+j = i
+while lines[j].strip() != "SettingGroup(":
+    j -= 1
+k = i
+while lines[k].strip() != "),":
+    k += 1
+del lines[j:k + 1]
+src = "\n".join(lines)
+assert "源内音乐" not in src, "源内音乐 still present"
+
+# ---- 9. 内容 when：分支手术（自下而上，索引不漂移）----
+lines = src.split("\n")
+
+
+def find_line(prefix):
+    idx = [i for i, ln in enumerate(lines) if ln == prefix]
+    assert len(idx) == 1, "branch line not unique: %r -> %d" % (prefix, len(idx))
+    return idx[0]
+
+
+i_search = find_line("                MusicTab.SEARCH -> {")
+i_rank = find_line("                MusicTab.RANKING -> {")
+i_rec = find_line("                MusicTab.RECOMMEND -> { // [40rec]")
+i_play = find_line("                MusicTab.PLAYLIST -> {")
+i_set = find_line("                MusicTab.SETTINGS -> {")
+i_sub = find_line("                MusicTab.SUBMUSIC -> {")
+new_search = [
+    "                MusicTab.SEARCH -> {",
+    "                    SubSearchScreen(",
+    "                        sources = subSources,",
+    "                        selectedKey = subSources.firstOrNull { it.key == selectedSubKey }?.key,",
+    "                        diag = sourceDiag",
+    "                    ) // [46v9]",
+    "                }",
+]
+new_quku_mine = [
+    "                MusicTab.QUKU -> {",
+    "                    SubMusicScreen(",
+    "                        sources = subSources,",
+    "                        selectedKey = subSources.firstOrNull { it.key == selectedSubKey }?.key,",
+    "                        diag = sourceDiag,",
+    "                        onSearchClick = { selectedTab = MusicTab.SEARCH }",
+    "                    ) // [46v9]",
+    "                }",
+    "                MusicTab.MINE -> {",
+    "                    SubMineScreen() // [46v9]",
+    "                }",
+]
+# 自下而上：SUBMUSIC(替换) -> PLAYLIST(删) -> RECOMMEND(删) -> RANKING(删) -> SEARCH(替换)
+assert lines[i_sub + 1].strip().startswith("SubMusicScreen(onOpenSettings")
+assert lines[i_sub + 2] == "                }"
+lines[i_sub:i_sub + 3] = new_quku_mine
+lines[i_play:i_set] = []
+lines[i_rec:i_play] = []
+lines[i_rank:i_rec] = []
+lines[i_search:i_rank] = new_search
+src = "\n".join(lines)
+
+# ---- 10. effectiveTab：旧 Tab 兜底到曲库 ----
+rep(
+    "            when (selectedTab) {",
+    "            val effectiveTab = if (selectedTab == MusicTab.QUKU || selectedTab == MusicTab.SEARCH || selectedTab == MusicTab.MINE || selectedTab == MusicTab.SETTINGS || selectedTab == MusicTab.HOME) selectedTab else MusicTab.QUKU // [46v9]\n            when (effectiveTab) {",
+)
+
+# ---- 11. 顶栏 actions：平台下拉换成源内源按钮 ----
+lines = src.split("\n")
+act = [i for i, ln in enumerate(lines) if ln == "                actions = {"]
+assert len(act) == 1, "actions block not unique"
+ia = act[0]
+ic = ia + 1
+while lines[ic] != "                }":
+    ic += 1
+assert lines[ic + 1] == "            )", "topbar close mismatch: %r" % lines[ic + 1]
+new_actions = [
+    "                actions = {",
+    "                    // [46v9] 顶栏源内源：点开按订阅顺序排的 Sheet，选中驱动曲库/搜索",
+    "                    TextButton(onClick = { showSourceSheet = true }) {",
+    "                        Text(",
+    "                            subSources.firstOrNull { it.key == selectedSubKey }?.displayName ?: \"选择源\",",
+    "                            color = musicColors().textPrimary,",
+    "                            fontWeight = FontWeight.Bold",
+    "                        )",
+    "                    }",
+    "                }",
+]
+lines[ia:ic + 1] = new_actions
+src = "\n".join(lines)
+
+# ---- 12. 图标 when：QUKU / MINE 分支（插在 SUBMUSIC 空分支前）----
+lines = src.split("\n")
+icon_sub = [i for i, ln in enumerate(lines) if ln == "            MusicTab.SUBMUSIC -> { } // [46v7]"]
+assert len(icon_sub) == 1, "icon SUBMUSIC branch not found"
+new_icons = [
+    "            MusicTab.QUKU -> { // [46v9] 曲库：音符（圆 + 竖线 + 旗）",
+    "                drawCircle(color = tint, radius = 3.2.dp.toPx(), center = off(8f, 16f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw))",
+    "                drawLine(color = tint, start = off(11.2f, 16f), end = off(11.2f, 5f), strokeWidth = sw, cap = cap)",
+    "                drawLine(color = tint, start = off(11.2f, 5f), end = off(17f, 7f), strokeWidth = sw, cap = cap)",
+    "            }",
+    "            MusicTab.MINE -> { // [46v9] 我的：人形（头圆 + 肩弧）",
+    "                drawCircle(color = tint, radius = 3.4.dp.toPx(), center = off(12f, 8f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw))",
+    "                drawArc(color = tint, startAngle = 180f, sweepAngle = 180f, useCenter = false, topLeft = off(4f, 11f), size = androidx.compose.ui.geometry.Size(16.dp.toPx(), 12.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw))",
+    "            }",
+]
+lines[icon_sub[0]:icon_sub[0]] = new_icons
+src = "\n".join(lines)
+
+# ---- 13. 选源 Sheet：放在 Scaffold 之后、Provider 结束之前 ----
+lines = src.split("\n")
+prov = [i for i, ln in enumerate(lines) if ln == "        } // [39wp5] Provider 结束"]
+assert len(prov) == 1, "provider close not found"
+sheet = [
+    "        // [46v9] 选源 Sheet：订阅源按顺序排，选中驱动曲库/搜索",
+    "        if (showSourceSheet) {",
+    "            androidx.compose.ui.window.Dialog(onDismissRequest = { showSourceSheet = false }) {",
+    "                Column(",
+    "                    modifier = Modifier",
+    "                        .fillMaxWidth()",
+    "                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))",
+    "                        .background(musicColors().card)",
+    "                        .padding(16.dp)",
+    "                ) {",
+    "                    Text(",
+    "                        text = \"选择音乐源\",",
+    "                        style = MaterialTheme.typography.titleMedium,",
+    "                        fontWeight = FontWeight.Bold,",
+    "                        color = musicColors().textPrimary",
+    "                    )",
+    "                    Spacer(modifier = Modifier.height(12.dp))",
+    "                    if (subSources.isEmpty()) {",
+    "                        Text(",
+    "                            text = \"暂无音乐源：请先在主体订阅里添加带┆音乐┆分类的源\",",
+    "                            style = MaterialTheme.typography.bodyMedium,",
+    "                            color = musicColors().textSecondary",
+    "                        )",
+    "                        if (sourceDiag != null) {",
+    "                            Spacer(modifier = Modifier.height(8.dp))",
+    "                            Text(",
+    "                                text = \"诊断：订阅源共 \" + sourceDiag!!.total + \" 个，其中未隐藏 \" + sourceDiag!!.visible + \" 个，名字带┆音乐┆的 \" + sourceDiag!!.nameMatched + \" 个，可搜索 \" + sourceDiag!!.finalCount + \" 个\",",
+    "                                style = MaterialTheme.typography.bodySmall,",
+    "                                color = musicColors().textSecondary",
+    "                            )",
+    "                        }",
+    "                    } else {",
+    "                        subSources.forEach { s ->",
+    "                            Row(",
+    "                                modifier = Modifier",
+    "                                    .fillMaxWidth()",
+    "                                    .clickable { selectedSubKey = s.key; showSourceSheet = false }",
+    "                                    .padding(vertical = 10.dp),",
+    "                                verticalAlignment = Alignment.CenterVertically",
+    "                            ) {",
+    "                                Text(",
+    "                                    text = s.displayName,",
+    "                                    style = MaterialTheme.typography.bodyLarge,",
+    "                                    color = musicColors().textPrimary,",
+    "                                    modifier = Modifier.weight(1f)",
+    "                                )",
+    "                                if (s.key == selectedSubKey) {",
+    "                                    Text(",
+    "                                        text = \"已选\",",
+    "                                        style = MaterialTheme.typography.bodyMedium,",
+    "                                        color = musicColors().accent",
+    "                                    )",
+    "                                }",
+    "                            }",
+    "                        }",
+    "                    }",
+    "                    Spacer(modifier = Modifier.height(12.dp))",
+    "                    Button(onClick = { showSourceSheet = false }) {",
+    "                        Text(text = \"取消\")",
+    "                    }",
+    "                }",
+    "            }",
+    "        }",
+]
+lines[prov[0]:prov[0]] = sheet
+src = "\n".join(lines)
+
+# ---- 终验 ----
+for dead in ["selectedPlatform", "platformNames", "showPlatformMenu", "pendingChartId", "subMusicOn"]:
+    assert dead not in src, "leftover: " + dead
+for live in ["MusicTab.QUKU", "MusicTab.MINE", "SubSearchScreen(", "SubMineScreen(", "selectedSubKey", "showSourceSheet", "sourceDiag", "diagnoseSources"]:
+    assert live in src, "missing: " + live
+assert src.count("MusicTab.SUBMUSIC ->") == 1, "SUBMUSIC branches: %d" % src.count("MusicTab.SUBMUSIC ->")
+assert src.count("tabDefs97") >= 2
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v9 MH")
+PYEOF46V9
+echo "OK 46v9"
+echo "=== 46 v9 done ==="
