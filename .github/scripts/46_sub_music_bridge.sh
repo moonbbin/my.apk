@@ -5863,3 +5863,190 @@ grep -q "46v22" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusi
 grep -q "46v22" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v22 screen"; exit 1; }
 echo "OK 46v22"
 echo "=== 46 v22 done ==="
+
+# === 46 v23: 歌单首次就拉出来（用户确认：首次打开歌单空、去榜单回来才有） ===
+echo "=== 46 v23 ==="
+cat > /tmp/patch_screen46v23.py << 'PYEOF46V23'
+import sys
+
+# 46 v23（屏幕侧）：歌单首次就拉出来——
+# 根因：歌单 tab 是 chartItems 的派生视图（pool=home.items+chartItems），但分段拉取只在 applyTab(t==1) 里跑；
+# 首次停在歌单 tab 时 chartItems 为空，且该源 home.items 里没有歌单型条目，故首次空、去榜单走一圈才出现。
+# 改法：① 新 loadSections（分段拉取，换源时就启动，与 tab 无关；一源只拉一次，sectionsKey 守卫）；
+# ② loadBrowse 在 home 到手后先调 loadSections 再调 applyTab；③ applyTab(t==1) 不再自带拉取循环，只做兜底；
+# ④ 换源失败时清 sectionsKey/分段，容后重试；⑤ 歌单 tab 空时：还在拉分段显示“正在加载歌单…”，拉完仍空才说“该源暂无歌单”；
+# ⑥ 附带：换源时清 chartItems，避免旧源条目留在新源歌单池里
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v23]" in src:
+    print("screen already 46v23, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+# 1) sectionsKey 状态（放在 sectionsLoading 之后）
+rep(
+    "    var sectionsLoading by remember { mutableStateOf(false) } // [46v13] 分段加载中",
+    "    var sectionsLoading by remember { mutableStateOf(false) } // [46v13] 分段加载中\n"
+    "    var sectionsKey by remember { mutableStateOf<String?>(null) } // [46v23] 分段已拉的源 key（换源重拉，同源不重拉）",
+    "sections-key-state",
+)
+
+# 2) loadSections（插在 applyTab 之前；applyTab/loadBrowse 在其后调用）
+rep(
+    """    fun applyTab(src: SubMusicBridge.SubSource, t: Int, h: SubMusicBridge.SubHome?) { // [46v19] Peek 式两 tab：0=歌单，1=榜单（歌手 tab 拿掉）
+        chartDetail = null // [46v13] 回榜单视图
+        detailTitle = "" // [46v22] 换 tab 退出详情分集
+        detailTracks = emptyList()
+        if (t == 0) { // [46v16] 歌单 tab：派生视图，不拉数据
+            gridItems = emptyList()
+            gridNote = ""
+            return
+        }
+        if (h == null || h.classes.isEmpty()) {
+            chartSections = emptyList()
+            chartItems = emptyList()
+            gridNote = "该源暂无分类"
+            return
+        }
+        gridNote = ""
+        chartSections = emptyList()
+        sectionsLoading = true
+        scope.launch {
+            try {
+                for (cls in h.classes) { // [46v15] 只拉有用的分类：杂项分类、歌手类分类跳过不拉
+                    if (SubMusicBridge.isJunkName(cls.name) || cls.name.contains("歌手") || SubMusicBridge.isNavTitle(cls.name)) continue // [46v18] 导航类分类跳过不拉
+                    try {
+                        val items = SubMusicBridge.category(src.key, cls.id).filter { !SubMusicBridge.isJunkName(it.title) } // [46v15] 段内杂项条目过滤
+                        if (items.isNotEmpty()) {
+                            val ns = chartSections + Triple(cls.id, cls.name, items)
+                            chartSections = ns
+                            chartItems = ns.flatMap { it.third } // [46v13] 歌手推导覆盖全部分段
+                        }
+                    } catch (e: Exception) {
+                        // 单段失败跳过，不拦后段
+                    }
+                }
+            } finally {
+                sectionsLoading = false
+            }
+        }
+    }""",
+    """    fun loadSections(src: SubMusicBridge.SubSource, h: SubMusicBridge.SubHome?) { // [46v23] 分段拉取：换源时就拉，与 tab 无关
+        if (h == null || h.classes.isEmpty()) return
+        if (sectionsKey == src.key) return
+        sectionsKey = src.key
+        chartSections = emptyList()
+        chartItems = emptyList()
+        sectionsLoading = true
+        scope.launch {
+            try {
+                for (cls in h.classes) { // [46v15] 只拉有用的分类：杂项分类、歌手类分类跳过不拉
+                    if (SubMusicBridge.isJunkName(cls.name) || cls.name.contains("歌手") || SubMusicBridge.isNavTitle(cls.name)) continue // [46v18] 导航类分类跳过不拉
+                    try {
+                        val items = SubMusicBridge.category(src.key, cls.id).filter { !SubMusicBridge.isJunkName(it.title) } // [46v15] 段内杂项条目过滤
+                        if (items.isNotEmpty()) {
+                            val ns = chartSections + Triple(cls.id, cls.name, items)
+                            chartSections = ns
+                            chartItems = ns.flatMap { it.third } // [46v13] 歌手推导覆盖全部分段
+                        }
+                    } catch (e: Exception) {
+                        // 单段失败跳过，不拦后段
+                    }
+                }
+            } finally {
+                sectionsLoading = false
+            }
+        }
+    }
+
+    fun applyTab(src: SubMusicBridge.SubSource, t: Int, h: SubMusicBridge.SubHome?) { // [46v19] Peek 式两 tab：0=歌单，1=榜单（歌手 tab 拿掉）
+        chartDetail = null // [46v13] 回榜单视图
+        detailTitle = "" // [46v22] 换 tab 退出详情分集
+        detailTracks = emptyList()
+        if (t == 0) { // [46v16] 歌单 tab：派生视图（分段已在换源时拉起）
+            gridItems = emptyList()
+            gridNote = ""
+            return
+        }
+        if (h == null || h.classes.isEmpty()) {
+            chartSections = emptyList()
+            chartItems = emptyList()
+            gridNote = "该源暂无分类"
+            return
+        }
+        gridNote = ""
+        loadSections(src, h) // [46v23] 分段已在换源时拉起，这里只做兜底（未拉过才拉）
+    }""",
+    "loadsections-applytab",
+)
+
+# 3) loadBrowse：home 到手后先拉分段；失败时清分段 key，容后重试
+rep(
+    """    fun loadBrowse(src: SubMusicBridge.SubSource) {
+        clearSearch() // [46v21] 换源回浏览
+        gridLoading = true
+        gridNote = ""
+        scope.launch {
+            try {
+                val h = SubMusicBridge.home(src.key)
+                home = h
+                gridLoading = false
+                applyTab(src, tab, h)
+            } catch (e: Exception) {
+                gridLoading = false
+                home = null
+                gridItems = emptyList()
+                gridNote = "加载失败：${e.message}"
+            }
+        }
+    }""",
+    """    fun loadBrowse(src: SubMusicBridge.SubSource) {
+        clearSearch() // [46v21] 换源回浏览
+        gridLoading = true
+        gridNote = ""
+        scope.launch {
+            try {
+                val h = SubMusicBridge.home(src.key)
+                home = h
+                gridLoading = false
+                loadSections(src, h) // [46v23] 换源就拉分段，歌单 tab 不用先去榜单
+                applyTab(src, tab, h)
+            } catch (e: Exception) {
+                gridLoading = false
+                home = null
+                gridItems = emptyList()
+                sectionsKey = null // [46v23] 换源失败：清分段 key，容后重试
+                chartSections = emptyList()
+                chartItems = emptyList()
+                gridNote = "加载失败：${e.message}"
+            }
+        }
+    }""",
+    "loadbrowse-sections",
+)
+
+# 4) 歌单 tab 空态：还在拉分段时说“正在加载歌单…”，拉完仍空才说暂无
+rep(
+    """            } else if (tab == 0) { // [46v19] 歌单 tab：Peek 式紧致网格
+                if (playlists.isEmpty()) {
+                    Text(
+                        text = "该源暂无歌单",""",
+    """            } else if (tab == 0) { // [46v19] 歌单 tab：Peek 式紧致网格
+                if (playlists.isEmpty()) {
+                    Text(
+                        text = if (sectionsLoading) "正在加载歌单…" else "该源暂无歌单", // [46v23] 加载中不说暂无""",
+    "playlist-empty-loading",
+)
+
+assert src.count("[46v23]") >= 6
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v23 screen")
+PYEOF46V23
+python3 /tmp/patch_screen46v23.py
+grep -q "46v23" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v23 screen"; exit 1; }
+echo "OK 46v23"
+echo "=== 46 v23 done ==="
