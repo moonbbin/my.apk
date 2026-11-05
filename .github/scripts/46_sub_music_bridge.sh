@@ -3576,3 +3576,99 @@ PYEOF46V13
 grep -q "46v13" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v13 screen"; exit 1; }
 echo "OK 46v13"
 echo "=== 46 v13 done ==="
+
+# === 46 v14: 三页壁纸透明（同设置页） ===
+
+echo "=== 46 v14 ==="
+
+python3 - << 'PYEOF46V14'
+import sys
+
+# 46 v14：三页（曲库/搜索/我的）像设置页一样透明——有壁纸时页底透明、卡片磨砂（card 0.45 + 白 0.15 描边）
+# 参照：SettingsScreen.kt:77（页底 WallpaperManager.isActive() ? Transparent : background）、:96/:206/:342（磨砂卡片）
+
+ROOT_OLD = "            .background(musicColors().background)"
+ROOT_NEW = "            .background(if (WallpaperManager.isActive()) androidx.compose.ui.graphics.Color.Transparent else musicColors().background) // [46v14] 有壁纸时透明（同设置页）"
+
+# ---- 曲库页 SubMusicScreen.kt ----
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v14]" not in src:
+    old_head = "源选择由顶栏 Sheet 驱动，本页只读。"
+    assert src.count(old_head) == 1, "screen head count %d" % src.count(old_head)
+    src = src.replace(old_head, "源选择由顶栏 Sheet 驱动，本页只读；[46v14] 有壁纸时页底透明、卡片磨砂（同设置页）。", 1)
+
+    old_imp = "import androidx.compose.foundation.background\n"
+    assert src.count(old_imp) == 1, "screen import bg count %d" % src.count(old_imp)
+    src = src.replace(old_imp, old_imp + "import androidx.compose.foundation.border\n", 1)
+    old_imp2 = "import androidx.compose.ui.draw.clip\n"
+    assert src.count(old_imp2) == 1, "screen import clip count %d" % src.count(old_imp2)
+    src = src.replace(old_imp2, old_imp2 + "import androidx.compose.ui.graphics.Color\n", 1)
+
+    assert src.count(ROOT_OLD) == 1, "screen root count %d" % src.count(ROOT_OLD)
+    src = src.replace(ROOT_OLD, ROOT_NEW, 1)
+
+    old_under = ".background(if (tab == i) musicColors().accent else musicColors().background)"
+    assert src.count(old_under) == 1, "underline count %d" % src.count(old_under)
+    src = src.replace(old_under, ".background(if (tab == i) musicColors().accent else Color.Transparent) // [46v14] 未选中下划线透明（壁纸上不留黑条）", 1)
+
+    old_grid = "                .background(cardBg)\n        ) {"
+    assert src.count(old_grid) == 1, "grid card count %d" % src.count(old_grid)
+    src = src.replace(old_grid, "                .background(cardBg.copy(alpha = 0.45f)) // [46v14] 磨砂卡片（同设置页）\n                .border(0.5.dp, Color.White.copy(alpha = 0.15f), MaterialTheme.shapes.medium)\n        ) {", 1)
+
+    old_card = "                .background(cardBg),\n            contentAlignment = Alignment.Center"
+    assert src.count(old_card) == 2, "artist/section card count %d" % src.count(old_card)
+    src = src.replace(old_card, "                .background(cardBg.copy(alpha = 0.45f)) // [46v14] 磨砂卡片（同设置页）\n                .border(0.5.dp, Color.White.copy(alpha = 0.15f), MaterialTheme.shapes.medium),\n            contentAlignment = Alignment.Center")
+    open(path, "w", encoding="utf-8").write(src)
+    print("OK 46v14 screen")
+else:
+    print("screen already 46v14, skip")
+
+# ---- 搜索页 SubSearchScreen.kt ----
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubSearchScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v14]" not in src:
+    old_head = "切歌/列表点播走订阅解析。"
+    assert src.count(old_head) == 1, "search head count %d" % src.count(old_head)
+    src = src.replace(old_head, "切歌/列表点播走订阅解析；[46v14] 有壁纸时页底透明、占位缩略图磨砂（同设置页）。", 1)
+
+    old_imp = "import androidx.compose.foundation.background\n"
+    assert src.count(old_imp) == 1, "search import bg count %d" % src.count(old_imp)
+    src = src.replace(old_imp, old_imp + "import androidx.compose.foundation.border\n", 1)
+    old_imp2 = "import androidx.compose.ui.draw.clip\n"
+    assert src.count(old_imp2) == 1, "search import clip count %d" % src.count(old_imp2)
+    src = src.replace(old_imp2, old_imp2 + "import androidx.compose.ui.graphics.Color\n", 1)
+
+    assert src.count(ROOT_OLD) == 1, "search root count %d" % src.count(ROOT_OLD)
+    src = src.replace(ROOT_OLD, ROOT_NEW, 1)
+
+    old_thumb = """                    .background(musicColors().card),
+                contentAlignment = Alignment.Center"""
+    assert src.count(old_thumb) == 1, "thumb count %d" % src.count(old_thumb)
+    src = src.replace(old_thumb, """                    .background(musicColors().card.copy(alpha = 0.45f)) // [46v14] 磨砂（同设置页）
+                    .border(0.5.dp, Color.White.copy(alpha = 0.15f), androidx.compose.foundation.shape.RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center""", 1)
+    open(path, "w", encoding="utf-8").write(src)
+    print("OK 46v14 search")
+else:
+    print("search already 46v14, skip")
+
+# ---- 我的页 SubMineScreen.kt ----
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMineScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v14]" not in src:
+    old_head = "// [46v9] 我的页：先放我的喜欢 + 播放历史两块现成的（与设置页同一入口）。"
+    assert src.count(old_head) == 1, "mine head count %d" % src.count(old_head)
+    src = src.replace(old_head, "// [46v14] 我的页：先放我的喜欢 + 播放历史两块现成的（与设置页同一入口）；有壁纸时页底透明（同设置页）。", 1)
+    assert src.count(ROOT_OLD) == 1, "mine root count %d" % src.count(ROOT_OLD)
+    src = src.replace(ROOT_OLD, ROOT_NEW, 1)
+    open(path, "w", encoding="utf-8").write(src)
+    print("OK 46v14 mine")
+else:
+    print("mine already 46v14, skip")
+PYEOF46V14
+grep -q "46v14" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v14 screen"; exit 1; }
+grep -q "46v14" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubSearchScreen.kt || { echo "X 46v14 search"; exit 1; }
+grep -q "46v14" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMineScreen.kt || { echo "X 46v14 mine"; exit 1; }
+echo "OK 46v14"
+echo "=== 46 v14 done ==="
