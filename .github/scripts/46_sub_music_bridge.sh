@@ -2501,3 +2501,298 @@ print("OK 46v10 MH")
 PYEOF46V10
 echo "OK 46v10"
 echo "=== 46 v10 done ==="
+
+# === 46 v11: 内容源开关（订阅源/脚本源双模式） ===
+
+echo "=== 46 v11 ==="
+
+python3 - << 'PYEOF46V11'
+import sys
+
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v11]" in src:
+    print("MH already 46v11, skip")
+    sys.exit(0)
+
+# --- 1. 模式状态 + 脚本源平台状态（v9 前原文恢复） ---
+old_state = """    LaunchedEffect(Unit) {
+        try {
+            val list = SubMusicBridge.loadMusicSources()
+            subSources = list
+            if (selectedSubKey == null) selectedSubKey = list.firstOrNull()?.key
+            sourceDiag = SubMusicBridge.diagnoseSources()
+        } catch (_: Exception) { }
+    }
+
+    fun comingSoon(name: String) {"""
+assert src.count(old_state) == 1, "state anchor count %d" % src.count(old_state)
+new_state = """    LaunchedEffect(Unit) {
+        try {
+            val list = SubMusicBridge.loadMusicSources()
+            subSources = list
+            if (selectedSubKey == null) selectedSubKey = list.firstOrNull()?.key
+            sourceDiag = SubMusicBridge.diagnoseSources()
+        } catch (_: Exception) { }
+    }
+
+    // [46v11] 内容源模式：script=落雪脚本源（默认，现订阅为 0 先保可播），sub=订阅源；切模式时不在新模式里的 Tab 自动回落
+    var contentMode by remember { mutableStateOf(context.getSharedPreferences("music_settings", Context.MODE_PRIVATE).getString("content_mode", "script") ?: "script") }
+    fun setContentMode(mode: String) {
+        contentMode = mode
+        context.getSharedPreferences("music_settings", Context.MODE_PRIVATE).edit().putString("content_mode", mode).apply()
+        if (mode == "sub") {
+            if (selectedTab != MusicTab.QUKU && selectedTab != MusicTab.SEARCH && selectedTab != MusicTab.MINE && selectedTab != MusicTab.SETTINGS && selectedTab != MusicTab.HOME) selectedTab = MusicTab.QUKU
+        } else {
+            if (selectedTab != MusicTab.SEARCH && selectedTab != MusicTab.RANKING && selectedTab != MusicTab.RECOMMEND && selectedTab != MusicTab.PLAYLIST && selectedTab != MusicTab.MINE && selectedTab != MusicTab.SETTINGS && selectedTab != MusicTab.HOME) selectedTab = MusicTab.SEARCH
+        }
+    }
+    // [46v11] 脚本源模式的平台状态（v9 前原文恢复）：读上次的源，没有用 kg
+    var selectedPlatform by remember {
+        mutableStateOf(
+            context.getSharedPreferences("lx_music", Context.MODE_PRIVATE)
+                .getString("lx_last_source_id", "kg") ?: "kg"
+        )
+    }
+    var showPlatformMenu by remember { mutableStateOf(false) }
+    // 搜索 tab 分类卡点击后，要在排行 tab 预选的榜单
+    var pendingChartId by remember { mutableStateOf<String?>(null) }
+    // 平台列表：固定 5 大平台（用户要求）
+    val platforms = remember { listOf("wy", "tx", "kg", "kw", "mg") }
+    val platformNames = mapOf("wy" to "小芸", "tx" to "小秋", "kg" to "小枸", "kw" to "小蜗", "mg" to "小蜜")
+    if (selectedPlatform !in platforms) {
+        selectedPlatform = platforms.firstOrNull() ?: "kg"
+    }
+
+    fun comingSoon(name: String) {"""
+src = src.replace(old_state, new_state, 1)
+
+# --- 2. 顶栏：模式二选一（订阅源 Sheet / 脚本源平台下拉） ---
+old_top = """                actions = {
+                    // [46v9] 顶栏源内源：点开按订阅顺序排的 Sheet，选中驱动曲库/搜索
+                    TextButton(onClick = { showSourceSheet = true }) {
+                        Text(
+                            subSources.firstOrNull { it.key == selectedSubKey }?.displayName ?: "选择源",
+                            color = musicColors().textPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }"""
+assert src.count(old_top) == 1, "topbar anchor count %d" % src.count(old_top)
+new_top = """                actions = {
+                    if (contentMode == "sub") {
+                        // [46v9] 顶栏源内源：点开按订阅顺序排的 Sheet，选中驱动曲库/搜索
+                        TextButton(onClick = { showSourceSheet = true }) {
+                            Text(
+                                subSources.firstOrNull { it.key == selectedSubKey }?.displayName ?: "选择源",
+                                color = musicColors().textPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    } else {
+                        // [46v11] 脚本源模式：平台切换器（v9 前原文恢复）
+                        Box {
+                            TextButton(onClick = { showPlatformMenu = true }) {
+                                Text(
+                                    platformNames[selectedPlatform] ?: selectedPlatform,
+                                    color = musicColors().textPrimary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showPlatformMenu,
+                                onDismissRequest = { showPlatformMenu = false }
+                            ) {
+                                platforms.forEach { p ->
+                                    DropdownMenuItem(
+                                        text = { Text("${platformNames[p] ?: p} ($p)") },
+                                        onClick = {
+                                            selectedPlatform = p
+                                            // 源选择记忆：保存
+                                            context.getSharedPreferences("lx_music", Context.MODE_PRIVATE)
+                                                .edit().putString("lx_last_source_id", p).apply()
+                                            showPlatformMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }"""
+src = src.replace(old_top, new_top, 1)
+
+# --- 3. 内容 when：双模式（订阅 5 分支 + 脚本 4 分支恢复 + 共享 我的/设置/首页） ---
+old_when = """            val effectiveTab = if (selectedTab == MusicTab.QUKU || selectedTab == MusicTab.SEARCH || selectedTab == MusicTab.MINE || selectedTab == MusicTab.SETTINGS || selectedTab == MusicTab.HOME) selectedTab else MusicTab.QUKU // [46v9]
+            when (effectiveTab) {
+                MusicTab.SEARCH -> {
+                    SubSearchScreen(
+                        sources = subSources,
+                        selectedKey = subSources.firstOrNull { it.key == selectedSubKey }?.key,
+                        diag = sourceDiag
+                    ) // [46v9]
+                }
+                MusicTab.SETTINGS -> {
+                    MusicSettingsList(onComingSoon = ::comingSoon) // [46v9]
+                }
+                MusicTab.QUKU -> {
+                    SubMusicScreen(
+                        sources = subSources,
+                        selectedKey = subSources.firstOrNull { it.key == selectedSubKey }?.key,
+                        diag = sourceDiag,
+                        onSearchClick = { selectedTab = MusicTab.SEARCH }
+                    ) // [46v9]
+                }
+                MusicTab.MINE -> {
+                    SubMineScreen() // [46v9]
+                }
+                MusicTab.HOME -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("返回首页…", color = TextGray)
+                    }
+                }
+                else -> { } // [46v10] effectiveTab 已预映射到 5 Tab，此分支不可达，仅满足 when 穷尽
+            }"""
+assert src.count(old_when) == 1, "content-when anchor count %d" % src.count(old_when)
+new_when = """            val effectiveTab = if (contentMode == "sub") {
+                if (selectedTab == MusicTab.QUKU || selectedTab == MusicTab.SEARCH || selectedTab == MusicTab.MINE || selectedTab == MusicTab.SETTINGS || selectedTab == MusicTab.HOME) selectedTab else MusicTab.QUKU
+            } else {
+                if (selectedTab == MusicTab.SEARCH || selectedTab == MusicTab.RANKING || selectedTab == MusicTab.RECOMMEND || selectedTab == MusicTab.PLAYLIST || selectedTab == MusicTab.MINE || selectedTab == MusicTab.SETTINGS || selectedTab == MusicTab.HOME) selectedTab else MusicTab.SEARCH
+            } // [46v11]
+            when (effectiveTab) {
+                MusicTab.QUKU -> {
+                    SubMusicScreen(
+                        sources = subSources,
+                        selectedKey = subSources.firstOrNull { it.key == selectedSubKey }?.key,
+                        diag = sourceDiag,
+                        onSearchClick = { selectedTab = MusicTab.SEARCH }
+                    ) // [46v9]
+                }
+                MusicTab.SEARCH -> {
+                    if (contentMode == "sub") {
+                        SubSearchScreen(
+                            sources = subSources,
+                            selectedKey = subSources.firstOrNull { it.key == selectedSubKey }?.key,
+                            diag = sourceDiag
+                        ) // [46v9]
+                    } else {
+                        // 搜索：新版 SearchScreen（数据：SearchTabLanding 的热词/关键词逻辑）
+                        SearchTabLanding(
+                            platform = selectedPlatform,
+                            onSearch = { kw ->
+                                context.startActivity(
+                                    Intent(context, LxMusicSearchActivity::class.java).apply {
+                                        putExtra("platform", selectedPlatform)
+                                        putExtra("keyword", kw)
+                                    }
+                                )
+                            },
+                            onBrowseChart = { chartId ->
+                                pendingChartId = chartId
+                                selectedTab = MusicTab.RANKING
+                            }
+                        )
+                    }
+                }
+                MusicTab.RANKING -> {
+                    // 排行：新版 RankScreen（数据：RankingTab 的榜单/歌曲逻辑）
+                    RankingTab(
+                        platform = selectedPlatform,
+                        platformName = platformNames[selectedPlatform] ?: selectedPlatform,
+                        initialChartId = pendingChartId,
+                        drawerHazeState = drawerHazeState, // [32v109] 抽屉状态跨函数传递(v108 只在 MusicHomeScreen 内声明, RankingTab 内不可见)
+                    )
+                }
+                MusicTab.RECOMMEND -> { // [40rec]
+                    RecommendScreen(
+                        playerTitle = playerTitle,
+                        playerArtist = playerArtist,
+                        playerIsPlaying = playerIsPlaying,
+                        onPlay = { songs, i -> playSongs(context, songs, i) },
+                        onPlayOnly = { songs, i -> playSongsOnly(songs, i) }, // [40fin] 按钮播歌不进页
+                        onTogglePlay = { LxPlayerManager.togglePlayPause() }
+                    )
+                }
+                MusicTab.PLAYLIST -> {
+                    // 歌单：新版 PlaylistScreen（数据：PlaylistTab/PlaylistBrowser 的歌单逻辑）
+                    PlaylistTab(platform = selectedPlatform)
+                }
+                MusicTab.MINE -> {
+                    SubMineScreen() // [46v9]
+                }
+                MusicTab.SETTINGS -> {
+                    MusicSettingsList(onComingSoon = ::comingSoon, contentMode = contentMode, onContentModeChange = ::setContentMode) // [46v11]
+                }
+                MusicTab.HOME -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("返回首页…", color = TextGray)
+                    }
+                }
+                else -> { } // [46v10] effectiveTab 已预映射到两模式各自 Tab 集，此分支不可达，仅满足 when 穷尽
+            }"""
+src = src.replace(old_when, new_when, 1)
+
+# --- 4. 底栏 tabDefs：模式二选一 ---
+old_tabs = """                        val tabDefs97 = listOf(
+                            MusicTab.QUKU to "曲库",
+                            MusicTab.SEARCH to "搜索",
+                            MusicTab.MINE to "我的",
+                            MusicTab.SETTINGS to "设置",
+                            MusicTab.HOME to "首页",
+                        )"""
+assert src.count(old_tabs) == 1, "tabDefs anchor count %d" % src.count(old_tabs)
+new_tabs = """                        val tabDefs97 = if (contentMode == "sub") listOf( // [46v11]
+                            MusicTab.QUKU to "曲库",
+                            MusicTab.SEARCH to "搜索",
+                            MusicTab.MINE to "我的",
+                            MusicTab.SETTINGS to "设置",
+                            MusicTab.HOME to "首页",
+                        ) else listOf(
+                            MusicTab.SEARCH to "搜索",
+                            MusicTab.RANKING to "排行",
+                            MusicTab.RECOMMEND to "推荐", // [40rec]
+                            MusicTab.PLAYLIST to "歌单",
+                            MusicTab.MINE to "我的",
+                            MusicTab.SETTINGS to "设置",
+                            MusicTab.HOME to "首页",
+                        )"""
+src = src.replace(old_tabs, new_tabs, 1)
+
+# --- 5. 设置：签名加模式参数 + 顶部“内容源”开关组 ---
+old_sig = "fun MusicSettingsList(onComingSoon: (String) -> Unit) { // [46v9]"
+assert src.count(old_sig) == 1, "settings sig anchor count %d" % src.count(old_sig)
+src = src.replace(old_sig, "fun MusicSettingsList(onComingSoon: (String) -> Unit, contentMode: String, onContentModeChange: (String) -> Unit) { // [46v11]", 1)
+old_groups = """    val groups = listOf(
+        SettingGroup(
+            "音乐源","""
+assert src.count(old_groups) == 1, "groups anchor count %d" % src.count(old_groups)
+new_groups = """    val groups = listOf(
+        SettingGroup(
+            "内容源",
+            listOf(
+                SettingItem(title = "订阅源", subtitle = "关闭则使用脚本源（落雪）", isSwitch = true, switchChecked = { contentMode == "sub" }, onSwitchChange = { on -> onContentModeChange(if (on) "sub" else "script") }, action = {}) // [46v11]
+            )
+        ),
+        SettingGroup(
+            "音乐源","""
+src = src.replace(old_groups, new_groups, 1)
+
+# --- 断言 ---
+assert src.count("var selectedPlatform by remember") == 1
+assert src.count("var showPlatformMenu by remember") == 1
+assert src.count("var pendingChartId by remember") == 1
+assert src.count('val platforms = remember { listOf("wy", "tx", "kg", "kw", "mg") }') == 1
+assert src.count("var contentMode by remember") == 1
+assert "SearchTabLanding(" in src and "RankingTab(" in src and "RecommendScreen(" in src and "PlaylistTab(platform = selectedPlatform)" in src
+assert "onContentModeChange = ::setContentMode" in src
+assert 'SettingItem(title = "订阅源"' in src
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v11 MH")
+PYEOF46V11
+echo "OK 46v11"
+echo "=== 46 v11 done ==="
