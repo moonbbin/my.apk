@@ -6775,3 +6775,198 @@ python3 /tmp/patch_screen46v27b.py
 grep -q "46v27" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v27 screen"; exit 1; }
 echo "OK 46v27 screen"
 echo "=== 46 v27 done ==="
+
+echo "=== 46 v28 ==="
+cat > /tmp/patch_screen46v28.py << 'PYEOF46V28'
+import sys
+
+# 46 v28（桥接）：详情封面回填——列表条目常不带 vod_pic（歌手卡全是首字占位），详情对象里一般有 vod_pic（跟播放地址同一个对象）；
+# 修法：detailEpisodes 顺带把详情 vod_pic 带回来（分集封面＝列表图，没有就用详情图）；episodeCache 一并存封面（flag to 播放 id 列表 to 详情封面），
+# resolvePlay 经缓存命中也能拿到封面，随 Ok 一起带出（Ok 加 pic 字段，默认空串）；不多花一次请求。配 21 v57（切歌也用详情封面）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+src = open(path, encoding="utf-8").read()
+if "[46v28]" in src: # [46v28] 守卫用裸标记：多处标记写作 [46v27][46v28] 连写，"// [46v28]" 子串匹配不到
+    print("bridge already 46v28, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+# 1) Ok 带详情封面
+rep(
+    "        data class Ok(val url: String, val headers: Map<String, String> = emptyMap()) : PlayResult // [46v27] 订阅带头播放：playerContent 返回的头一起带出",
+    "        data class Ok(val url: String, val headers: Map<String, String> = emptyMap(), val pic: String = \"\") : PlayResult // [46v27][46v28] 订阅带头播放＋详情封面：Ok 带头与详情 vod_pic 一起返回",
+    "ok-with-pic",
+)
+
+# 2) episodeCache 一并存封面
+rep(
+    "    private val episodeCache = mutableMapOf<String, Pair<String, List<String>>>() // [46v22] 详情只拉一次：key = 源:条目 id，value = flag to 播放 id 列表",
+    "    private val episodeCache = mutableMapOf<String, Triple<String, List<String>, String>>() // [46v22][46v28] 详情只拉一次：key = 源:条目 id，value = flag to 播放 id 列表 to 详情封面",
+    "cache-with-pic",
+)
+
+# 3) detailEpisodes 整函数换：返回 (分集列表，详情封面)，分集封面＝列表图，没有就用详情图
+rep(
+    """    suspend fun detailEpisodes(track: SubTrack): List<SubTrack> = withContext(Dispatchers.IO) { // [46v22] 详情拆全部分集（点卡进歌单用）
+        try {
+            val baseId = track.id.substringBefore("#")
+            val bean = ApiConfig.get().getSource(track.sourceKey) ?: return@withContext emptyList()
+            val sp = ApiConfig.get().getCSP(bean)
+            val detail = sp.detailContent(listOf(baseId)) ?: return@withContext emptyList()
+            val d = JSONObject(detail)
+            val item = d.optJSONArray("list")?.optJSONObject(0) ?: d
+            val parts = parsePlayParts(item) ?: return@withContext emptyList()
+            val key = track.sourceKey + ":" + baseId
+            if (episodeCache.size > 20) episodeCache.clear()
+            episodeCache[key] = parts.flag to parts.playIds
+            parts.playIds.mapIndexed { i, _ ->
+                val name = parts.names.getOrNull(i)?.takeIf { it.isNotBlank() } ?: (track.title + " " + (i + 1))
+                SubTrack(track.sourceKey, track.sourceName, baseId + "#" + i, name, track.pic, "", track.title)
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }""",
+    """    suspend fun detailEpisodes(track: SubTrack): Pair<List<SubTrack>, String> = withContext(Dispatchers.IO) { // [46v22][46v28] 详情拆全部分集＋详情封面（点卡进歌单用）
+        try {
+            val baseId = track.id.substringBefore("#")
+            val bean = ApiConfig.get().getSource(track.sourceKey) ?: return@withContext (emptyList() to "")
+            val sp = ApiConfig.get().getCSP(bean)
+            val detail = sp.detailContent(listOf(baseId)) ?: return@withContext (emptyList() to "")
+            val d = JSONObject(detail)
+            val item = d.optJSONArray("list")?.optJSONObject(0) ?: d
+            val parts = parsePlayParts(item) ?: return@withContext (emptyList() to "")
+            val detailPic = item.optString("vod_pic") // [46v28] 详情封面：跟播放地址同一个对象里
+            val key = track.sourceKey + ":" + baseId
+            if (episodeCache.size > 20) episodeCache.clear()
+            episodeCache[key] = Triple(parts.flag, parts.playIds, detailPic)
+            parts.playIds.mapIndexed { i, _ ->
+                val name = parts.names.getOrNull(i)?.takeIf { it.isNotBlank() } ?: (track.title + " " + (i + 1))
+                SubTrack(track.sourceKey, track.sourceName, baseId + "#" + i, name, track.pic.ifBlank { detailPic }, "", track.title)
+            } to detailPic
+        } catch (e: Exception) {
+            emptyList() to ""
+        }
+    }""",
+    "detailEpisodes-with-pic",
+)
+
+# 4) resolvePlay：parts 改 Triple（缓存命中也有封面）
+rep(
+    "            val parts: Pair<String, List<String>>",
+    "            val parts: Triple<String, List<String>, String>",
+    "resolvePlay-parts-triple",
+)
+
+# 5) resolvePlay 未命中时存封面
+rep(
+    "                parts = pp.flag to pp.playIds",
+    "                parts = Triple(pp.flag, pp.playIds, item.optString(\"vod_pic\"))",
+    "resolvePlay-store-pic",
+)
+
+# 6) resolvePlay 返回带封面
+rep(
+    "            PlayResult.Ok(url, extractPlayHeaders(pj, bean.header)) // [46v27] 带头返回",
+    "            PlayResult.Ok(url, headers = extractPlayHeaders(pj, bean.header), pic = parts.third) // [46v27][46v28] 带头返回＋详情封面",
+    "ok-return-pic",
+)
+
+# 后验：标记在位，括号平衡，标记注释不吞码
+assert src.count("[46v28]") >= 5
+assert src.count("(") - src.count(")") == 0
+assert src.count("{") - src.count("}") == 0
+assert src.count("[") - src.count("]") == 0
+for line in src.splitlines():
+    if "// [46v28]" in line:
+        after = line.split("// [46v28]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 46v28 bridge")
+
+PYEOF46V28
+python3 /tmp/patch_screen46v28.py
+grep -q "46v28" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v28 bridge"; exit 1; }
+echo "OK 46v28 bridge"
+
+cat > /tmp/patch_screen46v28b.py << 'PYEOF46V28B'
+import sys
+
+# 46 v28（曲库屏）：详情封面回填到卡片与播放页——点卡一次就把详情 vod_pic 存进 picOverrides（key = 源:条目 id 去 #），
+# 四处卡片（搜索/分集/钻入/推荐）统一走 picOf（回填优先、列表原图次之）；点播时封面＝picOf，没有再用 resolvePlay 返回的详情封面
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "[46v28]" in src: # [46v28] 守卫用裸标记：多处标记写作 [46v27][46v28] 连写，"// [46v28]" 子串匹配不到
+    print("screen already 46v28, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+def repAll(old, new, tag, n):
+    global src
+    assert src.count(old) == n, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new)
+
+# 1) 回填状态：key = 源:条目 id（去 #），value = 详情的 vod_pic
+rep(
+    "    var sectionsKey by remember { mutableStateOf<String?>(null) } // [46v23] 分段已拉的源 key（换源重拉，同源不重拉）",
+    "    var sectionsKey by remember { mutableStateOf<String?>(null) } // [46v23] 分段已拉的源 key（换源重拉，同源不重拉）\n    var picOverrides by remember { mutableStateOf<Map<String, String>>(emptyMap()) } // [46v28] 详情封面回填：key = 源:条目 id（去 #），value = 详情的 vod_pic",
+    "picOverrides-state",
+)
+
+# 2) picOf：回填优先，列表原图次之
+rep(
+    "    fun doSearch() { // [46v21] 曲库内搜：搜当前源（同 SubSearchScreen 的 searchInSource 链）",
+    """    fun picOf(track: SubMusicBridge.SubTrack): String { // [46v28] 卡片封面：详情回填优先，列表原图次之
+        return picOverrides[track.sourceKey + ":" + track.id.substringBefore("#")] ?: track.pic
+    }
+
+    fun doSearch() { // [46v21] 曲库内搜：搜当前源（同 SubSearchScreen 的 searchInSource 链）""",
+    "picOf-helper",
+)
+
+# 3) 点播封面：picOf，没有再用 resolvePlay 返回的详情封面
+rep(
+    "                    LxPlayerManager.play(r.url, track.title, track.sourceName, track.pic, headers = r.headers) // [46v27] 订阅带头播放",
+    "                    LxPlayerManager.play(r.url, track.title, track.sourceName, picOf(track).ifBlank { r.pic }, headers = r.headers) // [46v27][46v28] 订阅带头播放＋详情封面",
+    "playTrack-pic",
+)
+
+# 4) openItem：点卡一次就把详情封面存进回填表（单集直接播也存，列表卡照样回填）
+rep(
+    """            val eps = SubMusicBridge.detailEpisodes(track)
+            if (eps.size > 1) {""",
+    """            val (eps, detailPic) = SubMusicBridge.detailEpisodes(track) // [46v28] 详情封面回填：点卡一次就把详情 vod_pic 带回来
+            if (detailPic.isNotBlank()) {
+                val key = track.sourceKey + ":" + track.id.substringBefore("#")
+                picOverrides = picOverrides + (key to detailPic)
+            }
+            if (eps.size > 1) {""",
+    "openItem-store-pic",
+)
+
+# 5) 四处卡片统一走 picOf（搜索/分集/钻入/推荐）
+repAll("pic = track.pic", "pic = picOf(track)", "cards-picOf", 4)
+
+assert src.count("[46v28]") >= 4
+assert src.count("(") - src.count(")") == 0
+assert src.count("{") - src.count("}") == 0
+assert src.count("[") - src.count("]") == 0
+for line in src.splitlines():
+    if "// [46v28]" in line:
+        after = line.split("// [46v28]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 46v28 screen")
+
+PYEOF46V28B
+python3 /tmp/patch_screen46v28b.py
+grep -q "46v28" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v28 screen"; exit 1; }
+echo "OK 46v28 screen"
+echo "=== 46 v28 done ==="
