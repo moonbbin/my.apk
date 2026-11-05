@@ -5388,3 +5388,478 @@ grep -q "46v21" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusi
 grep -q "46v21" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt || { echo "X 46v21 MH"; exit 1; }
 echo "OK 46v21"
 echo "=== 46 v21 done ==="
+
+# === 46 v22: 点卡进详情歌单＋钻入分页＋下拉刷新（用户确认，全量卡片） ===
+echo "=== 46 v22 ==="
+cat > /tmp/patch_bridge46v22.py << 'PYEOF46V22'
+import sys
+
+# 46 v22（桥接侧）：点卡进详情歌单＋钻入分页——
+# ① category 加 pg 参数（默认 "1"，旧调用不动），钻入分页靠它拉下一页；
+# ② 新 parsePlayParts（详情分集解析：flag + 每集名 + 每集播放 id，$$$ 取第一组、# 分集、$ 分名/地址，空白集过滤）；
+# ③ 新 detailEpisodes（详情拆全部分集成 SubTrack，id = 原 id + "#" + 集号，标题取集名、缺名补“原标题 集号”）；
+# ④ episodeCache（详情只拉一次：detailEpisodes 与 resolvePlay 共享，超 20 条清掉）；
+# ⑤ resolvePlay 改走 parsePlayParts + 缓存：id 带 "#" 按集号取播放 id，越界报“该分集不存在”；其余播放链（playerContent/vip 标志/parse=1 拒绝）与旧版逐字一致
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v22]" in src:
+    print("bridge already 46v22, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+# 1) category 加页码
+rep(
+    '''    suspend fun category(sourceKey: String, tid: String): List<SubTrack> = withContext(Dispatchers.IO) {
+        try {
+            val bean = ApiConfig.get().getSource(sourceKey) ?: return@withContext emptyList()
+            val sp = ApiConfig.get().getCSP(bean)
+            val json = sp.categoryContent(tid, "1", false, HashMap()) ?: return@withContext emptyList()''',
+    '''    suspend fun category(sourceKey: String, tid: String, pg: String = "1"): List<SubTrack> = withContext(Dispatchers.IO) { // [46v22] 钻入分页：页码参数，默认 "1"
+        try {
+            val bean = ApiConfig.get().getSource(sourceKey) ?: return@withContext emptyList()
+            val sp = ApiConfig.get().getCSP(bean)
+            val json = sp.categoryContent(tid, pg, false, HashMap()) ?: return@withContext emptyList()''',
+    "category-page",
+)
+
+# 2) 分集解析 + 缓存 + detailEpisodes + resolvePlay 改走缓存
+rep(
+    '''    suspend fun resolvePlay(track: SubTrack): PlayResult = withContext(Dispatchers.IO) {
+        try {
+            val bean = ApiConfig.get().getSource(track.sourceKey)
+                ?: return@withContext PlayResult.Fail("源已不存在")
+            val sp = ApiConfig.get().getCSP(bean)
+            val detail = sp.detailContent(listOf(track.id))
+                ?: return@withContext PlayResult.Fail("详情为空")
+            val d = JSONObject(detail)
+            val item = d.optJSONArray("list")?.optJSONObject(0) ?: d
+            val from = item.optString("vod_play_from")
+            val urls = item.optString("vod_play_url")
+            if (from.isBlank() || urls.isBlank()) return@withContext PlayResult.Fail("该条目无播放地址")
+            val flag = from.split("$$$")[0]
+            val firstGroup = urls.split("$$$")[0]
+            val firstEp = firstGroup.split("#")[0]
+            val playId = firstEp.substringAfter("$", firstEp)
+            val pr = sp.playerContent(flag, playId, ApiConfig.get().getVipParseFlags())
+                ?: return@withContext PlayResult.Fail("取播放地址失败")
+            val pj = JSONObject(pr)
+            val parse = pj.optInt("parse", 0)
+            val url = pj.optString("url")
+            if (url.isBlank()) return@withContext PlayResult.Fail("播放地址为空")
+            if (parse == 1) return@withContext PlayResult.Fail("该源需要解析，源内音乐 v1 暂不支持解析播放")
+            PlayResult.Ok(url)
+        } catch (e: Exception) {
+            PlayResult.Fail("播放失败：${e.message}")
+        }
+    }''',
+    '''    private data class PlayParts(val flag: String, val names: List<String>, val playIds: List<String>) // [46v22] 详情分集解析结果
+
+    private fun parsePlayParts(item: JSONObject): PlayParts? { // [46v22] 详情分集解析：$$$ 取第一组、# 分集、$ 分名/地址，空白集过滤
+        val from = item.optString("vod_play_from")
+        val urls = item.optString("vod_play_url")
+        if (from.isBlank() || urls.isBlank()) return null
+        val flag = from.split("$$$")[0]
+        val firstGroup = urls.split("$$$")[0]
+        val pairs = firstGroup.split("#").filter { it.isNotBlank() }.map { ep ->
+            ep.substringBefore("$", "") to ep.substringAfter("$", ep)
+        }.filter { it.second.isNotBlank() }
+        if (pairs.isEmpty()) return null
+        return PlayParts(flag, pairs.map { it.first }, pairs.map { it.second })
+    }
+
+    private val episodeCache = mutableMapOf<String, Pair<String, List<String>>>() // [46v22] 详情只拉一次：key = 源:条目 id，value = flag to 播放 id 列表
+
+    suspend fun detailEpisodes(track: SubTrack): List<SubTrack> = withContext(Dispatchers.IO) { // [46v22] 详情拆全部分集（点卡进歌单用）
+        try {
+            val baseId = track.id.substringBefore("#")
+            val bean = ApiConfig.get().getSource(track.sourceKey) ?: return@withContext emptyList()
+            val sp = ApiConfig.get().getCSP(bean)
+            val detail = sp.detailContent(listOf(baseId)) ?: return@withContext emptyList()
+            val d = JSONObject(detail)
+            val item = d.optJSONArray("list")?.optJSONObject(0) ?: d
+            val parts = parsePlayParts(item) ?: return@withContext emptyList()
+            val key = track.sourceKey + ":" + baseId
+            if (episodeCache.size > 20) episodeCache.clear()
+            episodeCache[key] = parts.flag to parts.playIds
+            parts.playIds.mapIndexed { i, _ ->
+                val name = parts.names.getOrNull(i)?.takeIf { it.isNotBlank() } ?: (track.title + " " + (i + 1))
+                SubTrack(track.sourceKey, track.sourceName, baseId + "#" + i, name, track.pic, "", track.title)
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun resolvePlay(track: SubTrack): PlayResult = withContext(Dispatchers.IO) {
+        try {
+            val bean = ApiConfig.get().getSource(track.sourceKey)
+                ?: return@withContext PlayResult.Fail("源已不存在")
+            val sp = ApiConfig.get().getCSP(bean)
+            val hash = track.id.indexOf("#")
+            val baseId = if (hash >= 0) track.id.substring(0, hash) else track.id
+            val wantIdx = if (hash >= 0) track.id.substring(hash + 1).toIntOrNull() ?: 0 else 0
+            val key = track.sourceKey + ":" + baseId
+            val cached = episodeCache[key]
+            val parts: Pair<String, List<String>>
+            if (cached != null) {
+                parts = cached
+            } else {
+                val detail = sp.detailContent(listOf(baseId))
+                    ?: return@withContext PlayResult.Fail("详情为空")
+                val d = JSONObject(detail)
+                val item = d.optJSONArray("list")?.optJSONObject(0) ?: d
+                val pp = parsePlayParts(item)
+                    ?: return@withContext PlayResult.Fail("该条目无播放地址")
+                if (episodeCache.size > 20) episodeCache.clear()
+                episodeCache[key] = pp.flag to pp.playIds
+                parts = pp.flag to pp.playIds
+            }
+            val playId = parts.second.getOrNull(wantIdx)
+                ?: return@withContext PlayResult.Fail("该分集不存在")
+            val pr = sp.playerContent(parts.first, playId, ApiConfig.get().getVipParseFlags())
+                ?: return@withContext PlayResult.Fail("取播放地址失败")
+            val pj = JSONObject(pr)
+            val parse = pj.optInt("parse", 0)
+            val url = pj.optString("url")
+            if (url.isBlank()) return@withContext PlayResult.Fail("播放地址为空")
+            if (parse == 1) return@withContext PlayResult.Fail("该源需要解析，源内音乐 v1 暂不支持解析播放")
+            PlayResult.Ok(url)
+        } catch (e: Exception) {
+            PlayResult.Fail("播放失败：${e.message}")
+        }
+    }''',
+    "resolveplay-episodes",
+)
+
+assert src.count("[46v22]") >= 5
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v22 bridge")
+PYEOF46V22
+cat > /tmp/patch_screen46v22.py << 'PYEOF46V22'
+import sys
+
+# 46 v22（屏幕侧）：点卡进详情歌单＋钻入分页＋下拉刷新——
+# ① openItem：点卡探详情（detailEpisodes），多集进分集网格、单集直接播、拉不到报提示；歌单/钻入/搜索三处网格的 onOpen 全改 openItem，圆播 onPlay 保持直接播；
+# ② 分集网格分支（detailTracks 非空时替代表格区，← 返回回原列表，点集走现有建队列）；
+# ③ 钻入分页：滑到底（末项合成时）拉下一页追加，全重/空页即止；段卡点开重置分页；
+# ④ 钻入下拉刷新：PullToRefreshBox 包钻入网格（同 PlaylistScreen/RecommendScreen 的三参用法），重拉第一页；
+# ⑤ 换 tab/清空搜索/换源时退出分集网格
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v22]" in src:
+    print("screen already 46v22, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+# 0) 新 import + OptIn（PullToRefreshBox 三参用法同 PlaylistScreen.kt:139；@OptIn 同 RecommendScreen.kt:84）
+rep(
+    "import androidx.compose.material3.MaterialTheme",
+    "import androidx.compose.material3.ExperimentalMaterial3Api\n"
+    "import androidx.compose.material3.MaterialTheme",
+    "imports-optin",
+)
+rep(
+    "import androidx.compose.material3.Text",
+    "import androidx.compose.material3.Text\n"
+    "import androidx.compose.material3.pulltorefresh.PullToRefreshBox",
+    "imports-ptr",
+)
+rep(
+    "import androidx.compose.foundation.lazy.grid.items\n",
+    "import androidx.compose.foundation.lazy.grid.item\n"
+    "import androidx.compose.foundation.lazy.grid.items\n",
+    "imports-grid-item",
+)
+rep(
+    """@Composable
+fun SubMusicScreen(""",
+    """@OptIn(ExperimentalMaterial3Api::class) // [46v22] 下拉刷新用 PullToRefreshBox
+@Composable
+fun SubMusicScreen(""",
+    "optin-fun",
+)
+
+# 1) 分集 + 分页状态（放在 searchResults 之后）
+rep(
+    '    var searchResults by remember { mutableStateOf<List<SubMusicBridge.SubTrack>>(emptyList()) } // [46v21] 曲库内搜',
+    '    var searchResults by remember { mutableStateOf<List<SubMusicBridge.SubTrack>>(emptyList()) } // [46v21] 曲库内搜\n'
+    '    var detailTitle by remember { mutableStateOf("") } // [46v22] 详情分集：点卡进来的合集标题\n'
+    '    var detailTracks by remember { mutableStateOf<List<SubMusicBridge.SubTrack>>(emptyList()) } // [46v22] 详情分集列表（多集才进）\n'
+    '    var drillPage by remember { mutableStateOf(1) } // [46v22] 钻入分页：当前页\n'
+    '    var drillHasMore by remember { mutableStateOf(true) } // [46v22] 钻入分页：还有下一页\n'
+    '    var drillLoadingMore by remember { mutableStateOf(false) } // [46v22] 钻入分页：正在拉下一页\n'
+    '    var drillRefreshing by remember { mutableStateOf(false) } // [46v22] 钻入下拉刷新',
+    "detail-states",
+)
+
+# 2) clearSearch：退出分集网格
+rep(
+    """    fun clearSearch() { // [46v21] 曲库内搜：回浏览
+        keyword = ""
+        searchResults = emptyList()
+        searched = false
+        searching = false
+    }""",
+    """    fun clearSearch() { // [46v21] 曲库内搜：回浏览
+        keyword = ""
+        searchResults = emptyList()
+        searched = false
+        searching = false
+        detailTitle = "" // [46v22] 退出详情分集
+        detailTracks = emptyList()
+    }""",
+    "clearsearch-detail",
+)
+
+# 3) openItem / loadMoreDrill / refreshDrill（放在 playTrack 之后、Column 之前；调用点都在其后）
+rep(
+    """    fun playTrack(track: SubMusicBridge.SubTrack, list: List<SubMusicBridge.SubTrack>) { // [46v12] 点卡片建队列：当前页从点中那首起
+        notice = "正在取播放地址…"
+        val maps = SubMusicBridge.toQueueMaps(list)
+        val idx = list.indexOfFirst { it.sourceKey == track.sourceKey && it.id == track.id }.takeIf { it >= 0 } ?: 0
+        LxPlayerManager.playQueue = maps
+        LxPlayerManager.queueIndex = idx
+        scope.launch {
+            when (val r = SubMusicBridge.resolvePlay(track)) {
+                is SubMusicBridge.PlayResult.Ok -> {
+                    LxPlayerManager.play(r.url, track.title, track.sourceName, track.pic)
+                    notice = ""
+                }
+                is SubMusicBridge.PlayResult.Fail -> {
+                    notice = r.msg
+                }
+            }
+        }
+    }""",
+    """    fun playTrack(track: SubMusicBridge.SubTrack, list: List<SubMusicBridge.SubTrack>) { // [46v12] 点卡片建队列：当前页从点中那首起
+        notice = "正在取播放地址…"
+        val maps = SubMusicBridge.toQueueMaps(list)
+        val idx = list.indexOfFirst { it.sourceKey == track.sourceKey && it.id == track.id }.takeIf { it >= 0 } ?: 0
+        LxPlayerManager.playQueue = maps
+        LxPlayerManager.queueIndex = idx
+        scope.launch {
+            when (val r = SubMusicBridge.resolvePlay(track)) {
+                is SubMusicBridge.PlayResult.Ok -> {
+                    LxPlayerManager.play(r.url, track.title, track.sourceName, track.pic)
+                    notice = ""
+                }
+                is SubMusicBridge.PlayResult.Fail -> {
+                    notice = r.msg
+                }
+            }
+        }
+    }
+
+    fun openItem(track: SubMusicBridge.SubTrack, list: List<SubMusicBridge.SubTrack>) { // [46v22] 点卡探详情：多集进列表，单集直接播
+        notice = "正在取详情…"
+        scope.launch {
+            val eps = SubMusicBridge.detailEpisodes(track)
+            if (eps.size > 1) {
+                detailTitle = track.title
+                detailTracks = eps
+                notice = ""
+            } else if (eps.size == 1) {
+                playTrack(track, list)
+            } else {
+                notice = "拉取详情失败"
+            }
+        }
+    }
+
+    fun loadMoreDrill() { // [46v22] 钻入分页：滑到底拉下一页追加
+        val sec = chartDetail ?: return
+        val src = selected ?: return
+        if (drillLoadingMore || !drillHasMore) return
+        drillLoadingMore = true
+        scope.launch {
+            try {
+                val next = drillPage + 1
+                val items = SubMusicBridge.category(src.key, sec.first, next.toString()).filter { !SubMusicBridge.isJunkName(it.title) }
+                val fresh = items.filter { ni -> gridItems.none { it.sourceKey == ni.sourceKey && it.id == ni.id } }
+                if (fresh.isEmpty()) {
+                    drillHasMore = false
+                } else {
+                    val merged = gridItems + fresh
+                    drillPage = next
+                    gridItems = merged
+                    chartDetail = Triple(sec.first, sec.second, merged)
+                }
+            } catch (e: Exception) {
+                // 拉更多失败：留在本页，下次滑到底再试
+            } finally {
+                drillLoadingMore = false
+            }
+        }
+    }
+
+    fun refreshDrill() { // [46v22] 钻入下拉刷新：重拉第一页
+        val sec = chartDetail ?: return
+        val src = selected ?: return
+        if (drillRefreshing) return
+        drillRefreshing = true
+        scope.launch {
+            try {
+                val items = SubMusicBridge.category(src.key, sec.first, "1").filter { !SubMusicBridge.isJunkName(it.title) }
+                gridItems = items
+                chartDetail = Triple(sec.first, sec.second, items)
+                drillPage = 1
+                drillHasMore = items.isNotEmpty()
+            } catch (e: Exception) {
+                // 刷新失败：留在本页
+            } finally {
+                drillRefreshing = false
+            }
+        }
+    }""",
+    "openitem-funs",
+)
+
+# 4) applyTab：换 tab 退出分集网格
+rep(
+    "        chartDetail = null // [46v13] 回榜单视图",
+    "        chartDetail = null // [46v13] 回榜单视图\n"
+    "        detailTitle = \"\" // [46v22] 换 tab 退出详情分集\n"
+    "        detailTracks = emptyList()",
+    "applytab-detail",
+)
+
+# 5) 段卡点开：重置钻入分页
+rep(
+    "                                onOpen = { chartDetail = sec; gridItems = sec.third },",
+    "                                onOpen = { chartDetail = sec; gridItems = sec.third; drillPage = 1; drillHasMore = true; drillLoadingMore = false }, // [46v22] 钻入分页重置",
+    "section-open-reset",
+)
+
+# 6) 三处网格 onOpen 改 openItem（圆播 onPlay 不动，仍直接播；标记必须放行尾闭合符号之后，绝不能插在调用中间——// 会吃掉后半行）
+rep(
+    "SubPeekCard(pic = track.pic, title = track.title, badge = track.remark.takeIf { it.isNotBlank() }, onOpen = { playTrack(track, searchResults) }, onPlay = { playTrack(track, searchResults) })",
+    "SubPeekCard(pic = track.pic, title = track.title, badge = track.remark.takeIf { it.isNotBlank() }, onOpen = { openItem(track, searchResults) }, onPlay = { playTrack(track, searchResults) }) // [46v22] 点卡探详情",
+    "search-open",
+)
+rep(
+    "SubPeekCard(pic = track.pic, title = track.title, badge = SubMusicBridge.countOf(track.remark), onOpen = { playTrack(track, playlists) }, onPlay = { playTrack(track, playlists) })",
+    "SubPeekCard(pic = track.pic, title = track.title, badge = SubMusicBridge.countOf(track.remark), onOpen = { openItem(track, playlists) }, onPlay = { playTrack(track, playlists) }) // [46v22] 点卡探详情",
+    "playlist-open",
+)
+
+# 7) 分集网格分支（插在搜索分支之后、榜单分支之前）
+rep(
+    '            } else if (tab == 1 && chartDetail == null) { // [46v19] Peek 式榜单：平铺榜单卡网格（一段一卡，点卡钻入、点播播本榜）',
+    """            } else if (detailTracks.isNotEmpty()) { // [46v22] 详情分集列表（歌手/歌单点卡进来）
+                Text(
+                    text = "← 返回",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = musicColors().accent,
+                    modifier = Modifier
+                        .clickable { detailTracks = emptyList(); detailTitle = "" }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+                Text(
+                    text = detailTitle + " · " + detailTracks.size + " 首",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = musicColors().textSecondary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(detailTracks, key = { it.sourceKey + ":" + it.id }) { track ->
+                        SubPeekCard(pic = track.pic, title = track.title, badge = null, onOpen = { playTrack(track, detailTracks) }, onPlay = { playTrack(track, detailTracks) })
+                    }
+                }
+            } else if (tab == 1 && chartDetail == null) { // [46v19] Peek 式榜单：平铺榜单卡网格（一段一卡，点卡钻入、点播播本榜）""",
+    "detail-branch",
+)
+
+# 8) 钻入网格：包 PullToRefreshBox + 末项触发拉下一页 + 加载中尾巴 + onOpen 改 openItem
+rep(
+    """            } else { // [46v19] 榜单钻入：榜内歌曲网格（Peek 式卡片，无名次）
+                if (tab == 1 && chartDetail != null) {
+                    Text(
+                        text = "← 返回榜单",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().accent,
+                        modifier = Modifier
+                            .clickable { chartDetail = null }
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(gridItems, key = { it.sourceKey + ":" + it.id }) { track ->
+                        SubPeekCard(pic = track.pic, title = track.title, badge = SubMusicBridge.countOf(track.remark), onOpen = { playTrack(track, gridItems) }, onPlay = { playTrack(track, gridItems) })
+                    }
+                }
+            }""",
+    """            } else { // [46v19] 榜单钻入：榜内歌曲网格（Peek 式卡片，无名次）
+                if (tab == 1 && chartDetail != null) {
+                    Text(
+                        text = "← 返回榜单",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().accent,
+                        modifier = Modifier
+                            .clickable { chartDetail = null }
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+                PullToRefreshBox( // [46v22] 钻入下拉刷新
+                    isRefreshing = drillRefreshing,
+                    onRefresh = { refreshDrill() },
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(gridItems, key = { it.sourceKey + ":" + it.id }) { track ->
+                            if (track.id == gridItems.lastOrNull()?.id) { // [46v22] 滑到底拉下一页
+                                LaunchedEffect(track.id) { loadMoreDrill() }
+                            }
+                            SubPeekCard(pic = track.pic, title = track.title, badge = SubMusicBridge.countOf(track.remark), onOpen = { openItem(track, gridItems) }, onPlay = { playTrack(track, gridItems) })
+                        }
+                        if (drillLoadingMore) {
+                            item {
+                                Text(
+                                    text = "正在加载更多…",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = musicColors().textSecondary,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }""",
+    "drill-paging-refresh",
+)
+
+assert src.count("[46v22]") >= 12
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v22 screen")
+PYEOF46V22
+python3 /tmp/patch_bridge46v22.py
+python3 /tmp/patch_screen46v22.py
+grep -q "46v22" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v22 bridge"; exit 1; }
+grep -q "46v22" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v22 screen"; exit 1; }
+echo "OK 46v22"
+echo "=== 46 v22 done ==="
