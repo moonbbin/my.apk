@@ -7122,3 +7122,129 @@ python3 /tmp/patch_screen46v30.py
 grep -q "46v30" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v30 screen"; exit 1; }
 echo "OK 46v30 screen"
 echo "=== 46 v30 done ==="
+
+echo "=== 46 v31 ==="
+cat > /tmp/patch_player46v31.py << 'PYEOF46V31'
+import sys
+
+# 46 v31（播放页回调）：playSongFromQueue 是播放页（LxPlayerActivity）给管理器挂的回调，切歌/自动下一首/开播失败回落都走它；
+# 但它的订阅分支（46 v12 加的）一直没跟上 21 v56/v57：play() 没传 headers（源站挡 UA、无头就报网络异常），封面只用 t.pic（不认 r.pic 的详情封面），
+# 也没有 21 v58 的取号防串。后果：曲库点歌（playTrack，走管理器、有头）能播的歌，一进播放页切歌/自动下一首就掉回无头播放、又报网络异常；
+# 连点切歌时旧解析也可能盖回。修法：与管理器 resolveAndPlay 订阅分支对齐——带头、封面回落、取号防串
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+src = open(path, encoding="utf-8").read()
+if "[46v31]" in src:
+    print("player already 46v31, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+# 1) 取号字段：playSongFromQueue 是 Activity 成员函数，字段放它前面（类成员位）
+rep(
+    "    private fun playSongFromQueue(song: Map<String, String>) {",
+    "    private var subPlayReq = 0 // [46v31] 播放页回调防串：只认最新一次切歌的解析结果\n    private fun playSongFromQueue(song: Map<String, String>) {",
+    "subPlayReq-field",
+)
+
+# 2) 订阅分支：取号、过期丢弃、带头＋详情封面
+rep(
+    """        if (song["sub"] == "1") { // [46v12] 订阅条目走桥接解析，不走落雪链
+            val t = SubMusicBridge.trackFromMap(song) ?: return
+            LxPlayerManager.setLoading(true)
+            Thread {
+                try {
+                    val r = kotlinx.coroutines.runBlocking { SubMusicBridge.resolvePlay(t) }
+                    if (r is SubMusicBridge.PlayResult.Ok) {
+                        runOnUiThread { LxPlayerManager.play(r.url, t.title, t.sourceName, t.pic); LxPlayerManager.setLoading(false) }""",
+    """        if (song["sub"] == "1") { // [46v12] 订阅条目走桥接解析，不走落雪链
+            val t = SubMusicBridge.trackFromMap(song) ?: return
+            val myReq = ++subPlayReq // [46v31] 切歌取号
+            LxPlayerManager.setLoading(true)
+            Thread {
+                try {
+                    val r = kotlinx.coroutines.runBlocking { SubMusicBridge.resolvePlay(t) }
+                    if (myReq != subPlayReq) return@Thread // [46v31] 已被更新的切歌取代，不播
+                    if (r is SubMusicBridge.PlayResult.Ok) {
+                        runOnUiThread { LxPlayerManager.play(r.url, t.title, t.sourceName, t.pic.ifBlank { r.pic }, headers = r.headers); LxPlayerManager.setLoading(false) } // [46v31] 回调解析也带头＋详情封面""",
+    "callback-guard-headers",
+)
+
+# 后验：标记在位，括号平衡，标记注释不吞码
+assert src.count("[46v31]") >= 4
+assert src.count("(") - src.count(")") == 0
+assert src.count("{") - src.count("}") == 0
+assert src.count("[") - src.count("]") == 0
+for line in src.splitlines():
+    if "// [46v31]" in line:
+        after = line.split("// [46v31]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 46v31 player")
+
+PYEOF46V31
+python3 /tmp/patch_player46v31.py
+grep -q "46v31" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt || { echo "X 46v31 player"; exit 1; }
+echo "OK 46v31 player"
+echo "=== 46 v31 done ==="
+
+echo "=== 46 v32 ==="
+cat > /tmp/patch_bridge46v32.py << 'PYEOF46V32'
+import sys
+
+# 46 v32（诊断，临时）：初心源播错歌——用户实测只有初心这样，别源正常；歌单名是对的、音频全不是该歌手的，
+# 说明错在取地址层（resolvePlay 回来的 URL 不是该集的），不是防串。根因待定：可能是初心详情的 vod_play_url 里
+# 名字与地址本来就错位，也可能是第一组 $$$ 不是音乐组、也可能是 playerContent 对 playId 回了别的歌。
+# 修法先不猜：把原始分集映射和取址结果写进运行日志（设置源管理里的日志抽屉能看到），点一次陈奕迅的歌、截一张日志图，
+# 就能钉死是源数据错位、还是解析错位、还是取址错位。诊断完可随时删这两行日志
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+src = open(path, encoding="utf-8").read()
+if "[46v32]" in src:
+    print("bridge already 46v32, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+# 1) 导运行日志（与管理器同款 import，用法同款 try 包裹）
+rep(
+    "import org.json.JSONObject",
+    "import org.json.JSONObject\nimport com.github.tvbox.osc.util.LxRuntimeLog // [46v32] 诊断：分集映射与取址结果写运行日志",
+    "runtime-log-import",
+)
+
+# 2) parsePlayParts：详情解析完就记一笔——条目名、线路 flag、共几集、前 3 组“名=>地址 id”
+rep(
+    "        return PlayParts(flag, pairs.map { it.first }, pairs.map { it.second })",
+    "        try { LxRuntimeLog.add(\"[46v32] 分集 \" + item.optString(\"vod_name\").take(20) + \" flag=\" + flag + \" 共\" + pairs.size + \"集：\" + pairs.take(3).joinToString(\" | \") { it.first.take(12) + \"=>\" + it.second.take(24) }) } catch (_: Exception) { } // [46v32] 诊断：原始分集映射\n        return PlayParts(flag, pairs.map { it.first }, pairs.map { it.second })",
+    "parsePlayParts-log",
+)
+
+# 3) resolvePlay：取到地址后记一笔——点的歌名、集号、用的 playId、地址尾巴
+rep(
+    '            PlayResult.Ok(url, headers = extractPlayHeaders(pj, bean.header), pic = parts.third) // [46v27][46v28] 带头返回＋详情封面',
+    '            try { LxRuntimeLog.add("[46v32] 取址 " + track.title.take(12) + " #" + wantIdx + " playId=" + playId.take(24) + " url尾=" + url.takeLast(48)) } catch (_: Exception) { } // [46v32] 诊断：取址结果\n            PlayResult.Ok(url, headers = extractPlayHeaders(pj, bean.header), pic = parts.third) // [46v27][46v28] 带头返回＋详情封面',
+    "resolvePlay-log",
+)
+
+# 后验：标记在位，括号平衡，标记注释不吞码
+assert src.count("[46v32]") >= 4
+assert src.count("(") - src.count(")") == 0
+assert src.count("{") - src.count("}") == 0
+assert src.count("[") - src.count("]") == 0
+for line in src.splitlines():
+    if "// [46v32]" in line:
+        after = line.split("// [46v32]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 46v32 bridge")
+
+PYEOF46V32
+python3 /tmp/patch_bridge46v32.py
+grep -q "46v32" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v32 bridge"; exit 1; }
+echo "OK 46v32 bridge"
+echo "=== 46 v32 done ==="
