@@ -3456,3 +3456,71 @@ PYEOF21V57
 grep -q "21v57" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v57"; exit 1; }
 echo "OK 21 v57"
 echo "=== 21 v57 done ==="
+
+echo "=== 21 v58 ==="
+
+python3 - << 'PYEOF21V58'
+import os
+import sys
+
+# 21 v58：切歌防串（配 46 v30）——resolveAndPlay 订阅分支每次切歌起一个裸 Thread 做桥接解析，无 guard；
+# 连点上下首/自动下一首与点歌交错时，先起的解析慢回包、后起的先回包，最后 post 的 play() 获胜——不是最后点的获胜，
+# 先点的歌会盖掉后点的歌。修法：切歌取号（subResolveReq 单调递增），只认最新一号的解析结果，过期的直接丢弃、不播不报错；
+# 队列下标是同步推进的（点即换位），本来就是最后点的获胜，只乱序回包要堵
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+if not os.path.exists(path):
+    path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+src = open(path, encoding="utf-8").read()
+if "[21v58]" in src:
+    print("manager already 21v58, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+base_parens = src.count("(") - src.count(")")
+base_braces = src.count("{") - src.count("}")
+base_brackets = src.count("[") - src.count("]")
+
+# 1) 取号字段：与 v56 留住的工厂同处
+rep(
+    "    private var httpDataSourceFactory: DefaultHttpDataSource.Factory? = null // [21v56] 订阅带头播放：每首歌的头在 play 时写进工厂，建播时只建一次",
+    "    private var httpDataSourceFactory: DefaultHttpDataSource.Factory? = null // [21v56] 订阅带头播放：每首歌的头在 play 时写进工厂，建播时只建一次\n    private var subResolveReq = 0 // [21v58] 订阅解析防串：只认最新一次切歌的解析结果",
+    "subResolveReq-field",
+)
+
+# 2) 订阅分支：取号，过期结果丢弃
+rep(
+    """            val t = SubMusicBridge.trackFromMap(song) ?: return
+            setLoading(true)
+            Thread {
+                try {
+                    val r = kotlinx.coroutines.runBlocking { SubMusicBridge.resolvePlay(t) }""",
+    """            val t = SubMusicBridge.trackFromMap(song) ?: return
+            val myReq = ++subResolveReq // [21v58] 切歌取号
+            setLoading(true)
+            Thread {
+                try {
+                    val r = kotlinx.coroutines.runBlocking { SubMusicBridge.resolvePlay(t) }
+                    if (myReq != subResolveReq) return@Thread // [21v58] 已被更新的切歌取代，不播""",
+    "resolveAndPlay-guard",
+)
+
+# 后验：标记在位，括号平衡不变（Manager 基线括号差为字符串内括号所致，v55 前后一致），标记注释不吞码
+assert src.count("[21v58]") >= 3
+assert src.count("(") - src.count(")") == base_parens
+assert src.count("{") - src.count("}") == base_braces
+assert src.count("[") - src.count("]") == base_brackets
+for line in src.splitlines():
+    if "// [21v58]" in line:
+        after = line.split("// [21v58]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 21v58")
+
+PYEOF21V58
+grep -q "21v58" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v58"; exit 1; }
+echo "OK 21 v58"
+echo "=== 21 v58 done ==="
