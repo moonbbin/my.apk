@@ -3990,3 +3990,974 @@ PYEOF46V17
 grep -q "46v17" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v17 bridge"; exit 1; }
 echo "OK 46v17"
 echo "=== 46 v17 done ==="
+
+# === 46 v18: 歌手推导收紧（对照 Peek/主体：只用真歌手信号） ===
+
+echo "=== 46 v18 ==="
+
+python3 - << 'PYEOF46V18B'
+import sys
+
+# 46 v18：歌手推导收紧——只用真歌手信号（对照 Peek/主体：它们按源自己的分类摆歌单/榜单，从不从备注猜歌手）
+# 故障（2026-11-05 14:31 用户截图，v17 包，酷我源歌手 tab）：
+#   规则三把榜单条目的备注（说明文字）当歌手：“按搜索播放数”“播放时”“根据公开市场…”“酷我会员用户…”“按歌曲热度”
+#   规则一把榜单名当歌手：“飙升榜”“新歌榜”“会员畅听”“会员飙升榜”“视频歌曲”（备注带歌单字样或备注本身就是榜单名）
+#   导航/提示项当歌手：“当前平台：酷…”“在酷我音乐 搜…”“酷我每日搜索…”（标题无 v15 杂项词）
+# 挡不住的原因：okName 只拦含“榜单”（两字）的名，“飙升榜”只含“榜”；isPersonName 的排除表只有“榜单”没有单字“榜”；
+#   isJunkName 只认点击/上移/调整…，不认平台/搜索/当前/榜/排行/畅听/会员
+# 修法：artistsOf 三规则全部加门——规则一要求标题本身是人名且非榜单/导航类；规则二 vod_actor 不动（唯一真歌手字段）；
+#   规则三（备注当歌手）只认“像人名的备注”且条目本身得是单曲样的、备注不能是说明文字；isPersonName 排除表扩到单字榜及榜单/导航/说明类词；
+#   isCollection 加榜单/导航类标题排除；新增 isChartLike/isNavTitle 供屏幕层过滤
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v18]" in src:
+    print("bridge already 46v18, skip")
+    sys.exit(0)
+
+old_junk = """    fun isJunkName(name: String): Boolean { // [46v15] 杂项名：空白、纯数字（榜单名次备注）、含杂项信号词
+        val n = name.trim()
+        return n.isEmpty() || n.all { it.isDigit() } || JUNK_HINTS.any { n.contains(it) }
+    }"""
+assert src.count(old_junk) == 1, "junk anchor %d" % src.count(old_junk)
+new_junk = old_junk + """
+
+    private val CHART_WORDS = listOf("榜", "排行", "飙升", "新歌", "畅听", "会员", "热歌", "金曲", "视频") // [46v18] 榜单类信号词：榜单名、榜单说明不进歌手、歌单桶
+    private val NAV_WORDS = listOf("平台", "搜索", "当前", "每日", "：") // [46v18] 导航/提示项信号词：“当前平台：酷我音乐”这类首页导航项
+    private val DESC_WORDS = listOf("播放", "搜索", "市场", "热度", "用户", "酷我", "按", "根据") // [46v18] 说明文字信号词：备注当歌手时排除
+
+    fun isChartLike(text: String): Boolean = CHART_WORDS.any { text.contains(it) } // [46v18] 榜单类标题/名
+
+    fun isNavTitle(text: String): Boolean = NAV_WORDS.any { text.contains(it) } // [46v18] 导航/提示类标题"""
+src = src.replace(old_junk, new_junk, 1)
+
+old_artists = """    fun artistsOf(track: SubTrack): List<String> { // [46v17] 修 228:19 构建红：判空改显式检查，ifBlank{null} 改 takeIf
+        val raw: String? = when {
+            track.remark.contains("合集") || track.remark.contains("专辑") || track.remark.contains("歌单") -> track.title.takeIf { it.isNotBlank() }
+            track.actor.isNotBlank() -> track.actor
+            track.remark.isNotBlank() && !track.remark.contains(">") -> track.remark
+            else -> null
+        }
+        if (raw.isNullOrBlank()) return emptyList()
+        return raw.split("&", "＆", "、", "，", ",").map { it.trim() }.filter { it.isNotEmpty() && !isJunkName(it) }
+    }"""
+assert src.count(old_artists) == 1, "artistsOf anchor %d" % src.count(old_artists)
+new_artists = """    fun artistsOf(track: SubTrack): List<String> { // [46v18] 歌手推导收紧：只用真歌手信号——vod_actor、合集类人名标题、像人名的备注（榜单说明/导航项不再当歌手）
+        val out = LinkedHashSet<String>()
+        fun addNames(raw: String?) {
+            if (raw.isNullOrBlank()) return
+            raw.split("&", "＆", "、", "，", ",").map { it.trim() }.filter { it.isNotEmpty() && !isJunkName(it) }.forEach { out.add(it) }
+        }
+        if ((track.remark.contains("合集") || track.remark.contains("专辑") || track.remark.contains("歌单")) && isPersonName(track.title) && !isChartLike(track.title) && !isNavTitle(track.title)) addNames(track.title)
+        if (track.actor.isNotBlank()) addNames(track.actor)
+        if (!isChartLike(track.title) && !isNavTitle(track.title) && track.remark.isNotBlank() && !track.remark.contains(">") && isPersonName(track.remark) && DESC_WORDS.none { track.remark.contains(it) }) addNames(track.remark)
+        return out.toList()
+    }"""
+src = src.replace(old_artists, new_artists, 1)
+
+old_person = """    fun isPersonName(title: String): Boolean { // [46v16] 人名信号：短（≤4 字）、无分隔符/括号/书名号、无歌单类词（“伤感歌单”4 字不是人名）
+        val n = title.trim()
+        if (n.isEmpty() || n.length > 4) return false
+        if (listOf("歌单", "合集", "专辑", "精选", "榜单", "排行", "热门", "推荐").any { n.contains(it) }) return false"""
+assert src.count(old_person) == 1, "isPersonName anchor %d" % src.count(old_person)
+new_person = """    fun isPersonName(title: String): Boolean { // [46v18] 人名信号收紧：榜单/导航/说明/曲风类词（榜、畅听、会员、搜索、平台、播放、粤语、经典…）一律不是人名
+        val n = title.trim()
+        if (n.isEmpty() || n.length > 4) return false
+        if (listOf("歌单", "合集", "专辑", "精选", "榜", "排行", "热门", "推荐", "畅听", "会员", "飙升", "新歌", "热歌", "金曲", "视频", "搜索", "平台", "播放", "当前", "每日", "粤语", "国语", "经典", "流行", "怀旧", "伤感", "治愈", "古风", "民谣", "摇滚", "纯音乐", "轻音乐", "钢琴", "电音", "舞曲", "老歌").any { n.contains(it) }) return false"""
+src = src.replace(old_person, new_person, 1)
+
+old_coll = """    fun isCollection(track: SubTrack): Boolean { // [46v16] 歌单型：备注合集/专辑/歌单，且标题不像人名（人名合集归歌手 tab）
+        val remark = track.remark
+        return (remark.contains("合集") || remark.contains("专辑") || remark.contains("歌单")) && !isPersonName(track.title)
+    }"""
+assert src.count(old_coll) == 1, "isCollection anchor %d" % src.count(old_coll)
+new_coll = """    fun isCollection(track: SubTrack): Boolean { // [46v18] 歌单型：备注合集/专辑/歌单，标题是人名归歌手、榜单/导航类标题排除
+        val remark = track.remark
+        return (remark.contains("合集") || remark.contains("专辑") || remark.contains("歌单")) && !isPersonName(track.title) && !isChartLike(track.title) && !isNavTitle(track.title)
+    }"""
+src = src.replace(old_coll, new_coll, 1)
+
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v18 bridge")
+PYEOF46V18B
+python3 - << 'PYEOF46V18S'
+import sys
+
+# 46 v18（屏幕侧）：歌手原料先排掉榜单/导航类条目；okName 拦词扩到单字榜及榜单/导航/说明类词；榜单分段跳过导航类分类
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v18]" in src:
+    print("screen already 46v18, skip")
+    sys.exit(0)
+
+old_all = "        val all = pool"
+assert src.count(old_all) == 1, "all anchor %d" % src.count(old_all)
+new_all = "        val all = pool.filter { !SubMusicBridge.isChartLike(it.title) && !SubMusicBridge.isNavTitle(it.title) } // [46v18] 歌手原料先排掉榜单/导航类条目"
+src = src.replace(old_all, new_all, 1)
+
+old_words = '        val sectionWords = listOf("歌手", "热门", "歌单", "榜单", "全部", "更多")'
+assert src.count(old_words) == 1, "sectionWords anchor %d" % src.count(old_words)
+new_words = '        val sectionWords = listOf("歌手", "热门", "歌单", "榜单", "全部", "更多", "榜", "排行", "畅听", "会员", "飙升", "新歌", "搜索", "平台", "播放", "当前", "每日", "热歌", "金曲", "视频", "粤语", "国语", "经典", "流行", "怀旧", "伤感", "治愈", "古风", "民谣", "摇滚", "纯音乐", "轻音乐", "钢琴", "电音", "舞曲", "老歌") // [46v18] 拦词扩到单字榜及榜单/导航/说明类词'
+src = src.replace(old_words, new_words, 1)
+
+old_cls = '                    if (SubMusicBridge.isJunkName(cls.name) || cls.name.contains("歌手")) continue'
+assert src.count(old_cls) == 1, "cls anchor %d" % src.count(old_cls)
+new_cls = '                    if (SubMusicBridge.isJunkName(cls.name) || cls.name.contains("歌手") || SubMusicBridge.isNavTitle(cls.name)) continue // [46v18] 导航类分类跳过不拉'
+src = src.replace(old_cls, new_cls, 1)
+
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v18 screen")
+PYEOF46V18S
+grep -q "46v18" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v18 bridge"; exit 1; }
+grep -q "46v18" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v18 screen"; exit 1; }
+echo "OK 46v18"
+echo "=== 46 v18 done ==="
+
+# === 46 v19: 曲库按 Peek 改紧致简洁（两 pill tab＋平铺榜单＋Peek 卡＋MH 顶栏） ===
+
+echo "=== 46 v19 ==="
+
+python3 - << 'PYEOF46V19B'
+import sys
+
+# 46 v19（桥接侧）：歌手 tab 按 Peek 拿掉——歌手推导整段删除（artistsOf/artistOf/isPersonName/DESC_WORDS）；
+# 歌单判定改 Peek 口径：有首数就是歌单（Peek 歌单卡都有首数，含热歌榜这类榜单名），或备注合集/专辑/歌单且标题非榜单类；
+# 人名合集不再单列（无歌手 tab 可归，合集就是歌单）；导航项排除；新增 countOf（备注里取“355首”，没有不显示）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v19]" in src:
+    print("bridge already 46v19, skip")
+    sys.exit(0)
+
+old_desc = '    private val DESC_WORDS = listOf("播放", "搜索", "市场", "热度", "用户", "酷我", "按", "根据") // [46v18] 说明文字信号词：备注当歌手时排除\n'
+assert src.count(old_desc) == 1, "desc anchor %d" % src.count(old_desc)
+src = src.replace(old_desc, "", 1)
+
+old_artists = """    fun artistsOf(track: SubTrack): List<String> { // [46v18] 歌手推导收紧：只用真歌手信号——vod_actor、合集类人名标题、像人名的备注（榜单说明/导航项不再当歌手）
+        val out = LinkedHashSet<String>()
+        fun addNames(raw: String?) {
+            if (raw.isNullOrBlank()) return
+            raw.split("&", "＆", "、", "，", ",").map { it.trim() }.filter { it.isNotEmpty() && !isJunkName(it) }.forEach { out.add(it) }
+        }
+        if ((track.remark.contains("合集") || track.remark.contains("专辑") || track.remark.contains("歌单")) && isPersonName(track.title) && !isChartLike(track.title) && !isNavTitle(track.title)) addNames(track.title)
+        if (track.actor.isNotBlank()) addNames(track.actor)
+        if (!isChartLike(track.title) && !isNavTitle(track.title) && track.remark.isNotBlank() && !track.remark.contains(">") && isPersonName(track.remark) && DESC_WORDS.none { track.remark.contains(it) }) addNames(track.remark)
+        return out.toList()
+    }
+
+    fun artistOf(track: SubTrack): String? = artistsOf(track).firstOrNull() // [46v15] 兼容旧调用
+
+    fun isPersonName(title: String): Boolean { // [46v18] 人名信号收紧：榜单/导航/说明/曲风类词（榜、畅听、会员、搜索、平台、播放、粤语、经典…）一律不是人名
+        val n = title.trim()
+        if (n.isEmpty() || n.length > 4) return false
+        if (listOf("歌单", "合集", "专辑", "精选", "榜", "排行", "热门", "推荐", "畅听", "会员", "飙升", "新歌", "热歌", "金曲", "视频", "搜索", "平台", "播放", "当前", "每日", "粤语", "国语", "经典", "流行", "怀旧", "伤感", "治愈", "古风", "民谣", "摇滚", "纯音乐", "轻音乐", "钢琴", "电音", "舞曲", "老歌").any { n.contains(it) }) return false
+        return !n.contains("&") && !n.contains("＆") && !n.contains("、") && !n.contains("，") && !n.contains(",") && !n.contains(" ") && !n.contains("-") && !n.contains("《") && !n.contains("》") && !n.contains("(") && !n.contains("（")
+    }
+
+"""
+assert src.count(old_artists) == 1, "artists anchor %d" % src.count(old_artists)
+src = src.replace(old_artists, "", 1)
+
+old_coll = """    fun isCollection(track: SubTrack): Boolean { // [46v18] 歌单型：备注合集/专辑/歌单，标题是人名归歌手、榜单/导航类标题排除
+        val remark = track.remark
+        return (remark.contains("合集") || remark.contains("专辑") || remark.contains("歌单")) && !isPersonName(track.title) && !isChartLike(track.title) && !isNavTitle(track.title)
+    }"""
+assert src.count(old_coll) == 1, "isCollection anchor %d" % src.count(old_coll)
+new_coll = """    fun countOf(remark: String): String? { // [46v19] 歌单首数徽标：备注里“355首”取出来，没有就不显示
+        val idx = remark.indexOf("首")
+        if (idx <= 0) return null
+        var s = idx
+        while (s > 0 && remark[s - 1].isDigit()) s--
+        if (s == idx) return null
+        return remark.substring(s, idx + 1)
+    }
+
+    fun isCollection(track: SubTrack): Boolean { // [46v19] 歌单型：有首数就是歌单（Peek 的歌单卡都有首数，含热歌榜这类榜单名）；或备注合集/专辑/歌单且标题非榜单类；导航项排除
+        val remark = track.remark
+        if (isNavTitle(track.title)) return false
+        if (countOf(remark) != null) return true
+        return (remark.contains("合集") || remark.contains("专辑") || remark.contains("歌单")) && !isChartLike(track.title)
+    }"""
+src = src.replace(old_coll, new_coll, 1)
+
+assert "artistsOf" not in src and "isPersonName" not in src and "DESC_WORDS" not in src
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v19 bridge")
+PYEOF46V19B
+python3 - << 'PYEOF46V19S'
+import sys
+
+# 46 v19（屏幕侧）：曲库按 Peek 改成紧致简洁——两 pill tab（歌单/榜单，选中绿底＋手绘对勾）、圆角搜索框、
+# 榜单改平铺榜单卡网格（一段一卡，点卡钻入、点播播本榜）、歌单与钻入网格共用 Peek 卡（方形封面＋左上徽标＋右下圆播＋单行标题，间距 8/12dp）、
+# 歌手 tab 拿掉（Peek 没有；歌手推导代码随桥接侧一并删）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v19]" in src:
+    print("screen already 46v19, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+# 1) 删歌手状态 + 改 chartItems 注释
+rep("    var showingArtistTracks by remember { mutableStateOf(false) } // [46v12] 歌手 tab 内：true=某歌手的歌曲网格\n", "", "artist-state")
+rep(" // [46v12] 榜单 items，供歌手推导", " // [46v12] 榜单 items（进歌单池）", "chartitems-comment")
+
+# 2) 删歌手推导块
+old_artists = """    val artists = remember(home, chartItems) { // [46v15] 歌手推导：拆合作歌手、去杂项、合集图优先
+        val classNames = home?.classes?.map { it.name } ?: emptyList()
+        val sectionWords = listOf("歌手", "热门", "歌单", "榜单", "全部", "更多", "榜", "排行", "畅听", "会员", "飙升", "新歌", "搜索", "平台", "播放", "当前", "每日", "热歌", "金曲", "视频", "粤语", "国语", "经典", "流行", "怀旧", "伤感", "治愈", "古风", "民谣", "摇滚", "纯音乐", "轻音乐", "钢琴", "电音", "舞曲", "老歌") // [46v18] 拦词扩到单字榜及榜单/导航/说明类词
+        fun okName(n: String) = !SubMusicBridge.isJunkName(n) && sectionWords.none { n.contains(it) } && !classNames.contains(n)
+        val seen = LinkedHashMap<String, String>()
+        val all = pool.filter { !SubMusicBridge.isChartLike(it.title) && !SubMusicBridge.isNavTitle(it.title) } // [46v18] 歌手原料先排掉榜单/导航类条目
+        val ordered = all.filter { it.remark.contains("合集") || it.remark.contains("专辑") } + all.filter { !(it.remark.contains("合集") || it.remark.contains("专辑")) }
+        for (t in ordered) {
+            for (name in SubMusicBridge.artistsOf(t)) {
+                if (!okName(name)) continue
+                if (!seen.containsKey(name)) seen[name] = t.pic
+            }
+        }
+        seen.map { (name, pic) -> name to pic }
+    }
+
+"""
+rep(old_artists, "", "artists-block")
+
+# 3) applyTab 改两 tab
+old_apply = """    fun applyTab(src: SubMusicBridge.SubSource, t: Int, h: SubMusicBridge.SubHome?) {
+        showingArtistTracks = false // [46v12] 切 Tab 回歌手列表
+        chartDetail = null // [46v13] 回榜单分段视图
+        if (t == 0) {
+            gridItems = emptyList()
+            gridNote = ""
+            return
+        }
+        if (t == 1) { // [46v16] 歌单 tab：派生视图，不拉数据
+            gridItems = emptyList()
+            gridNote = ""
+            return
+        }
+"""
+new_apply = """    fun applyTab(src: SubMusicBridge.SubSource, t: Int, h: SubMusicBridge.SubHome?) { // [46v19] Peek 式两 tab：0=歌单，1=榜单（歌手 tab 拿掉）
+        chartDetail = null // [46v13] 回榜单视图
+        if (t == 0) { // [46v16] 歌单 tab：派生视图，不拉数据
+            gridItems = emptyList()
+            gridNote = ""
+            return
+        }
+"""
+rep(old_apply, new_apply, "applyTab")
+
+# 4) 删 openArtist
+old_open = """    fun openArtist(name: String) { // [46v12] 歌手点开：搜该歌手，进歌曲网格
+        val src = selected ?: return
+        gridLoading = true
+        gridNote = ""
+        scope.launch {
+            try {
+                val res = SubMusicBridge.searchInSource(src.key, name)
+                gridItems = res
+                showingArtistTracks = res.isNotEmpty()
+                if (res.isEmpty()) gridNote = "该歌手暂无内容"
+            } catch (e: Exception) {
+                gridItems = emptyList()
+                gridNote = "加载失败：${e.message}"
+            } finally {
+                gridLoading = false
+            }
+        }
+    }
+
+"""
+rep(old_open, "", "openArtist")
+
+# 5) 搜索框改圆角
+old_search = """            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSearchClick() }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {"""
+new_search = """            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                    .background(musicColors().card)
+                    .clickable { onSearchClick() }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) { // [46v19] Peek 式圆角搜索框"""
+rep(old_search, new_search, "search-row")
+
+# 6) 文字 tab 改 pill tab
+old_tabs = """            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                listOf("歌手", "歌单", "榜单").forEachIndexed { i, label -> // [46v16] 分桶三分
+                    Column(
+                        modifier = Modifier
+                            .clickable {
+                                if (tab != i) {
+                                    tab = i
+                                    val src = selected
+                                    if (src != null) applyTab(src, i, home)
+                                }
+                            }
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (tab == i) FontWeight.Bold else FontWeight.Normal,
+                            color = if (tab == i) musicColors().accent else musicColors().textSecondary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .width(20.dp)
+                                .height(2.dp)
+                                .background(if (tab == i) musicColors().accent else Color.Transparent) // [46v14] 未选中下划线透明（壁纸上不留黑条）
+                        )
+                    }
+                }
+            }"""
+new_tabs = """            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) { // [46v19] Peek 式 pill tab：选中绿底＋对勾，未选中卡片底
+                listOf("歌单", "榜单").forEachIndexed { i, label ->
+                    val sel = tab == i
+                    Row(
+                        modifier = Modifier
+                            .padding(end = 12.dp)
+                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                            .background(if (sel) musicColors().accent else musicColors().card)
+                            .clickable {
+                                if (!sel) {
+                                    tab = i
+                                    val src = selected
+                                    if (src != null) applyTab(src, i, home)
+                                }
+                            }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val checkTint = musicColors().accentText
+                        if (sel) {
+                            Canvas(modifier = Modifier.size(14.dp)) {
+                                val sw = 2.dp.toPx()
+                                drawLine(color = checkTint, start = androidx.compose.ui.geometry.Offset(2.dp.toPx(), 7.dp.toPx()), end = androidx.compose.ui.geometry.Offset(6.dp.toPx(), 11.dp.toPx()), strokeWidth = sw, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                                drawLine(color = checkTint, start = androidx.compose.ui.geometry.Offset(6.dp.toPx(), 11.dp.toPx()), end = androidx.compose.ui.geometry.Offset(12.dp.toPx(), 3.dp.toPx()), strokeWidth = sw, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                            color = if (sel) musicColors().accentText else musicColors().textSecondary
+                        )
+                    }
+                }
+            }"""
+rep(old_tabs, new_tabs, "tabs")
+
+# 7) 榜单分段视图改平铺榜单卡网格
+old_sections = """            if (tab == 2 && chartDetail == null) { // [46v13] 榜单分段视图
+                if (gridNote.isNotBlank()) {
+                    Text(
+                        text = gridNote,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else if (chartSections.isEmpty()) {
+                    Text(
+                        text = if (sectionsLoading) "正在加载榜单…" else "该源暂无分类内容",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(vertical = 8.dp)
+                    ) {
+                        items(chartSections, key = { it.first }) { sec ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = sec.second,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = musicColors().textPrimary
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
+                                Text(
+                                    text = "全部 >",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = musicColors().accent,
+                                    modifier = Modifier.clickable {
+                                        chartDetail = sec
+                                        gridItems = sec.third
+                                    }
+                                )
+                            }
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                itemsIndexed(sec.third, key = { _, it -> it.sourceKey + ":" + it.id }) { idx, track ->
+                                    SubSectionCard(track = track, rank = idx + 1, onPlay = { playTrack(track, sec.third) })
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                        if (sectionsLoading) {
+                            item {
+                                Text(
+                                    text = "正在加载更多分类…",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = musicColors().textSecondary,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            } else if (gridLoading) {"""
+new_sections = """            if (tab == 1 && chartDetail == null) { // [46v19] Peek 式榜单：平铺榜单卡网格（一段一卡，点卡钻入、点播播本榜）
+                if (gridNote.isNotBlank()) {
+                    Text(
+                        text = gridNote,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else if (chartSections.isEmpty()) {
+                    Text(
+                        text = if (sectionsLoading) "正在加载榜单…" else "该源暂无分类内容",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else {
+                    if (sectionsLoading) {
+                        Text(
+                            text = "正在加载更多分类…",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = musicColors().textSecondary,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                        )
+                    }
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(chartSections, key = { it.first }) { sec ->
+                            val first = sec.third.firstOrNull()
+                            SubPeekCard(
+                                pic = first?.pic ?: "",
+                                title = sec.second,
+                                badge = "榜单",
+                                onOpen = { chartDetail = sec; gridItems = sec.third },
+                                onPlay = { if (sec.third.isNotEmpty()) playTrack(sec.third.first(), sec.third) }
+                            )
+                        }
+                    }
+                }
+            } else if (gridLoading) {"""
+rep(old_sections, new_sections, "chart-sections")
+
+# 8) 删歌手网格分支，歌单分支改 tab 0
+old_singer = """            } else if (tab == 0 && !showingArtistTracks) { // [46v12] 歌手 tab：推导出的歌手网格
+                if (artists.isEmpty()) {
+                    Text(
+                        text = "该源未提供歌手信息",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(artists, key = { it.first }) { a ->
+                            SubArtistCard(name = a.first, pic = a.second, onClick = { openArtist(a.first) })
+                        }
+                    }
+                }
+            } else if (tab == 1) { // [46v16] 歌单 tab：合集型条目网格"""
+new_singer = """            } else if (tab == 0) { // [46v19] 歌单 tab：Peek 式紧致网格"""
+rep(old_singer, new_singer, "singer-grid")
+
+# 9) 歌单网格改 Peek 卡 + 紧致间距
+old_playlist_grid = """                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(playlists, key = { it.sourceKey + ":" + it.id }) { track ->
+                            SubGridCard(track = track, onPlay = { playTrack(track, playlists) })
+                        }
+                    }"""
+new_playlist_grid = """                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(playlists, key = { it.sourceKey + ":" + it.id }) { track ->
+                            SubPeekCard(pic = track.pic, title = track.title, badge = SubMusicBridge.countOf(track.remark), onOpen = { playTrack(track, playlists) }, onPlay = { playTrack(track, playlists) })
+                        }
+                    }"""
+rep(old_playlist_grid, new_playlist_grid, "playlist-grid")
+
+# 10) 钻入分支：删返回歌手行，榜单 tab 号 2→1，网格改 Peek 卡
+old_drill = """            } else {
+                if (tab == 0 && showingArtistTracks) {
+                    Text(
+                        text = "← 返回歌手",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().accent,
+                        modifier = Modifier
+                            .clickable { showingArtistTracks = false }
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+                if (tab == 2 && chartDetail != null) { // [46v13] 从分类整页回分段视图
+                    Text(
+                        text = "← 返回榜单",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().accent,
+                        modifier = Modifier
+                            .clickable { chartDetail = null }
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    itemsIndexed(gridItems, key = { _, it -> it.sourceKey + ":" + it.id }) { idx, track ->
+                        SubGridCard(track = track, rank = if (tab == 2) idx + 1 else null, onPlay = { playTrack(track, gridItems) })
+                    }
+                }
+            }"""
+new_drill = """            } else { // [46v19] 榜单钻入：榜内歌曲网格（Peek 式卡片，无名次）
+                if (tab == 1 && chartDetail != null) {
+                    Text(
+                        text = "← 返回榜单",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().accent,
+                        modifier = Modifier
+                            .clickable { chartDetail = null }
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(gridItems, key = { it.sourceKey + ":" + it.id }) { track ->
+                        SubPeekCard(pic = track.pic, title = track.title, badge = SubMusicBridge.countOf(track.remark), onOpen = { playTrack(track, gridItems) }, onPlay = { playTrack(track, gridItems) })
+                    }
+                }
+            }"""
+rep(old_drill, new_drill, "drill")
+
+# 11) SubGridCard 改 SubPeekCard
+old_gridcard = """@Composable
+private fun SubGridCard(track: SubMusicBridge.SubTrack, rank: Int? = null, onPlay: () -> Unit) { // [46v12] rank 非空=榜单名次
+    val accent = musicColors().accent
+    val accentText = musicColors().accentText
+    val cardBg = musicColors().card
+    Column(modifier = Modifier.clickable { onPlay() }) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(MaterialTheme.shapes.medium)
+                .background(cardBg.copy(alpha = 0.45f)) // [46v14] 磨砂卡片（同设置页）
+                .border(0.5.dp, Color.White.copy(alpha = 0.15f), MaterialTheme.shapes.medium)
+        ) {
+            if (track.pic.isNotBlank()) {
+                AsyncImage(
+                    model = track.pic,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = track.title.take(1),
+                        color = musicColors().textSecondary
+                    )
+                }
+            }
+            if (track.remark.isNotBlank()) {
+                Text(
+                    text = track.remark,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = musicColors().textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .clip(MaterialTheme.shapes.small)
+                        .background(cardBg.copy(alpha = 0.8f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+            if (rank != null) {
+                Text(
+                    text = rank.toString(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = musicColors().textPrimary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd) // [46v13] 名次统一右上角
+                        .padding(6.dp)
+                        .clip(MaterialTheme.shapes.small)
+                        .background(cardBg.copy(alpha = 0.8f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(8.dp)
+                    .size(32.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(accent)
+                    .clickable { onPlay() },
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(modifier = Modifier.size(14.dp)) {
+                    val p = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(4.dp.toPx(), 2.dp.toPx())
+                        lineTo(4.dp.toPx(), 12.dp.toPx())
+                        lineTo(12.dp.toPx(), 7.dp.toPx())
+                        close()
+                    }
+                    drawPath(path = p, color = accentText)
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = track.title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = musicColors().textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}"""
+new_peekcard = """@Composable
+private fun SubPeekCard(pic: String, title: String, badge: String?, onOpen: () -> Unit, onPlay: () -> Unit) { // [46v19] Peek 式卡片：方形封面＋左上徽标＋右下圆播＋单行标题（点卡打开、点播播放）
+    val accent = musicColors().accent
+    val accentText = musicColors().accentText
+    val cardBg = musicColors().card
+    Column(modifier = Modifier.clickable { onOpen() }) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(MaterialTheme.shapes.medium)
+                .background(cardBg.copy(alpha = 0.45f)) // [46v14] 磨砂卡片（同设置页）
+                .border(0.5.dp, Color.White.copy(alpha = 0.15f), MaterialTheme.shapes.medium)
+        ) {
+            if (pic.isNotBlank()) {
+                AsyncImage(
+                    model = pic,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = title.take(1),
+                        color = musicColors().textSecondary
+                    )
+                }
+            }
+            if (badge != null) {
+                Text(
+                    text = badge,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = musicColors().textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .clip(MaterialTheme.shapes.small)
+                        .background(cardBg.copy(alpha = 0.8f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(8.dp)
+                    .size(32.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(accent)
+                    .clickable { onPlay() },
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(modifier = Modifier.size(14.dp)) {
+                    val p = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(4.dp.toPx(), 2.dp.toPx())
+                        lineTo(4.dp.toPx(), 12.dp.toPx())
+                        lineTo(12.dp.toPx(), 7.dp.toPx())
+                        close()
+                    }
+                    drawPath(path = p, color = accentText)
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = musicColors().textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}"""
+rep(old_gridcard, new_peekcard, "gridcard")
+
+# 12) 删 SubArtistCard
+old_artistcard = """@Composable
+private fun SubArtistCard(name: String, pic: String, onClick: () -> Unit) { // [46v12] 歌手卡：封面＋名，点开搜该歌手
+    val cardBg = musicColors().card
+    Column(modifier = Modifier.clickable { onClick() }) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(MaterialTheme.shapes.medium)
+                .background(cardBg.copy(alpha = 0.45f)) // [46v14] 磨砂卡片（同设置页）
+                .border(0.5.dp, Color.White.copy(alpha = 0.15f), MaterialTheme.shapes.medium),
+            contentAlignment = Alignment.Center
+        ) {
+            if (pic.isNotBlank()) {
+                AsyncImage(
+                    model = pic,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Text(
+                    text = name.take(1),
+                    color = musicColors().textSecondary
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = name,
+            style = MaterialTheme.typography.bodyMedium,
+            color = musicColors().textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+"""
+rep(old_artistcard, "", "artistcard")
+
+# 13) 删 SubSectionCard
+old_sectioncard = """@Composable
+private fun SubSectionCard(track: SubMusicBridge.SubTrack, rank: Int, onPlay: () -> Unit) { // [46v13] 榜单段内横滑卡：竖版＋右上角名次，点卡播本段队列
+    val cardBg = musicColors().card
+    Column(modifier = Modifier.width(120.dp).clickable { onPlay() }) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(3f / 4f)
+                .clip(MaterialTheme.shapes.medium)
+                .background(cardBg.copy(alpha = 0.45f)) // [46v14] 磨砂卡片（同设置页）
+                .border(0.5.dp, Color.White.copy(alpha = 0.15f), MaterialTheme.shapes.medium),
+            contentAlignment = Alignment.Center
+        ) {
+            if (track.pic.isNotBlank()) {
+                AsyncImage(
+                    model = track.pic,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Text(
+                    text = track.title.take(1),
+                    color = musicColors().textSecondary
+                )
+            }
+            Text(
+                text = rank.toString(),
+                style = MaterialTheme.typography.bodySmall,
+                color = musicColors().textPrimary,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(cardBg.copy(alpha = 0.8f))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = track.title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = musicColors().textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+"""
+rep(old_sectioncard, "", "sectioncard")
+
+assert "SubGridCard" not in src and "SubArtistCard" not in src and "SubSectionCard" not in src
+assert "showingArtistTracks" not in src and "openArtist" not in src and "artistsOf" not in src
+assert "tab == 2" not in src
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v19 screen")
+PYEOF46V19S
+python3 - << 'PYEOF46V19M'
+import sys
+
+# 46 v19（MH 顶栏，订阅模式）：Peek 式——标题改音符＋“音乐”，源选择改 pill（卡片底＋源名＋下箭头）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v19]" in src:
+    print("MH already 46v19, skip")
+    sys.exit(0)
+assert "Alignment.CenterVertically" in src, "MH lacks Alignment.CenterVertically usage"
+
+old_title = """                title = {
+                    Text(
+                        "音乐专区",
+                        color = musicColors().textPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                },"""
+assert src.count(old_title) == 1, "MH title anchor %d" % src.count(old_title)
+new_title = """                title = {
+                    if (contentMode == "sub") { // [46v19] Peek 式：音符＋音乐
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val noteTint = musicColors().accent
+                            Canvas(modifier = Modifier.size(22.dp)) {
+                                val sw = 2.dp.toPx()
+                                drawOval(color = noteTint, topLeft = androidx.compose.ui.geometry.Offset(4.dp.toPx(), 15.dp.toPx()), size = androidx.compose.ui.geometry.Size(8.dp.toPx(), 6.dp.toPx()))
+                                drawLine(color = noteTint, start = androidx.compose.ui.geometry.Offset(11.dp.toPx(), 15.5.dp.toPx()), end = androidx.compose.ui.geometry.Offset(11.dp.toPx(), 4.dp.toPx()), strokeWidth = sw, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "音乐",
+                                color = musicColors().textPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    } else {
+                        Text(
+                            "音乐专区",
+                            color = musicColors().textPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                },"""
+src = src.replace(old_title, new_title, 1)
+
+old_src = """                    if (contentMode == "sub") {
+                        // [46v9] 顶栏源内源：点开按订阅顺序排的 Sheet，选中驱动曲库/搜索
+                        TextButton(onClick = { showSourceSheet = true }) {
+                            Text(
+                                subSources.firstOrNull { it.key == selectedSubKey }?.displayName ?: "选择源",
+                                color = musicColors().textPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    } else {"""
+assert src.count(old_src) == 1, "MH source anchor %d" % src.count(old_src)
+new_src = """                    if (contentMode == "sub") {
+                        // [46v19] Peek 式源 pill：点开按订阅顺序排的 Sheet，选中驱动曲库/搜索
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(musicColors().card)
+                                .clickable { showSourceSheet = true }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    subSources.firstOrNull { it.key == selectedSubKey }?.displayName ?: "选择源",
+                                    color = musicColors().textPrimary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                val chevTint = musicColors().textSecondary
+                                Canvas(modifier = Modifier.size(12.dp)) {
+                                    val sw = 1.8.dp.toPx()
+                                    drawLine(color = chevTint, start = androidx.compose.ui.geometry.Offset(2.dp.toPx(), 4.dp.toPx()), end = androidx.compose.ui.geometry.Offset(6.dp.toPx(), 8.dp.toPx()), strokeWidth = sw, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                                    drawLine(color = chevTint, start = androidx.compose.ui.geometry.Offset(6.dp.toPx(), 8.dp.toPx()), end = androidx.compose.ui.geometry.Offset(10.dp.toPx(), 4.dp.toPx()), strokeWidth = sw, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                                }
+                            }
+                        }
+                    } else {"""
+src = src.replace(old_src, new_src, 1)
+
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v19 MH")
+PYEOF46V19M
+grep -q "46v19" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v19 bridge"; exit 1; }
+grep -q "46v19" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v19 screen"; exit 1; }
+grep -q "46v19" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt || { echo "X 46v19 MH"; exit 1; }
+echo "OK 46v19"
+echo "=== 46 v19 done ==="
