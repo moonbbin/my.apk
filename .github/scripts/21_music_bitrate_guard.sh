@@ -3257,3 +3257,61 @@ PYEOF21V54
 echo "=== 21 v54 完成 ==="
 grep -q '21v54' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v54 写入失败"; exit 1; }
 echo "OK 21 v54 切歌预取已写入"
+
+# === 21 v55: 订阅队列解析接缝 ===
+
+echo "=== 21 v55 ==="
+
+python3 - << 'PYEOF21V55'
+import os
+import sys
+
+# 21 v55：订阅队列解析接缝（播放器页关闭时切歌/自动下一首也走桥接解析）＋预取跳过订阅条目
+# 21 脚本中途 cd avbox（故 CI 里路径不带 avbox/ 前缀），仿真单跑时在 sim 根目录（带 avbox/ 前缀），两处自适应
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+if not os.path.exists(path):
+    path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+src = open(path, encoding="utf-8").read()
+if "// [21v55]" in src:
+    print("manager already 21v55, skip")
+    sys.exit(0)
+
+old_resolve = """    fun resolveAndPlay(song: Map<String, String>, triedPlatforms: Set<String> = emptySet()) {
+        val songId = song["songId"] ?: return"""
+assert src.count(old_resolve) == 1, "resolve anchor count %d" % src.count(old_resolve)
+src = src.replace(old_resolve, """    fun resolveAndPlay(song: Map<String, String>, triedPlatforms: Set<String> = emptySet()) {
+        if (song["sub"] == "1") { // [21v55] 订阅条目走桥接解析，不走落雪链（播放器页关闭时的切歌/自动下一首）
+            val t = SubMusicBridge.trackFromMap(song) ?: return
+            setLoading(true)
+            Thread {
+                try {
+                    val r = kotlinx.coroutines.runBlocking { SubMusicBridge.resolvePlay(t) }
+                    if (r is SubMusicBridge.PlayResult.Ok) {
+                        mainHandler.post { play(r.url, t.title, t.sourceName, t.pic); setLoading(false) }
+                    } else if (r is SubMusicBridge.PlayResult.Fail) {
+                        mainHandler.post { setError(r.msg); setLoading(false) }
+                    }
+                } catch (e: Exception) {
+                    mainHandler.post { setError("播放失败：${e.message}"); setLoading(false) }
+                }
+            }.start()
+            return
+        }
+        val songId = song["songId"] ?: return""", 1)
+
+old_add = """            fun addIdx(idx: Int) {
+                if (idx == cur) return
+                val song = playQueue.getOrNull(idx) ?: return"""
+assert src.count(old_add) == 1, "addIdx anchor count %d" % src.count(old_add)
+src = src.replace(old_add, """            fun addIdx(idx: Int) {
+                if (idx == cur) return
+                val song = playQueue.getOrNull(idx) ?: return
+                if (song["sub"] == "1") return // [21v55] 订阅条目不走落雪预取（落雪解析链不认订阅条目）""", 1)
+
+assert src.count("// [21v55]") == 2
+open(path, "w", encoding="utf-8").write(src)
+print("OK 21v55 manager")
+PYEOF21V55
+grep -q "21v55" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v55"; exit 1; }
+echo "OK 21 v55"
+echo "=== 21 v55 done ==="
