@@ -6050,3 +6050,35 @@ python3 /tmp/patch_screen46v23.py
 grep -q "46v23" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v23 screen"; exit 1; }
 echo "OK 46v23"
 echo "=== 46 v23 done ==="
+
+# === 46 v24: 构建红修复——删 v22 误加的 lazy.grid.item import（用户截图“别猜”，唯一报错 27:46） ===
+echo "=== 46 v24 ==="
+cat > /tmp/patch_screen46v24.py << 'PYEOF46V24'
+import sys
+
+# 46 v24（构建红修复）：删 v22 误加的 import 行——
+# 实锤：2026-11-05 18:24 构建红，唯一报错 SubMusicScreen.kt:27:46 Unresolved reference 'item'（27 行就是这行 import，
+# 46 脚本步骤本身已过、构建步骤 10 秒即红、错误摘要只有这一条）；
+# 根因：`item` 是 LazyGridScope/LazyListScope 的成员函数（作用域内直接用，不用 import），只有 List 版 `items`/`itemsIndexed`
+# 才是顶层扩展函数才要 import；全仓无人 import 过 lazy.grid.item（v22 那行是唯一一处），而 LazyColumn 里的 `item {`
+# （MusicHomeActivity.kt:1905、LxArtistDetailActivity.kt:277 等）全都不带 import——同款实证；
+# 修法：只删 import 行，钻入网格底的 `item { "正在加载更多…" }` 尾巴原样保留（它是作用域成员调用）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v24]" in src:
+    print("screen already 46v24, skip")
+    sys.exit(0)
+
+old = "import androidx.compose.foundation.lazy.grid.item\n"
+assert src.count(old) == 1, "bad-import anchor %d" % src.count(old)
+src = src.replace(old, "", 1)
+assert "lazy.grid.item\n" not in src, "import still present"
+assert "item {\n" in src, "loading footer item block missing"
+assert "46v22" in src and "46v23" in src
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v24 screen")
+PYEOF46V24
+python3 /tmp/patch_screen46v24.py
+grep -q "46v22" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v24 screen"; exit 1; }
+echo "OK 46v24"
+echo "=== 46 v24 done ==="
