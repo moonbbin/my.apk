@@ -2464,3 +2464,40 @@ print("OK 46v9 MH")
 PYEOF46V9
 echo "OK 46v9"
 echo "=== 46 v9 done ==="
+
+# === 46 v10: 修 v9 构建红（内容 when 作表达式须穷尽，补 else 空分支） ===
+
+echo "=== 46 v10 ==="
+
+python3 - << 'PYEOF46V10'
+import sys
+
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v10]" in src:
+    print("MH already 46v10, skip")
+    sys.exit(0)
+
+# v9 构建红根因（CI 实证，run 41955445270，MusicHomeActivity.kt:495:13）：
+# 内容 when 坐在页内容 Box 尾 lambda 里，作表达式用，必须穷尽；
+# v9 删了 RANKING/RECOMMEND/PLAYLIST/SUBMUSIC 四分支后不再穷尽。
+# effectiveTab 已预映射到 5 Tab，故 else 分支不可达，仅满足穷尽。
+old_home = """                MusicTab.HOME -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("返回首页…", color = TextGray)
+                    }
+                }"""
+assert src.count(old_home) == 1, "HOME branch anchor count %d" % src.count(old_home)
+new_home = old_home + "\n                else -> { } // [46v10] effectiveTab 已预映射到 5 Tab，此分支不可达，仅满足 when 穷尽"
+src = src.replace(old_home, new_home, 1)
+assert src.count("                else -> { } // [46v10]") == 1
+assert "when (effectiveTab)" in src
+assert "MusicTab.QUKU -> {" in src
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v10 MH")
+PYEOF46V10
+echo "OK 46v10"
+echo "=== 46 v10 done ==="
