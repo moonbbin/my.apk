@@ -3575,3 +3575,93 @@ PYEOF21V59
 grep -q "21v59" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v59"; exit 1; }
 echo "OK 21 v59"
 echo "=== 21 v59 done ==="
+
+echo "=== 21 v60 ==="
+
+python3 - << 'PYEOF21V60'
+import os
+import sys
+
+# 21 v60：播放地址归一化（与 46 v34/v35 同款）——用户说脚本源也放不了歌，试了还是不行。订阅源的数组地址是在桥接里拆的，
+# 脚本源（落雪链）的地址走引擎直出、不经过桥接，若引擎也回数组或标签地址，播放器同样认不出。修法：在 Manager.play() 播之前统一归一化
+# （数组拆包只认 http 地址、标签加美元符加地址取美元符后、协议相对地址补 http:、video:// 去前缀），已是干净地址时原样返回，本地 file 与 content 地址不受影响
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+if not os.path.exists(path):
+    path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+src = open(path, encoding="utf-8").read()
+if "[21v60]" in src:
+    print("manager already 21v60, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+base_parens = src.count("(") - src.count(")")
+base_braces = src.count("{") - src.count("}")
+base_brackets = src.count("[") - src.count("]")
+
+rep(
+    """    fun play(url: String, title: String = "", artist: String = "", picUrl: String = "", fromCacheKey: String? = null, headers: Map<String, String> = emptyMap()) {""",
+    """    // [21v60] 播放地址归一化（与 46 v34/v35 同款）：脚本源也可能回数组地址，播之前先拆包；已是干净 http 地址时原样返回
+    private fun normalizePlayUrl(raw: String): String {
+        var url = raw
+        if (url.isBlank()) return url
+        if (url.startsWith("//")) url = "http:" + url
+        if (url.startsWith("[") && url.endsWith("]")) {
+            try {
+                val arr = JSONArray(url)
+                var found = ""
+                for (i in 0 until arr.length()) {
+                    var s = arr.optString(i, "")
+                    if (!s.startsWith("http") && s.contains('$')) s = s.substringAfter('$')
+                    if (s.startsWith("video://")) s = s.substring(8)
+                    if (s.startsWith("proxy://") || s.isBlank()) continue
+                    if (!s.startsWith("http")) continue
+                    found = s
+                    break
+                }
+                if (found.isNotBlank()) url = found
+            } catch (_: Exception) { }
+        } else if (url.startsWith("video://")) {
+            url = url.substring(8)
+        }
+        return url
+    }
+
+    fun play(url: String, title: String = "", artist: String = "", picUrl: String = "", fromCacheKey: String? = null, headers: Map<String, String> = emptyMap()) {""",
+    "normalize-helper",
+)
+
+rep(
+    """            applyPlayHeaders(headers) // [21v56] 每首歌先写头，无头时清掉上一首的头、UA 回浏览器默认
+            val mediaItem = MediaItem.fromUri(url)""",
+    """            applyPlayHeaders(headers) // [21v56] 每首歌先写头，无头时清掉上一首的头、UA 回浏览器默认
+            val playUrl = normalizePlayUrl(url) // [21v60] 脚本源也可能回数组地址，播之前先归一化
+            val mediaItem = MediaItem.fromUri(playUrl)""",
+    "play-use-normalized-url",
+)
+
+rep(
+    """            Log.i(TAG, "开始播放: $title - $url")""",
+    """            Log.i(TAG, "开始播放: $title - $playUrl")""",
+    "log-normalized-url",
+)
+
+# 后验：标记在位，括号平衡不变（Manager 基线括号差为字符串内括号所致，v55 前后一致），标记注释不吞码
+assert src.count("[21v60]") >= 2
+assert src.count("(") - src.count(")") == base_parens
+assert src.count("{") - src.count("}") == base_braces
+assert src.count("[") - src.count("]") == base_brackets
+for line in src.splitlines():
+    if "// [21v60]" in line:
+        after = line.split("// [21v60]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 21v60")
+
+PYEOF21V60
+grep -q "21v60" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v60"; exit 1; }
+echo "OK 21 v60"
+echo "=== 21 v60 done ==="
