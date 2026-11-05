@@ -2796,3 +2796,491 @@ print("OK 46v11 MH")
 PYEOF46V11
 echo "OK 46v11"
 echo "=== 46 v11 done ==="
+
+# === 46 v12: 订阅队列化＋歌手 tab＋榜单名次 ===
+
+echo "=== 46 v12 ==="
+
+python3 - << 'PYEOF46V12A'
+import sys
+
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v12]" in src:
+    print("bridge already 46v12, skip")
+    sys.exit(0)
+
+# 1. SubTrack 加 actor 字段（仅 parseTrackList 一处构造，默认值保兼容）
+old_track = """    data class SubTrack(
+        val sourceKey: String,
+        val sourceName: String,
+        val id: String,
+        val title: String,
+        val pic: String,
+        val remark: String
+    )"""
+assert src.count(old_track) == 1, "SubTrack anchor count %d" % src.count(old_track)
+src = src.replace(old_track, """    data class SubTrack(
+        val sourceKey: String,
+        val sourceName: String,
+        val id: String,
+        val title: String,
+        val pic: String,
+        val remark: String,
+        val actor: String = ""
+    )""", 1)
+
+old_ctor = """                SubTrack(
+                    sourceKey,
+                    sourceName,
+                    id,
+                    title,
+                    o.optString("vod_pic"),
+                    o.optString("vod_remarks")
+                )"""
+assert src.count(old_ctor) == 1, "ctor anchor count %d" % src.count(old_ctor)
+src = src.replace(old_ctor, """                SubTrack(
+                    sourceKey,
+                    sourceName,
+                    id,
+                    title,
+                    o.optString("vod_pic"),
+                    o.optString("vod_remarks"),
+                    o.optString("vod_actor")
+                )""", 1)
+
+# 2. 歌手推导 + 队列映射 + 队列反查（挂在 resolvePlay 尾巴前）
+old_tail = """        } catch (e: Exception) {
+            PlayResult.Fail("播放失败：${e.message}")
+        }
+    }
+}"""
+assert src.count(old_tail) == 1, "tail anchor count %d" % src.count(old_tail)
+new_tail = """        } catch (e: Exception) {
+            PlayResult.Fail("播放失败：${e.message}")
+        }
+    }
+
+    fun artistOf(track: SubTrack): String? { // [46v12] 歌手推导：合集备注→标题即歌手；否则 vod_actor；否则不含 > 的备注
+        if (track.remark.contains("合集") || track.remark.contains("专辑")) return track.title.ifBlank { null }
+        if (track.actor.isNotBlank()) return track.actor
+        if (track.remark.isNotBlank() && !track.remark.contains(">")) return track.remark
+        return null
+    }
+
+    fun toQueueMaps(tracks: List<SubTrack>): List<Map<String, String>> { // [46v12] 订阅队列：播放器页列表读的就是这份 playQueue
+        return tracks.map { t ->
+            mapOf(
+                "sub" to "1",
+                "subSourceKey" to t.sourceKey,
+                "subId" to t.id,
+                "songId" to (t.sourceKey + ":" + t.id),
+                "platform" to "sub",
+                "title" to t.title,
+                "artist" to t.sourceName,
+                "picUrl" to t.pic
+            )
+        }
+    }
+
+    fun trackFromMap(map: Map<String, String>): SubTrack? { // [46v12] 队列切歌反查订阅条目
+        val sk = map["subSourceKey"] ?: return null
+        val id = map["subId"] ?: return null
+        return SubTrack(sk, map["artist"] ?: "", id, map["title"] ?: "", map["picUrl"] ?: "", "")
+    }
+}"""
+src = src.replace(old_tail, new_tail, 1)
+
+assert src.count("fun artistOf") == 1
+assert src.count("fun toQueueMaps") == 1
+assert src.count("fun trackFromMap") == 1
+assert src.count('val actor: String = ""') == 1
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v12 bridge")
+PYEOF46V12A
+
+python3 - << 'PYEOF46V12B'
+import sys
+
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v12]" in src:
+    print("screen already 46v12, skip")
+    sys.exit(0)
+
+# 0. 头注释：队列已通，旧“不进队列”说法作废
+old_head = "// [46v9] 曲库页：Peek 式（顶栏源驱动 + 搜索框入口 + 歌单/榜单 Tab + 卡片网格）；播走 LxPlayerManager.play 裸地址，不进落雪队列；源选择由顶栏 Sheet 驱动，本页只读。"
+assert src.count(old_head) == 1, "head anchor count %d" % src.count(old_head)
+src = src.replace(old_head, "// [46v12] 曲库页：Peek 式（顶栏源驱动 + 搜索框入口 + 歌手/榜单 Tab + 卡片网格）；点卡片把当前页建成播放队列（从点中那首起），切歌/列表点播走订阅解析；源选择由顶栏 Sheet 驱动，本页只读。", 1)
+
+# 0b. itemsIndexed 导入（榜单名次用）
+old_imp = "import androidx.compose.foundation.lazy.grid.items\n"
+assert src.count(old_imp) == 1, "import anchor count %d" % src.count(old_imp)
+src = src.replace(old_imp, old_imp + "import androidx.compose.foundation.lazy.grid.itemsIndexed\n", 1)
+
+# 1. 状态：歌手视图开关 + 榜单 items（供歌手推导）
+old_state = """    var notice by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()"""
+assert src.count(old_state) == 1, "state anchor count %d" % src.count(old_state)
+src = src.replace(old_state, """    var notice by remember { mutableStateOf("") }
+    var showingArtistTracks by remember { mutableStateOf(false) } // [46v12] 歌手 tab 内：true=某歌手的歌曲网格
+    var chartItems by remember { mutableStateOf<List<SubMusicBridge.SubTrack>>(emptyList()) } // [46v12] 榜单 items，供歌手推导
+    val scope = rememberCoroutineScope()
+
+    val artists = remember(home, chartItems) { // [46v12] 歌手推导：首页＋榜单条目去重
+        val seen = LinkedHashMap<String, String>()
+        for (t in (home?.items ?: emptyList()) + chartItems) {
+            val name = SubMusicBridge.artistOf(t) ?: continue
+            if (!seen.containsKey(name)) seen[name] = t.pic
+        }
+        seen.map { (name, pic) -> name to pic }
+    }""", 1)
+
+# 2. applyTab：t==0 改歌手视图（不再直接铺首页）；榜单分支同步 chartItems
+old_apply0 = """    fun applyTab(src: SubMusicBridge.SubSource, t: Int, h: SubMusicBridge.SubHome?) {
+        if (t == 0) {
+            gridItems = h?.items ?: emptyList()
+            gridNote = if (h == null || h.items.isEmpty()) "该源暂无浏览内容" else ""
+            return
+        }"""
+assert src.count(old_apply0) == 1, "apply0 anchor count %d" % src.count(old_apply0)
+src = src.replace(old_apply0, """    fun applyTab(src: SubMusicBridge.SubSource, t: Int, h: SubMusicBridge.SubHome?) {
+        showingArtistTracks = false // [46v12] 切 Tab 回歌手列表
+        if (t == 0) {
+            gridItems = emptyList()
+            gridNote = ""
+            return
+        }""", 1)
+
+old_cat = """        gridLoading = true
+        scope.launch {
+            try {
+                gridItems = SubMusicBridge.category(src.key, cls.id)
+                gridNote = if (gridItems.isEmpty()) "该分类暂无内容" else ""
+            } catch (e: Exception) {
+                gridItems = emptyList()
+                gridNote = "加载失败：${e.message}"
+            } finally {
+                gridLoading = false
+            }
+        }"""
+assert src.count(old_cat) == 1, "cat anchor count %d" % src.count(old_cat)
+src = src.replace(old_cat, """        gridLoading = true
+        scope.launch {
+            try {
+                gridItems = SubMusicBridge.category(src.key, cls.id)
+                chartItems = gridItems // [46v12]
+                gridNote = if (gridItems.isEmpty()) "该分类暂无内容" else ""
+            } catch (e: Exception) {
+                gridItems = emptyList()
+                chartItems = emptyList() // [46v12]
+                gridNote = "加载失败：${e.message}"
+            } finally {
+                gridLoading = false
+            }
+        }""", 1)
+
+# 3. 歌手点开：搜该歌手，进歌曲网格
+old_play = """    fun playTrack(track: SubMusicBridge.SubTrack) {
+        notice = "正在取播放地址…"
+        scope.launch {
+            when (val r = SubMusicBridge.resolvePlay(track)) {
+                is SubMusicBridge.PlayResult.Ok -> {
+                    LxPlayerManager.play(r.url, track.title, track.sourceName, track.pic)
+                    notice = ""
+                }
+                is SubMusicBridge.PlayResult.Fail -> {
+                    notice = r.msg
+                }
+            }
+        }
+    }"""
+assert src.count(old_play) == 1, "play anchor count %d" % src.count(old_play)
+new_play = """    fun openArtist(name: String) { // [46v12] 歌手点开：搜该歌手，进歌曲网格
+        val src = selected ?: return
+        gridLoading = true
+        gridNote = ""
+        scope.launch {
+            try {
+                val res = SubMusicBridge.searchInSource(src.key, name)
+                gridItems = res
+                showingArtistTracks = res.isNotEmpty()
+                if (res.isEmpty()) gridNote = "该歌手暂无内容"
+            } catch (e: Exception) {
+                gridItems = emptyList()
+                gridNote = "加载失败：${e.message}"
+            } finally {
+                gridLoading = false
+            }
+        }
+    }
+
+    fun playTrack(track: SubMusicBridge.SubTrack, list: List<SubMusicBridge.SubTrack>) { // [46v12] 点卡片建队列：当前页从点中那首起
+        notice = "正在取播放地址…"
+        val maps = SubMusicBridge.toQueueMaps(list)
+        val idx = list.indexOfFirst { it.sourceKey == track.sourceKey && it.id == track.id }.takeIf { it >= 0 } ?: 0
+        LxPlayerManager.playQueue = maps
+        LxPlayerManager.queueIndex = idx
+        scope.launch {
+            when (val r = SubMusicBridge.resolvePlay(track)) {
+                is SubMusicBridge.PlayResult.Ok -> {
+                    LxPlayerManager.play(r.url, track.title, track.sourceName, track.pic)
+                    notice = ""
+                }
+                is SubMusicBridge.PlayResult.Fail -> {
+                    notice = r.msg
+                }
+            }
+        }
+    }"""
+src = src.replace(old_play, new_play, 1)
+
+# 4. Tab 标签：歌单 → 歌手
+old_tabs = 'listOf("歌单", "榜单").forEachIndexed { i, label ->'
+assert src.count(old_tabs) == 1, "tabs anchor count %d" % src.count(old_tabs)
+src = src.replace(old_tabs, 'listOf("歌手", "榜单").forEachIndexed { i, label -> // [46v12] 歌单改歌手', 1)
+
+# 5. 网格分支：歌手网格 / 返回行 / 榜单名次
+old_grid = """            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(gridItems, key = { it.sourceKey + ":" + it.id }) { track ->
+                        SubGridCard(track = track, onPlay = { playTrack(track) })
+                    }
+                }
+            }"""
+assert src.count(old_grid) == 1, "grid anchor count %d" % src.count(old_grid)
+new_grid = """            } else if (tab == 0 && !showingArtistTracks) { // [46v12] 歌手 tab：推导出的歌手网格
+                if (artists.isEmpty()) {
+                    Text(
+                        text = "该源未提供歌手信息",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(artists, key = { it.first }) { a ->
+                            SubArtistCard(name = a.first, pic = a.second, onClick = { openArtist(a.first) })
+                        }
+                    }
+                }
+            } else {
+                if (tab == 0 && showingArtistTracks) {
+                    Text(
+                        text = "← 返回歌手",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().accent,
+                        modifier = Modifier
+                            .clickable { showingArtistTracks = false }
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    itemsIndexed(gridItems, key = { _, it -> it.sourceKey + ":" + it.id }) { idx, track ->
+                        SubGridCard(track = track, rank = if (tab == 1) idx + 1 else null, onPlay = { playTrack(track, gridItems) })
+                    }
+                }
+            }"""
+src = src.replace(old_grid, new_grid, 1)
+
+# 6. 卡片：名次角标（左下，榜单 tab 才传 rank）
+old_card = "private fun SubGridCard(track: SubMusicBridge.SubTrack, onPlay: () -> Unit) {"
+assert src.count(old_card) == 1, "card anchor count %d" % src.count(old_card)
+src = src.replace(old_card, "private fun SubGridCard(track: SubMusicBridge.SubTrack, rank: Int? = null, onPlay: () -> Unit) { // [46v12] rank 非空=榜单名次", 1)
+
+old_playbtn = """            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)"""
+assert src.count(old_playbtn) == 1, "playbtn anchor count %d" % src.count(old_playbtn)
+src = src.replace(old_playbtn, """            if (rank != null) {
+                Text(
+                    text = rank.toString(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = musicColors().textPrimary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(6.dp)
+                        .clip(MaterialTheme.shapes.small)
+                        .background(cardBg.copy(alpha = 0.8f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)""", 1)
+
+# 7. 文件尾追加歌手卡片
+old_tail = """        Text(
+            text = track.title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = musicColors().textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}"""
+assert src.count(old_tail) == 1, "tail anchor count %d" % src.count(old_tail)
+src = src.replace(old_tail, """        Text(
+            text = track.title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = musicColors().textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun SubArtistCard(name: String, pic: String, onClick: () -> Unit) { // [46v12] 歌手卡：封面＋名，点开搜该歌手
+    val cardBg = musicColors().card
+    Column(modifier = Modifier.clickable { onClick() }) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(MaterialTheme.shapes.medium)
+                .background(cardBg),
+            contentAlignment = Alignment.Center
+        ) {
+            if (pic.isNotBlank()) {
+                AsyncImage(
+                    model = pic,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Text(
+                    text = name.take(1),
+                    color = musicColors().textSecondary
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = name,
+            style = MaterialTheme.typography.bodyMedium,
+            color = musicColors().textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}""", 1)
+
+assert src.count("fun openArtist") == 1
+assert src.count("fun playTrack(track: SubMusicBridge.SubTrack, list:") == 1
+assert src.count('listOf("歌手", "榜单")') == 1
+assert src.count("fun SubArtistCard") == 1
+assert src.count("itemsIndexed(gridItems") == 1
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v12 screen")
+PYEOF46V12B
+
+python3 - << 'PYEOF46V12C'
+import sys
+
+# 搜索屏：点行建队列（与曲库网格同一机制）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubSearchScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v12]" in src:
+    print("search already 46v12, skip")
+    sys.exit(0)
+
+old_head = "// [46v9] 搜索页：搜当前源内源（顶栏 Sheet 选源）；播走 LxPlayerManager.play 裸地址，不进落雪队列。"
+assert src.count(old_head) == 1, "head anchor count %d" % src.count(old_head)
+src = src.replace(old_head, "// [46v12] 搜索页：搜当前源内源（顶栏 Sheet 选源）；点行把结果建成播放队列（从点中那首起），切歌/列表点播走订阅解析。", 1)
+
+old_play = """    fun playTrack(track: SubMusicBridge.SubTrack) {
+        notice = "正在取播放地址…"
+        scope.launch {
+            when (val r = SubMusicBridge.resolvePlay(track)) {
+                is SubMusicBridge.PlayResult.Ok -> {
+                    LxPlayerManager.play(r.url, track.title, track.sourceName, track.pic)
+                    notice = ""
+                }
+                is SubMusicBridge.PlayResult.Fail -> {
+                    notice = r.msg
+                }
+            }
+        }
+    }"""
+assert src.count(old_play) == 1, "play anchor count %d" % src.count(old_play)
+src = src.replace(old_play, """    fun playTrack(track: SubMusicBridge.SubTrack) { // [46v12] 点行建队列：结果列表从点中那首起
+        notice = "正在取播放地址…"
+        val maps = SubMusicBridge.toQueueMaps(results)
+        val idx = results.indexOfFirst { it.sourceKey == track.sourceKey && it.id == track.id }.takeIf { it >= 0 } ?: 0
+        LxPlayerManager.playQueue = maps
+        LxPlayerManager.queueIndex = idx
+        scope.launch {
+            when (val r = SubMusicBridge.resolvePlay(track)) {
+                is SubMusicBridge.PlayResult.Ok -> {
+                    LxPlayerManager.play(r.url, track.title, track.sourceName, track.pic)
+                    notice = ""
+                }
+                is SubMusicBridge.PlayResult.Fail -> {
+                    notice = r.msg
+                }
+            }
+        }
+    }""", 1)
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v12 search")
+
+# 播放器页：队列点播/切歌时，订阅条目走桥接解析（35 后定向补丁）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v12]" in src:
+    print("player page already 46v12, skip")
+    sys.exit(0)
+
+old_fn = """    private fun playSongFromQueue(song: Map<String, String>) {
+        val sid = song["songId"] ?: return"""
+assert src.count(old_fn) == 1, "playSongFromQueue anchor count %d" % src.count(old_fn)
+src = src.replace(old_fn, """    private fun playSongFromQueue(song: Map<String, String>) {
+        if (song["sub"] == "1") { // [46v12] 订阅条目走桥接解析，不走落雪链
+            val t = SubMusicBridge.trackFromMap(song) ?: return
+            LxPlayerManager.setLoading(true)
+            Thread {
+                try {
+                    val r = kotlinx.coroutines.runBlocking { SubMusicBridge.resolvePlay(t) }
+                    if (r is SubMusicBridge.PlayResult.Ok) {
+                        runOnUiThread { LxPlayerManager.play(r.url, t.title, t.sourceName, t.pic); LxPlayerManager.setLoading(false) }
+                    } else if (r is SubMusicBridge.PlayResult.Fail) {
+                        runOnUiThread { LxPlayerManager.setError(r.msg); LxPlayerManager.setLoading(false) }
+                    }
+                } catch (e: Exception) {
+                    runOnUiThread { LxPlayerManager.setError("播放失败：${e.message}"); LxPlayerManager.setLoading(false) }
+                }
+            }.start()
+            return
+        }
+        val sid = song["songId"] ?: return""", 1)
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v12 player page")
+PYEOF46V12C
+
+grep -q "46v12" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v12 bridge"; exit 1; }
+grep -q "46v12" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v12 screen"; exit 1; }
+grep -q "46v12" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubSearchScreen.kt || { echo "X 46v12 search"; exit 1; }
+grep -q "46v12" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt || { echo "X 46v12 player"; exit 1; }
+echo "OK 46v12"
+echo "=== 46 v12 done ==="
