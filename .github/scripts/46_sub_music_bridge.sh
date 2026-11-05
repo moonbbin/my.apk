@@ -6970,3 +6970,155 @@ python3 /tmp/patch_screen46v28b.py
 grep -q "46v28" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v28 screen"; exit 1; }
 echo "OK 46v28 screen"
 echo "=== 46 v28 done ==="
+
+echo "=== 46 v29 ==="
+cat > /tmp/patch_screen46v29.py << 'PYEOF46V29'
+import sys
+
+# 46 v29（构建红修复，两处都是 v28 留下的）：
+# ① resolvePlay 未命中分支：episodeCache 存的还是 Pair（pp.flag to pp.playIds），缓存类型已改 Triple，漏改这一行→269:37 Argument type mismatch；
+# ② detailEpisodes 的 (emptyList() to "") 推不出类型：to 是双泛型中缀函数，期望类型 Pair<List<SubTrack>, String> 流不回 emptyList 的元素类型 T，
+#    也流不回 to 自身的 A，致 202/205/207/210/220 五处 Cannot infer type（202 是 withContext 的 T，级联）；v22 原版只写 emptyList() 能推，是因期望类型直达。
+#    修法：四处全写死 emptyList<SubTrack>()。仿真不编译 Kotlin，抓不出这类错（同 v24 教训）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+src = open(path, encoding="utf-8").read()
+if "[46v29]" in src:
+    print("bridge already 46v29, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+def repAll(old, new, tag, n):
+    global src
+    assert src.count(old) == n, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new)
+
+# 1) 签名行补版本标记（其余改动行不便插注释，此处留痕）
+rep(
+    "    suspend fun detailEpisodes(track: SubTrack): Pair<List<SubTrack>, String> = withContext(Dispatchers.IO) { // [46v22][46v28] 详情拆全部分集＋详情封面（点卡进歌单用）",
+    "    suspend fun detailEpisodes(track: SubTrack): Pair<List<SubTrack>, String> = withContext(Dispatchers.IO) { // [46v22][46v28][46v29] 详情拆全部分集＋详情封面（点卡进歌单用）",
+    "signature-marker",
+)
+
+# 2) 三处提前返回：写死元素类型
+repAll("return@withContext (emptyList() to \"\")", "return@withContext (emptyList<SubTrack>() to \"\")", "early-returns-typed", 3)
+
+# 3) catch：写死元素类型
+rep(
+    "            emptyList() to \"\"",
+    "            emptyList<SubTrack>() to \"\"",
+    "catch-typed",
+)
+
+# 4) resolvePlay 未命中分支：缓存存 Triple（漏改行）
+rep(
+    "                episodeCache[key] = pp.flag to pp.playIds",
+    "                episodeCache[key] = Triple(pp.flag, pp.playIds, item.optString(\"vod_pic\")) // [46v29] 构建红修复：缓存存 Triple，Pair 塞不进去",
+    "cache-store-triple",
+)
+
+# 后验：标记在位，括号平衡，标记注释不吞码；确认无残留 Pair 存法与无类型 emptyList
+assert src.count("[46v29]") >= 2
+assert src.count("pp.flag to pp.playIds") == 0
+assert src.count("emptyList() to") == 0
+assert src.count("(") - src.count(")") == 0
+assert src.count("{") - src.count("}") == 0
+assert src.count("[") - src.count("]") == 0
+for line in src.splitlines():
+    if "// [46v29]" in line:
+        after = line.split("// [46v29]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 46v29 bridge")
+
+PYEOF46V29
+python3 /tmp/patch_screen46v29.py
+grep -q "46v29" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v29 bridge"; exit 1; }
+echo "OK 46v29 bridge"
+echo "=== 46 v29 done ==="
+
+echo "=== 46 v30 ==="
+cat > /tmp/patch_screen46v30.py << 'PYEOF46V30'
+import sys
+
+# 46 v30（曲库屏）：点歌防串——订阅解析慢（裸 play 无预取，每首现取详情＋地址），点歌后 1~3 秒才出声，用户常连点第二首；
+# playTrack/openItem 原先各起一个无 guard 的协程，先点的解析慢回包、后点的解析先回包，最后执行的 play() 获胜——不是最后点的获胜，
+# 先点的歌会盖掉后点的歌，放的歌和点的歌不一样。修法：点歌取号（playReq 单调递增），只认最新一号的解析结果，过期的直接丢弃、不播也不改提示；
+# 队列是同步赋值的（点即换队），本来就是最后点的获胜，只乱序回包要堵。配 21 v58（切歌那边同款问题）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "[46v30]" in src:
+    print("screen already 46v30, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+# 1) 取号状态：与 picOverrides 同处
+rep(
+    "    var picOverrides by remember { mutableStateOf<Map<String, String>>(emptyMap()) } // [46v28] 详情封面回填：key = 源:条目 id（去 #），value = 详情的 vod_pic",
+    "    var picOverrides by remember { mutableStateOf<Map<String, String>>(emptyMap()) } // [46v28] 详情封面回填：key = 源:条目 id（去 #），value = 详情的 vod_pic\n    var playReq by remember { mutableStateOf(0) } // [46v30] 点歌防串：每次点歌取号，只认最新一号的解析结果，订阅解析慢、连点会乱序回包",
+    "playReq-state",
+)
+
+# 2) playTrack：取号，过期结果丢弃
+rep(
+    """    fun playTrack(track: SubMusicBridge.SubTrack, list: List<SubMusicBridge.SubTrack>) { // [46v12] 点卡片建队列：当前页从点中那首起
+        notice = "正在取播放地址…"
+        val maps = SubMusicBridge.toQueueMaps(list)
+        val idx = list.indexOfFirst { it.sourceKey == track.sourceKey && it.id == track.id }.takeIf { it >= 0 } ?: 0
+        LxPlayerManager.playQueue = maps
+        LxPlayerManager.queueIndex = idx
+        scope.launch {
+            when (val r = SubMusicBridge.resolvePlay(track)) {""",
+    """    fun playTrack(track: SubMusicBridge.SubTrack, list: List<SubMusicBridge.SubTrack>) { // [46v12] 点卡片建队列：当前页从点中那首起
+        val myReq = ++playReq
+        notice = "正在取播放地址…"
+        val maps = SubMusicBridge.toQueueMaps(list)
+        val idx = list.indexOfFirst { it.sourceKey == track.sourceKey && it.id == track.id }.takeIf { it >= 0 } ?: 0
+        LxPlayerManager.playQueue = maps
+        LxPlayerManager.queueIndex = idx
+        scope.launch {
+            val r = SubMusicBridge.resolvePlay(track)
+            if (myReq != playReq) return@launch // [46v30] 已被更新的点歌取代，不播不改提示
+            when (r) {""",
+    "playTrack-guard",
+)
+
+# 3) openItem：取号，过期结果丢弃（单集进 playTrack 时 playTrack 自己再取一号）
+rep(
+    """    fun openItem(track: SubMusicBridge.SubTrack, list: List<SubMusicBridge.SubTrack>) { // [46v22] 点卡探详情：多集进列表，单集直接播
+        notice = "正在取详情…"
+        scope.launch {
+            val (eps, detailPic) = SubMusicBridge.detailEpisodes(track) // [46v28] 详情封面回填：点卡一次就把详情 vod_pic 带回来""",
+    """    fun openItem(track: SubMusicBridge.SubTrack, list: List<SubMusicBridge.SubTrack>) { // [46v22] 点卡探详情：多集进列表，单集直接播
+        val myReq = ++playReq
+        notice = "正在取详情…"
+        scope.launch {
+            val (eps, detailPic) = SubMusicBridge.detailEpisodes(track) // [46v28] 详情封面回填：点卡一次就把详情 vod_pic 带回来
+            if (myReq != playReq) return@launch // [46v30] 已被更新的点歌取代，不改列表""",
+    "openItem-guard",
+)
+
+# 后验：标记在位，括号平衡，标记注释不吞码
+assert src.count("[46v30]") >= 3
+assert src.count("(") - src.count(")") == 0
+assert src.count("{") - src.count("}") == 0
+assert src.count("[") - src.count("]") == 0
+for line in src.splitlines():
+    if "// [46v30]" in line:
+        after = line.split("// [46v30]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 46v30 screen")
+
+PYEOF46V30
+python3 /tmp/patch_screen46v30.py
+grep -q "46v30" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v30 screen"; exit 1; }
+echo "OK 46v30 screen"
+echo "=== 46 v30 done ==="
