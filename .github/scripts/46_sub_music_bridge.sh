@@ -3284,3 +3284,295 @@ grep -q "46v12" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubSear
 grep -q "46v12" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt || { echo "X 46v12 player"; exit 1; }
 echo "OK 46v12"
 echo "=== 46 v12 done ==="
+
+# === 46 v13: 榜单分段视图 ===
+
+echo "=== 46 v13 ==="
+
+python3 - << 'PYEOF46V13'
+import sys
+
+# 46 v13：榜单 tab 改分段视图（参考图：按源分类分段，段标题＋“全部”＋横滑竖版卡片＋右上角名次）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v13]" in src:
+    print("screen already 46v13, skip")
+    sys.exit(0)
+
+# 0. 头注释
+old_head = "// [46v12] 曲库页：Peek 式（顶栏源驱动 + 搜索框入口 + 歌手/榜单 Tab + 卡片网格）；点卡片把当前页建成播放队列（从点中那首起），切歌/列表点播走订阅解析；源选择由顶栏 Sheet 驱动，本页只读。"
+assert src.count(old_head) == 1, "head anchor count %d" % src.count(old_head)
+src = src.replace(old_head, "// [46v13] 曲库页：Peek 式（顶栏源驱动 + 搜索框入口 + 歌手/榜单 Tab）；榜单为分段视图（按源分类分段，段内横滑竖版卡片＋右上角名次，点“全部”进该分类整页网格）；点卡片把当前页建成播放队列（从点中那首起），切歌/列表点播走订阅解析；源选择由顶栏 Sheet 驱动，本页只读。", 1)
+
+# 0b. 导入 LazyColumn/LazyRow（与 grid 的 items/itemsIndexed 同名但接收器不同，分别解析）
+old_imp = "import androidx.compose.foundation.lazy.grid.itemsIndexed\n"
+assert src.count(old_imp) == 1, "import anchor count %d" % src.count(old_imp)
+src = src.replace(old_imp, old_imp + "import androidx.compose.foundation.lazy.LazyColumn\nimport androidx.compose.foundation.lazy.LazyRow\nimport androidx.compose.foundation.lazy.items\nimport androidx.compose.foundation.lazy.itemsIndexed\n", 1)
+
+# 1. 状态：分段列表＋钻入段＋分段加载中
+old_state = '    var chartItems by remember { mutableStateOf<List<SubMusicBridge.SubTrack>>(emptyList()) } // [46v12] 榜单 items，供歌手推导'
+assert src.count(old_state) == 1, "state anchor count %d" % src.count(old_state)
+src = src.replace(old_state, old_state + '\n    var chartSections by remember { mutableStateOf<List<Triple<String, String, List<SubMusicBridge.SubTrack>>>>(emptyList()) } // [46v13] 榜单分段：(分类 id, 分类名, 第 1 页条目)\n    var chartDetail by remember { mutableStateOf<Triple<String, String, List<SubMusicBridge.SubTrack>>?>(null) } // [46v13] 榜单“全部”钻入的段，null=分段视图\n    var sectionsLoading by remember { mutableStateOf(false) } // [46v13] 分段加载中', 1)
+
+# 2. applyTab：t==1 改全部分类逐段拉（有数据的段先出，单段失败不拦后段）
+old_apply = """    fun applyTab(src: SubMusicBridge.SubSource, t: Int, h: SubMusicBridge.SubHome?) {
+        showingArtistTracks = false // [46v12] 切 Tab 回歌手列表
+        if (t == 0) {
+            gridItems = emptyList()
+            gridNote = ""
+            return
+        }
+        val cls = h?.let { SubMusicBridge.chartClass(it.classes) }
+        if (cls == null) {
+            gridItems = emptyList()
+            gridNote = "该源暂无分类"
+            return
+        }
+        gridLoading = true
+        scope.launch {
+            try {
+                gridItems = SubMusicBridge.category(src.key, cls.id)
+                chartItems = gridItems // [46v12]
+                gridNote = if (gridItems.isEmpty()) "该分类暂无内容" else ""
+            } catch (e: Exception) {
+                gridItems = emptyList()
+                chartItems = emptyList() // [46v12]
+                gridNote = "加载失败：${e.message}"
+            } finally {
+                gridLoading = false
+            }
+        }
+    }"""
+assert src.count(old_apply) == 1, "apply anchor count %d" % src.count(old_apply)
+new_apply = """    fun applyTab(src: SubMusicBridge.SubSource, t: Int, h: SubMusicBridge.SubHome?) {
+        showingArtistTracks = false // [46v12] 切 Tab 回歌手列表
+        chartDetail = null // [46v13] 回榜单分段视图
+        if (t == 0) {
+            gridItems = emptyList()
+            gridNote = ""
+            return
+        }
+        if (h == null || h.classes.isEmpty()) {
+            chartSections = emptyList()
+            chartItems = emptyList()
+            gridNote = "该源暂无分类"
+            return
+        }
+        gridNote = ""
+        chartSections = emptyList()
+        sectionsLoading = true
+        scope.launch {
+            try {
+                for (cls in h.classes) { // [46v13] 全量分类逐段拉第 1 页，有数据的段先出
+                    try {
+                        val items = SubMusicBridge.category(src.key, cls.id)
+                        if (items.isNotEmpty()) {
+                            val ns = chartSections + Triple(cls.id, cls.name, items)
+                            chartSections = ns
+                            chartItems = ns.flatMap { it.third } // [46v13] 歌手推导覆盖全部分段
+                        }
+                    } catch (e: Exception) {
+                        // 单段失败跳过，不拦后段
+                    }
+                }
+            } finally {
+                sectionsLoading = false
+            }
+        }
+    }"""
+src = src.replace(old_apply, new_apply, 1)
+
+# 3. 渲染链：榜单分段分支插在 gridLoading 之前（分段视图不走 gridLoading/gridNote 门）
+old_chain = """            if (gridLoading) {
+                Text(
+                    text = "正在加载浏览内容…","""
+assert src.count(old_chain) == 1, "chain anchor count %d" % src.count(old_chain)
+new_chain = """            if (tab == 1 && chartDetail == null) { // [46v13] 榜单分段视图
+                if (gridNote.isNotBlank()) {
+                    Text(
+                        text = gridNote,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else if (chartSections.isEmpty()) {
+                    Text(
+                        text = if (sectionsLoading) "正在加载榜单…" else "该源暂无分类内容",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(vertical = 8.dp)
+                    ) {
+                        items(chartSections, key = { it.first }) { sec ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = sec.second,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = musicColors().textPrimary
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
+                                Text(
+                                    text = "全部 >",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = musicColors().accent,
+                                    modifier = Modifier.clickable {
+                                        chartDetail = sec
+                                        gridItems = sec.third
+                                    }
+                                )
+                            }
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                itemsIndexed(sec.third, key = { _, it -> it.sourceKey + ":" + it.id }) { idx, track ->
+                                    SubSectionCard(track = track, rank = idx + 1, onPlay = { playTrack(track, sec.third) })
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                        if (sectionsLoading) {
+                            item {
+                                Text(
+                                    text = "正在加载更多分类…",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = musicColors().textSecondary,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            } else if (gridLoading) {
+                Text(
+                    text = "正在加载浏览内容…","""
+src = src.replace(old_chain, new_chain, 1)
+
+# 4. 钻入整页网格的返回行（与“返回歌手”并列）
+old_back = """                if (tab == 0 && showingArtistTracks) {
+                    Text(
+                        text = "← 返回歌手",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().accent,
+                        modifier = Modifier
+                            .clickable { showingArtistTracks = false }
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }"""
+assert src.count(old_back) == 1, "back anchor count %d" % src.count(old_back)
+src = src.replace(old_back, old_back + """
+                if (tab == 1 && chartDetail != null) { // [46v13] 从分类整页回分段视图
+                    Text(
+                        text = "← 返回榜单",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().accent,
+                        modifier = Modifier
+                            .clickable { chartDetail = null }
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }""", 1)
+
+# 5. 整页网格名次统一到右上角（与段内卡片一致；备注 chip 仍在左上角，不冲突）
+old_rank = """                    text = rank.toString(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = musicColors().textPrimary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)"""
+assert src.count(old_rank) == 1, "rank anchor count %d" % src.count(old_rank)
+src = src.replace(old_rank, """                    text = rank.toString(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = musicColors().textPrimary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd) // [46v13] 名次统一右上角""", 1)
+
+# 6. 文件尾追加段内横滑卡片（竖版）
+old_tail = """        Text(
+            text = name,
+            style = MaterialTheme.typography.bodyMedium,
+            color = musicColors().textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}"""
+assert src.count(old_tail) == 1, "tail anchor count %d" % src.count(old_tail)
+src = src.replace(old_tail, """        Text(
+            text = name,
+            style = MaterialTheme.typography.bodyMedium,
+            color = musicColors().textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun SubSectionCard(track: SubMusicBridge.SubTrack, rank: Int, onPlay: () -> Unit) { // [46v13] 榜单段内横滑卡：竖版＋右上角名次，点卡播本段队列
+    val cardBg = musicColors().card
+    Column(modifier = Modifier.width(120.dp).clickable { onPlay() }) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(3f / 4f)
+                .clip(MaterialTheme.shapes.medium)
+                .background(cardBg),
+            contentAlignment = Alignment.Center
+        ) {
+            if (track.pic.isNotBlank()) {
+                AsyncImage(
+                    model = track.pic,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Text(
+                    text = track.title.take(1),
+                    color = musicColors().textSecondary
+                )
+            }
+            Text(
+                text = rank.toString(),
+                style = MaterialTheme.typography.bodySmall,
+                color = musicColors().textPrimary,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(cardBg.copy(alpha = 0.8f))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = track.title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = musicColors().textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}""", 1)
+
+assert src.count("fun SubSectionCard") == 1
+assert src.count("chartSections") >= 5
+assert src.count("Alignment.BottomStart") == 0
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v13 screen")
+PYEOF46V13
+grep -q "46v13" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v13 screen"; exit 1; }
+echo "OK 46v13"
+echo "=== 46 v13 done ==="
