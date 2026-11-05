@@ -3315,3 +3315,96 @@ PYEOF21V55
 grep -q "21v55" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v55"; exit 1; }
 echo "OK 21 v55"
 echo "=== 21 v55 done ==="
+
+echo "=== 21 v56 ==="
+
+python3 - << 'PYEOF21V56'
+import os
+import sys
+
+# 21 v56：订阅带头播放（主体能播、专区报网络异常的根因修法）——
+# 探针用浏览器 UA＋Range 能拿到文件头（498kbps 已量出），ExoPlayer 用 DefaultHttpDataSource 默认 UA、什么头都不带，被源站挡了→onPlayerError 网络类分支报网络异常；
+# 主体在 PlayLoader.mergeSiteHeaders＋PlayUrlResolver.jsonParse 把源站 header 与结果里的 UA/Referer 带上。修法：play() 接 headers 参数，
+# 建播时留住 DefaultHttpDataSource.Factory，每首歌先把头写进工厂（UA 取头里的 User-Agent，没有就用探针同款浏览器 UA；其余头原样写，无头时清掉上一首的头）；
+# resolveAndPlay 的订阅分支（v55）也把桥接返回的头传进 play()。落雪链不受影响（headers 默认空，只换 UA 为浏览器 UA，与 32v122 验活口径一致）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+if not os.path.exists(path):
+    path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+src = open(path, encoding="utf-8").read()
+if "// [21v56]" in src:
+    print("manager already 21v56, skip")
+    sys.exit(0)
+
+base_parens = src.count("(") - src.count(")")
+base_braces = src.count("{") - src.count("}")
+base_brackets = src.count("[") - src.count("]")
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+# 1) 留住 HTTP 工厂
+rep(
+    "    private var player: ExoPlayer? = null",
+    "    private var player: ExoPlayer? = null\n    private var httpDataSourceFactory: DefaultHttpDataSource.Factory? = null // [21v56] 订阅带头播放：每首歌的头在 play 时写进工厂，建播时只建一次",
+    "keep-http-factory-field",
+)
+
+# 2) 建播时存工厂
+rep(
+    "            val httpFactory = DefaultHttpDataSource.Factory()",
+    "            val httpFactory = DefaultHttpDataSource.Factory()\n            httpDataSourceFactory = httpFactory // [21v56] 留住工厂，play 时按歌写头",
+    "keep-http-factory-store",
+)
+
+# 3) play() 签名加 headers，并在它前面插入 applyPlayHeaders
+rep(
+    '    fun play(url: String, title: String = "", artist: String = "", picUrl: String = "", fromCacheKey: String? = null) {',
+    """    // [21v56] 订阅带头播放：把桥接给的头写进 ExoPlayer 数据源；UA 取头里的 User-Agent，没有就用探针同款浏览器 UA，探针能通的 UA 播也通
+    private fun applyPlayHeaders(headers: Map<String, String>) {
+        val factory = httpDataSourceFactory ?: return
+        val ua = headers.entries.firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value?.takeIf { it.isNotBlank() }
+            ?: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        val rest = headers.filterKeys { !it.equals("User-Agent", ignoreCase = true) }
+        factory.setUserAgent(ua)
+        factory.setDefaultRequestProperties(rest)
+    }
+
+    fun play(url: String, title: String = "", artist: String = "", picUrl: String = "", fromCacheKey: String? = null, headers: Map<String, String> = emptyMap()) {""",
+    "play-headers-signature",
+)
+
+# 4) play() 里每首歌先写头
+rep(
+    """            val mediaItem = MediaItem.fromUri(url)
+            p.setMediaItem(mediaItem)""",
+    """            applyPlayHeaders(headers) // [21v56] 每首歌先写头，无头时清掉上一首的头、UA 回浏览器默认
+            val mediaItem = MediaItem.fromUri(url)
+            p.setMediaItem(mediaItem)""",
+    "play-apply-headers",
+)
+
+# 5) resolveAndPlay 订阅分支把头传进 play()
+rep(
+    "                        mainHandler.post { play(r.url, t.title, t.sourceName, t.pic); setLoading(false) }",
+    "                        mainHandler.post { play(r.url, t.title, t.sourceName, t.pic, headers = r.headers); setLoading(false) } // [21v56] 切歌与自动下一首也带头",
+    "resolveAndPlay-headers",
+)
+
+# 后验：标记在位，括号平衡不变（Manager 基线括号差为字符串内括号所致，v55 前后一致），标记注释不吞码
+assert src.count("[21v56]") >= 5
+assert src.count("(") - src.count(")") == base_parens
+assert src.count("{") - src.count("}") == base_braces
+assert src.count("[") - src.count("]") == base_brackets
+for line in src.splitlines():
+    if "// [21v56]" in line:
+        after = line.split("// [21v56]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 21v56")
+
+PYEOF21V56
+grep -q "21v56" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v56"; exit 1; }
+echo "OK 21 v56"
+echo "=== 21 v56 done ==="
