@@ -3408,3 +3408,51 @@ PYEOF21V56
 grep -q "21v56" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v56"; exit 1; }
 echo "OK 21 v56"
 echo "=== 21 v56 done ==="
+
+echo "=== 21 v57 ==="
+
+python3 - << 'PYEOF21V57'
+import os
+import sys
+
+# 21 v57：切歌也用详情封面（配 46 v28）——订阅队列里存的是列表封面（常为空），切歌/自动下一首走 resolveAndPlay 时，
+# 桥接 resolvePlay 已随 Ok 带回详情封面（46 v28 的 pic 字段，经 episodeCache 或当次详情）；队列封面为空时用它，封面切歌不断
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+if not os.path.exists(path):
+    path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+src = open(path, encoding="utf-8").read()
+if "[21v57]" in src: # [21v57] 守卫用裸标记：本行标记写作 [21v56][21v57] 连写，"// [21v57]" 子串匹配不到
+    print("manager already 21v57, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+base_parens = src.count("(") - src.count(")")
+base_braces = src.count("{") - src.count("}")
+base_brackets = src.count("[") - src.count("]")
+
+rep(
+    "                        mainHandler.post { play(r.url, t.title, t.sourceName, t.pic, headers = r.headers); setLoading(false) } // [21v56] 切歌与自动下一首也带头",
+    "                        mainHandler.post { play(r.url, t.title, t.sourceName, t.pic.ifBlank { r.pic }, headers = r.headers); setLoading(false) } // [21v56][21v57] 切歌与自动下一首也带头＋详情封面",
+    "resolveAndPlay-pic",
+)
+
+# 后验：标记在位，括号平衡不变（Manager 基线括号差为字符串内括号所致，v55 前后一致），标记注释不吞码
+assert src.count("[21v57]") >= 1
+assert src.count("(") - src.count(")") == base_parens
+assert src.count("{") - src.count("}") == base_braces
+assert src.count("[") - src.count("]") == base_brackets
+for line in src.splitlines():
+    if "// [21v57]" in line:
+        after = line.split("// [21v57]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 21v57")
+
+PYEOF21V57
+grep -q "21v57" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v57"; exit 1; }
+echo "OK 21 v57"
+echo "=== 21 v57 done ==="
