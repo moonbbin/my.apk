@@ -3524,3 +3524,54 @@ PYEOF21V58
 grep -q "21v58" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v58"; exit 1; }
 echo "OK 21 v58"
 echo "=== 21 v58 done ==="
+
+echo "=== 21 v59 ==="
+
+python3 - << 'PYEOF21V59'
+import os
+import sys
+
+# 21 v59：首请求也带 Range——DJ 歌（短视频DJ热门歌曲 | 网红BGM）在新包（v27/v56 带头已在）上仍报网络异常，
+# 但探针已量出 HQ·497kbps。探针与播放器剩下的系统性差别只有 Range：探针每次 GET 都带 Range（bytes=0-65535，见 probeBytesRange），
+# 播放器首请求是普通 GET（无 Range），部分源站只认 Range 请求、普通 GET 直接挡。修法：每首歌写头时默认补 Range: bytes=0-，
+# 让首请求配方与探针一致（浏览器 UA＋Range）；切歌/续播时 DataSpec 自带 Range，会覆盖此默认项，seek 不受影响；
+# 头里若已有 Range（理论上不会，playerContent 不回 Range）先去掉再补，避免双 Range 头
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+if not os.path.exists(path):
+    path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+src = open(path, encoding="utf-8").read()
+if "[21v59]" in src:
+    print("manager already 21v59, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+base_parens = src.count("(") - src.count(")")
+base_braces = src.count("{") - src.count("}")
+base_brackets = src.count("[") - src.count("]")
+
+rep(
+    "        factory.setUserAgent(ua)\n        factory.setDefaultRequestProperties(rest)",
+    "        factory.setUserAgent(ua)\n        factory.setDefaultRequestProperties(rest.filterKeys { !it.equals(\"Range\", ignoreCase = true) } + (\"Range\" to \"bytes=0-\")) // [21v59] 首请求也带 Range：探针 GET+Range 能通、播放器首请求无 Range 被挡；切歌续播时 DataSpec 自带 Range 会覆盖此默认项",
+    "first-request-range",
+)
+
+# 后验：标记在位，括号平衡不变（Manager 基线括号差为字符串内括号所致，v55 前后一致），标记注释不吞码
+assert src.count("[21v59]") >= 1
+assert src.count("(") - src.count(")") == base_parens
+assert src.count("{") - src.count("}") == base_braces
+assert src.count("[") - src.count("]") == base_brackets
+for line in src.splitlines():
+    if "// [21v59]" in line:
+        after = line.split("// [21v59]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 21v59")
+
+PYEOF21V59
+grep -q "21v59" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v59"; exit 1; }
+echo "OK 21 v59"
+echo "=== 21 v59 done ==="
