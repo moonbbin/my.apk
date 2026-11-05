@@ -6153,3 +6153,505 @@ python3 /tmp/patch_screen46v25.py
 grep -q "46v25" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v25 screen"; exit 1; }
 echo "OK 46v25"
 echo "=== 46 v25 done ==="
+
+echo "=== 46 v26 ==="
+cat > /tmp/patch_screen46v26.py << 'PYEOF46V26'
+import sys
+
+# 46 v26（屏幕侧）：分类横条＋当页内容（用户确认“按这个做 v26”，取代纵向分段旧版方案）——
+# 删两 pill 与 tab 分流（tab/applyTab/playlists/chartOnlySections/pool/chartItems/sectionsLoading 全删），
+# 顶部横向可滑分类条（源站自己的分类：歌手/歌单/榜单/250榜……按源站顺序向右延伸），点分类只换当页内容、不跳新页；
+# 内容区复用钻入网格（chartDetail/gridItems/分页/下拉刷新），点分类即以前段卡点开的动作，去掉“← 返回榜单”；
+# 首页条目放第一个分类片“推荐”（管理那 5 张歌手走的就是这条）；数据层不动，仍只取各段第 1 页
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v26]" in src:
+    print("screen already 46v26, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+# 1) 删 tab 状态
+rep(
+    """    var tab by remember { mutableStateOf(0) }
+""",
+    "",
+    "drop-tab-state",
+)
+
+# 2) 删 chartItems 状态
+rep(
+    """    var chartItems by remember { mutableStateOf<List<SubMusicBridge.SubTrack>>(emptyList()) } // [46v12] 榜单 items（进歌单池）
+""",
+    "",
+    "drop-chartItems-state",
+)
+
+# 3) 删 sectionsLoading 状态
+rep(
+    """    var sectionsLoading by remember { mutableStateOf(false) } // [46v13] 分段加载中
+""",
+    "",
+    "drop-sectionsLoading-state",
+)
+
+# 4) chartDetail 注释改义
+rep(
+    '    var chartDetail by remember { mutableStateOf<Triple<String, String, List<SubMusicBridge.SubTrack>>?>(null) } // [46v13] 榜单“全部”钻入的段，null=分段视图',
+    '    var chartDetail by remember { mutableStateOf<Triple<String, String, List<SubMusicBridge.SubTrack>>?>(null) } // [46v26] 当前选中的分类（null=推荐）',
+    "chartDetail-comment",
+)
+
+# 5) pool/playlists/chartOnlySections → homeItems（推荐）
+rep(
+    """    val pool = remember(home, chartItems) { // [46v16] 分桶原料：首页＋全部分段，去杂项、去重
+        val names = home?.classes?.map { it.name } ?: emptyList()
+        ((home?.items ?: emptyList()) + chartItems)
+            .filter { !SubMusicBridge.isJunkName(it.title) && !names.contains(it.title.trim()) && it.title.trim() != "热门歌曲" }
+            .distinctBy { it.sourceKey + ":" + it.id }
+    }
+
+    val playlists = remember(pool, chartSections) { // [46v25] 歌单桶：合集型条目＋非榜单类段的条目全并入（歌手类段条目必进歌单）
+        (pool.filter { SubMusicBridge.isCollection(it) } + chartSections.filter { !SubMusicBridge.isChartLike(it.second) }.flatMap { it.third }.filter { it.title.trim() != "热门歌曲" })
+            .distinctBy { it.sourceKey + ":" + it.id }
+    }
+
+    val chartOnlySections = remember(chartSections) { // [46v25] 榜单只留真榜单：分类名含榜单信号词的段
+        chartSections.filter { SubMusicBridge.isChartLike(it.second) }
+    }""",
+    """    val homeItems = remember(home) { // [46v26] 推荐：首页条目（管理那 5 张歌手走的就是这条），去杂项
+        (home?.items ?: emptyList())
+            .filter { !SubMusicBridge.isJunkName(it.title) && it.title.trim() != "热门歌曲" }
+    }""",
+    "pool-to-homeItems",
+)
+
+# 6) loadSections 全量改写：去 chartItems/sectionsLoading 写入，去外层 try/finally
+rep(
+    """    fun loadSections(src: SubMusicBridge.SubSource, h: SubMusicBridge.SubHome?) { // [46v23] 分段拉取：换源时就拉，与 tab 无关
+        if (h == null || h.classes.isEmpty()) return
+        if (sectionsKey == src.key) return
+        sectionsKey = src.key
+        chartSections = emptyList()
+        chartItems = emptyList()
+        sectionsLoading = true
+        scope.launch {
+            try {
+                for (cls in h.classes) { // [46v15] 只拉有用的分类：杂项分类、歌手类分类跳过不拉
+                    if (SubMusicBridge.isJunkName(cls.name) || SubMusicBridge.isNavTitle(cls.name)) continue // [46v25] 歌手分类不再跳过（其条目进歌单），导航类仍跳过
+                    try {
+                        val items = SubMusicBridge.category(src.key, cls.id).filter { !SubMusicBridge.isJunkName(it.title) } // [46v15] 段内杂项条目过滤
+                        if (items.isNotEmpty()) {
+                            val ns = chartSections + Triple(cls.id, cls.name, items)
+                            chartSections = ns
+                            chartItems = ns.flatMap { it.third } // [46v13] 歌手推导覆盖全部分段
+                        }
+                    } catch (e: Exception) {
+                        // 单段失败跳过，不拦后段
+                    }
+                }
+            } finally {
+                sectionsLoading = false
+            }
+        }
+    }""",
+    """    fun loadSections(src: SubMusicBridge.SubSource, h: SubMusicBridge.SubHome?) { // [46v23] 分段拉取：换源时就拉，与 tab 无关
+        if (h == null || h.classes.isEmpty()) return
+        if (sectionsKey == src.key) return
+        sectionsKey = src.key
+        chartSections = emptyList()
+        scope.launch {
+            for (cls in h.classes) { // [46v26] 只拉有用的分类：杂项、导航类跳过，歌手分类照拉
+                if (SubMusicBridge.isJunkName(cls.name) || SubMusicBridge.isNavTitle(cls.name)) continue // [46v25] 歌手分类不再跳过，导航类仍跳过
+                try {
+                    val items = SubMusicBridge.category(src.key, cls.id).filter { !SubMusicBridge.isJunkName(it.title) } // [46v15] 段内杂项条目过滤
+                    if (items.isNotEmpty()) {
+                        chartSections = chartSections + Triple(cls.id, cls.name, items)
+                    }
+                } catch (e: Exception) {
+                    // 单段失败跳过，不拦后段
+                }
+            }
+        }
+    }""",
+    "loadSections-v26",
+)
+
+# 7) 删 applyTab 整段
+rep(
+    """    fun applyTab(src: SubMusicBridge.SubSource, t: Int, h: SubMusicBridge.SubHome?) { // [46v19] Peek 式两 tab：0=歌单，1=榜单（歌手 tab 拿掉）
+        chartDetail = null // [46v13] 回榜单视图
+        detailTitle = "" // [46v22] 换 tab 退出详情分集
+        detailTracks = emptyList()
+        if (t == 0) { // [46v16] 歌单 tab：派生视图（分段已在换源时拉起）
+            gridItems = emptyList()
+            gridNote = ""
+            return
+        }
+        if (h == null || h.classes.isEmpty()) {
+            chartSections = emptyList()
+            chartItems = emptyList()
+            gridNote = "该源暂无分类"
+            return
+        }
+        gridNote = ""
+        loadSections(src, h) // [46v23] 分段已在换源时拉起，这里只做兜底（未拉过才拉）
+    }
+
+""",
+    "",
+    "drop-applyTab",
+)
+
+# 8) loadBrowse 全量改写：换源回推荐，无分类时清分段＋明说
+rep(
+    """    fun loadBrowse(src: SubMusicBridge.SubSource) {
+        clearSearch() // [46v21] 换源回浏览
+        gridLoading = true
+        gridNote = ""
+        scope.launch {
+            try {
+                val h = SubMusicBridge.home(src.key)
+                home = h
+                gridLoading = false
+                loadSections(src, h) // [46v23] 换源就拉分段，歌单 tab 不用先去榜单
+                applyTab(src, tab, h)
+            } catch (e: Exception) {
+                gridLoading = false
+                home = null
+                gridItems = emptyList()
+                sectionsKey = null // [46v23] 换源失败：清分段 key，容后重试
+                chartSections = emptyList()
+                chartItems = emptyList()
+                gridNote = "加载失败：${e.message}"
+            }
+        }
+    }""",
+    """    fun loadBrowse(src: SubMusicBridge.SubSource) {
+        clearSearch() // [46v21] 换源回浏览
+        gridLoading = true
+        gridNote = ""
+        chartDetail = null // [46v26] 换源回推荐
+        detailTitle = ""
+        detailTracks = emptyList()
+        gridItems = emptyList()
+        scope.launch {
+            try {
+                val h = SubMusicBridge.home(src.key)
+                home = h
+                gridLoading = false
+                if (h == null || h.classes.isEmpty()) {
+                    chartSections = emptyList()
+                    gridNote = "该源暂无分类"
+                } else {
+                    gridNote = ""
+                    loadSections(src, h) // [46v23] 换源就拉分段
+                }
+            } catch (e: Exception) {
+                gridLoading = false
+                home = null
+                gridItems = emptyList()
+                sectionsKey = null // [46v23] 换源失败：清分段 key，容后重试
+                chartSections = emptyList()
+                gridNote = "加载失败：${e.message}"
+            }
+        }
+    }""",
+    "loadBrowse-v26",
+)
+
+# 9) pill 行 → 分类横条 LazyRow（推荐片＋每分类一片）
+rep(
+    """            if (!searched && !searching) { // [46v21] 搜结果时藏 pill tab
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) { // [46v19] Peek 式 pill tab：选中绿底＋对勾，未选中卡片底
+                listOf("歌单", "榜单").forEachIndexed { i, label ->
+                    val sel = tab == i
+                    Row(
+                        modifier = Modifier
+                            .padding(end = 12.dp)
+                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                            .background(if (sel) musicColors().accent else musicColors().card)
+                            .clickable {
+                                if (!sel) {
+                                    tab = i
+                                    val src = selected
+                                    if (src != null) applyTab(src, i, home)
+                                }
+                            }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val checkTint = musicColors().accentText
+                        if (sel) {
+                            Canvas(modifier = Modifier.size(14.dp)) {
+                                val sw = 2.dp.toPx()
+                                drawLine(color = checkTint, start = androidx.compose.ui.geometry.Offset(2.dp.toPx(), 7.dp.toPx()), end = androidx.compose.ui.geometry.Offset(6.dp.toPx(), 11.dp.toPx()), strokeWidth = sw, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                                drawLine(color = checkTint, start = androidx.compose.ui.geometry.Offset(6.dp.toPx(), 11.dp.toPx()), end = androidx.compose.ui.geometry.Offset(12.dp.toPx(), 3.dp.toPx()), strokeWidth = sw, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                        }
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                            color = if (sel) musicColors().accentText else musicColors().textSecondary
+                        )
+                    }
+                }
+            }
+            } // [46v21] 搜结果时藏 pill tab""",
+    """            if (!searched && !searching) { // [46v21] 搜结果时藏分类条
+            LazyRow( // [46v26] 分类横条：源站自己的分类向右延伸，点分类只换当页内容、不跳新页
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item { // [46v26] 推荐片：首页条目
+                    ClassChip(
+                        label = "推荐",
+                        selected = chartDetail == null,
+                        onClick = {
+                            if (chartDetail != null) {
+                                chartDetail = null
+                                gridItems = emptyList()
+                                detailTitle = ""
+                                detailTracks = emptyList()
+                            }
+                        }
+                    )
+                }
+                items(chartSections, key = { it.first }) { sec ->
+                    ClassChip(
+                        label = sec.second,
+                        selected = chartDetail?.first == sec.first,
+                        onClick = {
+                            if (chartDetail?.first != sec.first) {
+                                chartDetail = sec
+                                gridItems = sec.third
+                                drillPage = 1
+                                drillHasMore = true
+                                drillLoadingMore = false
+                                detailTitle = ""
+                                detailTracks = emptyList()
+                            }
+                        }
+                    )
+                }
+            }
+            } // [46v21] 搜结果时藏分类条""",
+    "pill-to-classstrip",
+)
+
+# 10) 删榜单段卡分支（tab==1 平铺网格）
+rep(
+    """            } else if (tab == 1 && chartDetail == null) { // [46v19] Peek 式榜单：平铺榜单卡网格（一段一卡，点卡钻入、点播播本榜）
+                if (gridNote.isNotBlank()) {
+                    Text(
+                        text = gridNote,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else if (chartOnlySections.isEmpty()) {
+                    Text(
+                        text = if (sectionsLoading) "正在加载榜单…" else if (chartSections.isEmpty()) "该源暂无分类内容" else "该源暂无榜单", // [46v25] 有分类但无榜单类段
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else {
+                    if (sectionsLoading) {
+                        Text(
+                            text = "正在加载更多分类…",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = musicColors().textSecondary,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                        )
+                    }
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(chartOnlySections, key = { it.first }) { sec -> // [46v25] 只显真榜单段
+                            val first = sec.third.firstOrNull()
+                            SubPeekCard(
+                                pic = first?.pic ?: "",
+                                title = sec.second,
+                                badge = "榜单",
+                                onOpen = { chartDetail = sec; gridItems = sec.third; drillPage = 1; drillHasMore = true; drillLoadingMore = false }, // [46v22] 钻入分页重置
+                                onPlay = { if (sec.third.isNotEmpty()) playTrack(sec.third.first(), sec.third) }
+                            )
+                        }
+                    }
+                }
+            } else if (gridLoading) {""",
+    """            } else if (gridLoading) {""",
+    "drop-sections-branch",
+)
+
+# 11) 删歌单分支，钻入 else 改 else-if（分类内容）
+rep(
+    """            } else if (tab == 0) { // [46v19] 歌单 tab：Peek 式紧致网格
+                if (playlists.isEmpty()) {
+                    Text(
+                        text = if (sectionsLoading) "正在加载歌单…" else "该源暂无歌单", // [46v23] 加载中不说暂无
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(playlists, key = { it.sourceKey + ":" + it.id }) { track ->
+                            SubPeekCard(pic = track.pic, title = track.title, badge = SubMusicBridge.countOf(track.remark), onOpen = { openItem(track, playlists) }, onPlay = { playTrack(track, playlists) }) // [46v22] 点卡探详情
+                        }
+                    }
+                }
+            } else { // [46v19] 榜单钻入：榜内歌曲网格（Peek 式卡片，无名次）""",
+    """            } else if (chartDetail != null) { // [46v26] 分类内容：当前选中的分类（当页切换，不跳新页）""",
+    "playlist-to-classcontent",
+)
+
+# 12) 删钻入内“← 返回榜单”
+rep(
+    """                if (tab == 1 && chartDetail != null) {
+                    Text(
+                        text = "← 返回榜单",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().accent,
+                        modifier = Modifier
+                            .clickable { chartDetail = null }
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+""",
+    "",
+    "drop-drill-backlink",
+)
+
+# 13) 钻入尾巴后追加推荐分支
+rep(
+    """                        if (drillLoadingMore) {
+                            item {
+                                Text(
+                                    text = "正在加载更多…",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = musicColors().textSecondary,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }""",
+    """                        if (drillLoadingMore) {
+                            item {
+                                Text(
+                                    text = "正在加载更多…",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = musicColors().textSecondary,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            } else { // [46v26] 推荐：首页条目
+                if (homeItems.isEmpty()) {
+                    Text(
+                        text = "该源暂无推荐",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(homeItems, key = { it.sourceKey + ":" + it.id }) { track ->
+                            SubPeekCard(pic = track.pic, title = track.title, badge = SubMusicBridge.countOf(track.remark), onOpen = { openItem(track, homeItems) }, onPlay = { playTrack(track, homeItems) })
+                        }
+                    }
+                }
+            }""",
+    "append-recommend-branch",
+)
+
+# 14) SubPeekCard 之前插入 ClassChip（分类片：同 v19 pill 样式）
+rep(
+    """@Composable
+private fun SubPeekCard(pic: String, title: String, badge: String?, onOpen: () -> Unit, onPlay: () -> Unit) { // [46v19] Peek 式卡片：方形封面＋左上徽标＋右下圆播＋单行标题（点卡打开、点播播放）""",
+    """@Composable
+private fun ClassChip(label: String, selected: Boolean, onClick: () -> Unit) { // [46v26] 分类片：选中绿底＋对勾，未选中卡片底（同 v19 pill 样式）
+    Row(
+        modifier = Modifier
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+            .background(if (selected) musicColors().accent else musicColors().card)
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val checkTint = musicColors().accentText
+        if (selected) {
+            Canvas(modifier = Modifier.size(14.dp)) {
+                val sw = 2.dp.toPx()
+                drawLine(color = checkTint, start = androidx.compose.ui.geometry.Offset(2.dp.toPx(), 7.dp.toPx()), end = androidx.compose.ui.geometry.Offset(6.dp.toPx(), 11.dp.toPx()), strokeWidth = sw, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(color = checkTint, start = androidx.compose.ui.geometry.Offset(6.dp.toPx(), 11.dp.toPx()), end = androidx.compose.ui.geometry.Offset(12.dp.toPx(), 3.dp.toPx()), strokeWidth = sw, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) musicColors().accentText else musicColors().textSecondary
+        )
+    }
+}
+
+@Composable
+private fun SubPeekCard(pic: String, title: String, badge: String?, onOpen: () -> Unit, onPlay: () -> Unit) { // [46v19] Peek 式卡片：方形封面＋左上徽标＋右下圆播＋单行标题（点卡打开、点播播放）""",
+    "insert-ClassChip",
+)
+
+# 后验：死代码全清，v26 标记在位，括号平衡，标记注释不吞码
+for dead in ["applyTab", "chartOnlySections", "playlists", "chartItems", "sectionsLoading", "var tab by"]:
+    assert dead not in src, "dead remains: %s" % dead
+assert src.count("[46v26]") >= 9
+assert src.count("(") - src.count(")") == 0
+assert src.count("{") - src.count("}") == 0
+assert src.count("[") - src.count("]") == 0
+for line in src.splitlines():
+    if "// [46v26]" in line:
+        after = line.split("// [46v26]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 46v26")
+
+PYEOF46V26
+python3 /tmp/patch_screen46v26.py
+grep -q "46v26" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v26 screen"; exit 1; }
+echo "OK 46v26"
+echo "=== 46 v26 done ==="
