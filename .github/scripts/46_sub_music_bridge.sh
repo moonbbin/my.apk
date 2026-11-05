@@ -7331,3 +7331,75 @@ python3 /tmp/patch_bridge46v33.py
 grep -q "46v33" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v33 bridge"; exit 1; }
 echo "OK 46v33 bridge"
 echo "=== 46 v33 done ==="
+
+echo "=== 46 v34 ==="
+cat > /tmp/patch_bridge46v34.py << 'PYEOF46V34'
+import sys
+
+# 46 v34：播放地址归一化（主体 normalizePlayerResult＋jsonParse 同款）——用户发的 [46v32] 日志钉死 DJ 歌根因：
+# 4 首 DJ 歌的取址日志里 url 尾都是 "]，即 playerContent 回的 url 本身是个 JSON 数组字符串 ["https://..."]；
+# 桥接原样把它当地址交给播放器，播放器认不出、报 code=2001 Source error。主体 PlayLoader.normalizePlayerResult
+# 专门处理这种格式（[...] 数组逐项清洗、video:// 去前缀、proxy:// 换代理），我们桥接一直没做。
+# 另：v59 Range＋v33 收敛头都没修好它，正因为地址本身就是错的——头和 Range 修不了一个带括号的地址。
+# 修法：取到 url 后先归一化——协议相对地址补 http:、[...] 数组拆包取第一条可播地址（video:// 去前缀、proxy:// 跳过）、
+# video:// 去前缀并标 parse=1；归一化后的 parse 再进原有 parse==1 判断
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+src = open(path, encoding="utf-8").read()
+if "[46v34]" in src:
+    print("bridge already 46v34, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+rep(
+    """            val pj = JSONObject(pr)
+            val parse = pj.optInt("parse", 0)
+            val url = pj.optString("url")
+            if (url.isBlank()) return@withContext PlayResult.Fail("播放地址为空")
+            if (parse == 1) return@withContext PlayResult.Fail("该源需要解析，源内音乐 v1 暂不支持解析播放")""",
+    """            val pj = JSONObject(pr)
+            var normParse = pj.optInt("parse", 0)
+            var url = pj.optString("url")
+            if (url.isBlank()) return@withContext PlayResult.Fail("播放地址为空")
+            if (url.startsWith("//")) url = "http:" + url // [46v34] 主体 jsonParse 同款：协议相对地址补 http:
+            if (url.startsWith("[") && url.endsWith("]")) { // [46v34] 主体 normalizePlayerResult 同款：数组拆包取第一条可播地址
+                try {
+                    val arr = JSONArray(url)
+                    var found = ""
+                    for (i in 0 until arr.length()) {
+                        var s = arr.optString(i, "")
+                        if (s.startsWith("video://")) s = s.substring(8)
+                        if (s.startsWith("proxy://") || s.isBlank()) continue
+                        found = s
+                        break
+                    }
+                    if (found.isNotBlank()) { url = found; normParse = 0 }
+                } catch (_: Exception) { }
+            } else if (url.startsWith("video://")) {
+                url = url.substring(8)
+                normParse = 1
+            }
+            if (normParse == 1) return@withContext PlayResult.Fail("该源需要解析，源内音乐 v1 暂不支持解析播放")""",
+    "normalize-play-url",
+)
+
+# 后验：标记在位，括号平衡，标记注释不吞码
+assert src.count("[46v34]") >= 2
+assert src.count("(") - src.count(")") == 0
+assert src.count("{") - src.count("}") == 0
+assert src.count("[") - src.count("]") == 0
+for line in src.splitlines():
+    if "// [46v34]" in line:
+        after = line.split("// [46v34]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 46v34 bridge")
+
+PYEOF46V34
+python3 /tmp/patch_bridge46v34.py
+grep -q "46v34" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v34 bridge"; exit 1; }
+echo "OK 46v34 bridge"
+echo "=== 46 v34 done ==="
