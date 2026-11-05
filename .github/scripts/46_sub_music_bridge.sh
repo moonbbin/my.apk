@@ -3943,3 +3943,50 @@ grep -q "46v16" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusi
 grep -q "46v16" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v16 screen"; exit 1; }
 echo "OK 46v16"
 echo "=== 46 v16 done ==="
+
+# === 46 v17: 修 228:19 构建红 ===
+
+echo "=== 46 v17 ==="
+
+python3 - << 'PYEOF46V17'
+import sys
+
+# 46 v17：修 v15/v16 构建红——SubMusicBridge.kt:228:19，raw.split 的 raw 仍是 String?
+# 根因：val raw: String? = when {...} ?: return emptyList() ——初始化器里的 ?: return 没让编译器把 raw 收窄为非空；
+# 另 track.title.ifBlank { null } 的类型靠推断（泛型 ifBlank 的 C 随上下文变），一并换成 takeIf
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v17]" in src:
+    print("bridge already 46v17, skip")
+    sys.exit(0)
+
+old_fn = """    fun artistsOf(track: SubTrack): List<String> { // [46v15] 歌手推导（多名）：合集备注→标题、否则 vod_actor、否则不含 > 的备注；合作歌手按 &/、/，拆；杂项名过滤
+        val raw: String? = when {
+            track.remark.contains("合集") || track.remark.contains("专辑") || track.remark.contains("歌单") -> track.title.ifBlank { null } // [46v16] 规则一加歌单
+            track.actor.isNotBlank() -> track.actor
+            track.remark.isNotBlank() && !track.remark.contains(">") -> track.remark
+            else -> null
+        } ?: return emptyList()
+        return raw.split("&", "＆", "、", "，", ",").map { it.trim() }.filter { it.isNotEmpty() && !isJunkName(it) }
+    }"""
+assert src.count(old_fn) == 1, "artistsOf anchor count %d" % src.count(old_fn)
+new_fn = """    fun artistsOf(track: SubTrack): List<String> { // [46v17] 修 228:19 构建红：判空改显式检查，ifBlank{null} 改 takeIf
+        val raw: String? = when {
+            track.remark.contains("合集") || track.remark.contains("专辑") || track.remark.contains("歌单") -> track.title.takeIf { it.isNotBlank() }
+            track.actor.isNotBlank() -> track.actor
+            track.remark.isNotBlank() && !track.remark.contains(">") -> track.remark
+            else -> null
+        }
+        if (raw.isNullOrBlank()) return emptyList()
+        return raw.split("&", "＆", "、", "，", ",").map { it.trim() }.filter { it.isNotEmpty() && !isJunkName(it) }
+    }"""
+src = src.replace(old_fn, new_fn, 1)
+
+assert src.count("ifBlank { null }") == 0
+assert src.count("isNullOrBlank()) return emptyList()") == 1
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v17 bridge")
+PYEOF46V17
+grep -q "46v17" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v17 bridge"; exit 1; }
+echo "OK 46v17"
+echo "=== 46 v17 done ==="
