@@ -6082,3 +6082,74 @@ python3 /tmp/patch_screen46v24.py
 grep -q "46v22" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v24 screen"; exit 1; }
 echo "OK 46v24"
 echo "=== 46 v24 done ==="
+
+# === 46 v25: 榜单只留真榜单＋歌手全进歌单（用户确认；歌手管理弹窗是源站自带的） ===
+echo "=== 46 v25 ==="
+cat > /tmp/patch_screen46v25.py << 'PYEOF46V25'
+import sys
+
+# 46 v25（屏幕侧）：榜单只留真榜单＋歌手全进歌单（用户确认；弹窗是源站自带的，不在 AVBox 里）——
+# 背景：歌单 tab 的 5 张歌手卡就是源站首页透过来的管理名单（桥接只读源站首页＋分类）；
+# 藏在分类里的歌手此前整段跳过（loadSections 跳含“歌手”的分类），进不了任何 tab。
+# 改法：① loadSections 不再跳过歌手分类（其条目进池子）；② 榜单 tab 只显分类名含榜单信号词的段
+# （新增 chartOnlySections 派生，isChartLike 既有口径：榜/排行/飙升/新歌/畅听/会员/热歌/金曲/视频）；
+# ③ 歌单 tab＝isCollection(pool)＋非榜单类段的条目全并入（去重，歌手类段条目必进歌单、不依赖备注）；
+# ④ 不建歌手 tab、不猜人名、不逐卡探详情；歌单仍只取各段第 1 页
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v25]" in src:
+    print("screen already 46v25, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+# 1) loadSections：歌手分类不再跳过
+rep(
+    '                    if (SubMusicBridge.isJunkName(cls.name) || cls.name.contains("歌手") || SubMusicBridge.isNavTitle(cls.name)) continue // [46v18] 导航类分类跳过不拉',
+    '                    if (SubMusicBridge.isJunkName(cls.name) || SubMusicBridge.isNavTitle(cls.name)) continue // [46v25] 歌手分类不再跳过（其条目进歌单），导航类仍跳过',
+    "unskip-singer-class",
+)
+
+# 2) 歌单桶：并入非榜单类段条目；榜单派生：只留真榜单段
+rep(
+    """    val playlists = remember(pool) { // [46v16] 歌单桶：合集型条目（人名合集除外，归歌手）
+        pool.filter { SubMusicBridge.isCollection(it) }
+    }""",
+    """    val playlists = remember(pool, chartSections) { // [46v25] 歌单桶：合集型条目＋非榜单类段的条目全并入（歌手类段条目必进歌单）
+        (pool.filter { SubMusicBridge.isCollection(it) } + chartSections.filter { !SubMusicBridge.isChartLike(it.second) }.flatMap { it.third }.filter { it.title.trim() != "热门歌曲" })
+            .distinctBy { it.sourceKey + ":" + it.id }
+    }
+
+    val chartOnlySections = remember(chartSections) { // [46v25] 榜单只留真榜单：分类名含榜单信号词的段
+        chartSections.filter { SubMusicBridge.isChartLike(it.second) }
+    }""",
+    "playlists-chartonly",
+)
+
+# 3) 榜单段卡网格：只显 chartOnlySections；空态区分（加载中/无分类/无榜单类段）
+rep(
+    """                } else if (chartSections.isEmpty()) {
+                    Text(
+                        text = if (sectionsLoading) "正在加载榜单…" else "该源暂无分类内容",""",
+    """                } else if (chartOnlySections.isEmpty()) {
+                    Text(
+                        text = if (sectionsLoading) "正在加载榜单…" else if (chartSections.isEmpty()) "该源暂无分类内容" else "该源暂无榜单", // [46v25] 有分类但无榜单类段""",
+    "chart-empty-text",
+)
+rep(
+    "                        items(chartSections, key = { it.first }) { sec ->",
+    "                        items(chartOnlySections, key = { it.first }) { sec -> // [46v25] 只显真榜单段",
+    "chart-grid-only",
+)
+
+assert src.count("[46v25]") >= 5
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v25 screen")
+PYEOF46V25
+python3 /tmp/patch_screen46v25.py
+grep -q "46v25" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v25 screen"; exit 1; }
+echo "OK 46v25"
+echo "=== 46 v25 done ==="
