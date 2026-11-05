@@ -7248,3 +7248,86 @@ python3 /tmp/patch_bridge46v32.py
 grep -q "46v32" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v32 bridge"; exit 1; }
 echo "OK 46v32 bridge"
 echo "=== 46 v32 done ==="
+
+echo "=== 46 v33 ==="
+cat > /tmp/patch_bridge46v33.py << 'PYEOF46V33'
+import sys
+
+# 46 v33：头收敛到主体口径——主体 SourceHelper.extractPlayHeaders 只读结果里 header/headers 对象（对象或 JSON 文本都认），
+# 不读顶层 user-agent/referer、不看 data 包裹；我们 v27 多读了顶层 user-agent/referer＋data 包裹，等于比主体多发一个 Referer，
+# 若那个 Referer 不对、反而会被源站挡（DJ 歌 HQ·497kbps 仍网络异常的嫌疑之一；主体用更少的头能播）。修法：只读 header/headers 对象，
+# 对象或 JSON 文本都认（与主体 appendJsonHeaders 同款）；源站 header 仍只补没有的键；UA 不动（仍走 v56 浏览器 UA 回落，探针已证能通）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+src = open(path, encoding="utf-8").read()
+if "[46v33]" in src:
+    print("bridge already 46v33, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+# 1) 函数头注释改口径（v27 的旧口径已作废）
+rep(
+    "    // [46v27] 订阅带头播放：取 playerContent 返回里的头（主体 PlayUrlResolver.jsonParse＋mergeSiteHeaders 口径：结果里的 header/headers 对象＋user-agent/referer，data 包裹也认；源站 header 只补没有的键）",
+    "    // [46v27][46v33] 订阅带头播放：取 playerContent 返回里的头（主体 SourceHelper.extractPlayHeaders＋mergeSiteHeaders 口径：只读 header/headers 对象，对象或 JSON 文本都认；源站 header 只补没有的键；顶层 user-agent/referer 与 data 包裹不再读）",
+    "header-comment",
+)
+
+# 2) 取头逻辑收敛：只读 pj 的 header/headers 对象（或 JSON 文本），不再读 data 包裹与顶层 user-agent/referer
+rep(
+    """        val map = LinkedHashMap<String, String>()
+        val data = pj.optJSONObject("data")
+        for (o in listOf(pj, data)) {
+            if (o == null) continue
+            val h = o.optJSONObject("header") ?: o.optJSONObject("headers")
+            if (h != null) {
+                val keys = h.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    val v = h.optString(k)
+                    if (v.isNotBlank()) map[k] = v
+                }
+            }
+            val ua = o.optString("user-agent")
+            if (ua.isNotBlank()) map["User-Agent"] = ua
+            val ref = o.optString("referer")
+            if (ref.isNotBlank()) map["Referer"] = ref
+        }""",
+    """        val map = LinkedHashMap<String, String>()
+        for (key in listOf("header", "headers")) { // [46v33] 只读 header/headers 对象，与主体 extractPlayHeaders 同口径；顶层 user-agent/referer 与 data 包裹不再读
+            val raw = pj.opt(key)
+            if (raw == null || raw === JSONObject.NULL) continue
+            val h = when (raw) {
+                is JSONObject -> raw
+                is String -> try { JSONObject(raw) } catch (_: Exception) { null }
+                else -> null
+            } ?: continue
+            val keys = h.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val v = h.optString(k)
+                if (v.isNotBlank()) map[k] = v
+            }
+        }""",
+    "extract-headers-converge",
+)
+
+# 后验：标记在位，括号平衡，标记注释不吞码
+assert src.count("[46v33]") >= 2
+assert src.count("(") - src.count(")") == 0
+assert src.count("{") - src.count("}") == 0
+assert src.count("[") - src.count("]") == 0
+for line in src.splitlines():
+    if "// [46v33]" in line:
+        after = line.split("// [46v33]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 46v33 bridge")
+
+PYEOF46V33
+python3 /tmp/patch_bridge46v33.py
+grep -q "46v33" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v33 bridge"; exit 1; }
+echo "OK 46v33 bridge"
+echo "=== 46 v33 done ==="
