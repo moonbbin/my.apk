@@ -4961,3 +4961,430 @@ grep -q "46v19" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusi
 grep -q "46v19" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt || { echo "X 46v19 MH"; exit 1; }
 echo "OK 46v19"
 echo "=== 46 v19 done ==="
+
+# === 46 v21: 订阅搜索页并进曲库（用户确认：结果卡片网格） ===
+echo "=== 46 v21 ==="
+cat > /tmp/patch_screen46v21.py << 'PYEOF46V21'
+import sys
+
+# 46 v21（屏幕侧）：订阅搜索页并进曲库——曲库顶搜索框由假框改真输入框（BasicTextField，圆角外观同 v19，键盘搜索触发），
+# 出结果时结果卡片网格替代表格区（点卡播本页队列，复用 SubPeekCard/playTrack），pill tab 搜时隐藏，×/返回浏览回浏览；
+# 换源时清空搜索；onSearchClick 参数删除（MH 侧同步删调用）
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v21]" in src:
+    print("screen already 46v21, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+# 0) 新 import（BasicTextField/KeyboardOptions/KeyboardActions/ImeAction/SolidColor 均在 PlayerSheets.kt 有同款用法）
+rep(
+    "import androidx.compose.foundation.clickable",
+    "import androidx.compose.foundation.clickable\n"
+    "import androidx.compose.foundation.text.BasicTextField\n"
+    "import androidx.compose.foundation.text.KeyboardActions\n"
+    "import androidx.compose.foundation.text.KeyboardOptions",
+    "imports-text",
+)
+rep(
+    "import androidx.compose.ui.graphics.Color",
+    "import androidx.compose.ui.graphics.Color\n"
+    "import androidx.compose.ui.graphics.SolidColor",
+    "imports-solid",
+)
+rep(
+    "import androidx.compose.ui.text.font.FontWeight",
+    "import androidx.compose.ui.text.font.FontWeight\n"
+    "import androidx.compose.ui.text.input.ImeAction",
+    "imports-ime",
+)
+
+# 1) 签名删 onSearchClick
+rep(
+    """fun SubMusicScreen(
+    sources: List<SubMusicBridge.SubSource>,
+    selectedKey: String?,
+    diag: SubMusicBridge.SourceDiag?,
+    onSearchClick: () -> Unit
+) {""",
+    """fun SubMusicScreen(
+    sources: List<SubMusicBridge.SubSource>,
+    selectedKey: String?,
+    diag: SubMusicBridge.SourceDiag?
+) { // [46v21] 搜索已并进本页，onSearchClick 参数删除""",
+    "signature",
+)
+
+# 2) 搜索状态（放在 notice 之后）
+rep(
+    '    var notice by remember { mutableStateOf("") }',
+    '    var notice by remember { mutableStateOf("") }\n'
+    '    var keyword by remember { mutableStateOf("") } // [46v21] 曲库内搜\n'
+    '    var searching by remember { mutableStateOf(false) } // [46v21] 曲库内搜\n'
+    '    var searched by remember { mutableStateOf(false) } // [46v21] 曲库内搜\n'
+    '    var searchResults by remember { mutableStateOf<List<SubMusicBridge.SubTrack>>(emptyList()) } // [46v21] 曲库内搜',
+    "search-states",
+)
+
+# 3) doSearch/clearSearch（放在 scope 之后、pool 之前；loadBrowse 在后调用 clearSearch，故须先声明）
+rep(
+    "    val scope = rememberCoroutineScope()",
+    """    val scope = rememberCoroutineScope()
+
+    fun clearSearch() { // [46v21] 曲库内搜：回浏览
+        keyword = ""
+        searchResults = emptyList()
+        searched = false
+        searching = false
+    }
+
+    fun doSearch() { // [46v21] 曲库内搜：搜当前源（同 SubSearchScreen 的 searchInSource 链）
+        val kw = keyword.trim()
+        val src = selected
+        if (kw.isEmpty() || searching || src == null) return
+        searching = true
+        searched = false
+        notice = ""
+        scope.launch {
+            try {
+                searchResults = SubMusicBridge.searchInSource(src.key, kw)
+                searched = true
+            } catch (e: Exception) {
+                notice = "搜索失败：" + e.message
+            } finally {
+                searching = false
+            }
+        }
+    }""",
+    "search-funs",
+)
+
+# 4) loadBrowse：换源清空搜索
+rep(
+    """    fun loadBrowse(src: SubMusicBridge.SubSource) {
+        gridLoading = true
+        gridNote = """"",
+    """    fun loadBrowse(src: SubMusicBridge.SubSource) {
+        clearSearch() // [46v21] 换源回浏览
+        gridLoading = true
+        gridNote = """"",
+    "loadbrowse-clear",
+)
+
+# 5) 假搜索框改真输入框（放大镜 Canvas 原样保留；光标色用 accent，颜色在 Canvas 外提升）
+rep(
+    """            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                    .background(musicColors().card)
+                    .clickable { onSearchClick() }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) { // [46v19] Peek 式圆角搜索框
+                val searchTint = musicColors().textSecondary
+                Canvas(modifier = Modifier.size(20.dp)) {
+                    val sw = 2.dp.toPx()
+                    drawCircle(
+                        color = searchTint,
+                        radius = 6.dp.toPx(),
+                        center = androidx.compose.ui.geometry.Offset(8.dp.toPx(), 8.dp.toPx()),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw)
+                    )
+                    drawLine(
+                        color = searchTint,
+                        start = androidx.compose.ui.geometry.Offset(12.5.dp.toPx(), 12.5.dp.toPx()),
+                        end = androidx.compose.ui.geometry.Offset(17.dp.toPx(), 17.dp.toPx()),
+                        strokeWidth = sw,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "搜索歌曲、歌手…",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = musicColors().textSecondary
+                )
+            }""",
+    """            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                    .background(musicColors().card)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) { // [46v21] 曲库内搜：真输入框（圆角外观同 v19）
+                val searchTint = musicColors().textSecondary
+                Canvas(modifier = Modifier.size(20.dp)) {
+                    val sw = 2.dp.toPx()
+                    drawCircle(
+                        color = searchTint,
+                        radius = 6.dp.toPx(),
+                        center = androidx.compose.ui.geometry.Offset(8.dp.toPx(), 8.dp.toPx()),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = sw)
+                    )
+                    drawLine(
+                        color = searchTint,
+                        start = androidx.compose.ui.geometry.Offset(12.5.dp.toPx(), 12.5.dp.toPx()),
+                        end = androidx.compose.ui.geometry.Offset(17.dp.toPx(), 17.dp.toPx()),
+                        strokeWidth = sw,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                BasicTextField(
+                    value = keyword,
+                    onValueChange = { keyword = it },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = musicColors().textPrimary),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { doSearch() }),
+                    cursorBrush = SolidColor(musicColors().accent),
+                    decorationBox = { inner ->
+                        if (keyword.isEmpty()) {
+                            Text(
+                                text = "搜索歌曲、歌手…",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = musicColors().textSecondary
+                            )
+                        }
+                        inner()
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                if (keyword.isNotEmpty()) {
+                    val clearTint = musicColors().textSecondary
+                    Box(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clickable { clearSearch() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Canvas(modifier = Modifier.size(12.dp)) {
+                            val sw = 2.dp.toPx()
+                            drawLine(color = clearTint, start = androidx.compose.ui.geometry.Offset(2.dp.toPx(), 2.dp.toPx()), end = androidx.compose.ui.geometry.Offset(10.dp.toPx(), 10.dp.toPx()), strokeWidth = sw, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                            drawLine(color = clearTint, start = androidx.compose.ui.geometry.Offset(10.dp.toPx(), 2.dp.toPx()), end = androidx.compose.ui.geometry.Offset(2.dp.toPx(), 10.dp.toPx()), strokeWidth = sw, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                        }
+                    }
+                }
+            }""",
+    "search-box",
+)
+
+# 6) pill tab：搜结果时隐藏（返回浏览再现）
+rep(
+    """            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) { // [46v19] Peek 式 pill tab：选中绿底＋对勾，未选中卡片底""",
+    """            if (!searched && !searching) { // [46v21] 搜结果时藏 pill tab
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) { // [46v19] Peek 式 pill tab：选中绿底＋对勾，未选中卡片底""",
+    "pills-hide-open",
+)
+rep(
+    """                    }
+                }
+            }
+            if (notice.isNotBlank()) {""",
+    """                    }
+                }
+            }
+            } // [46v21] 搜结果时藏 pill tab
+            if (notice.isNotBlank()) {""",
+    "pills-hide-close",
+)
+
+# 7) 内容链首分支：搜结果卡片网格（在榜单/歌单/钻入之前）
+rep(
+    '            if (tab == 1 && chartDetail == null) { // [46v19] Peek 式榜单：平铺榜单卡网格（一段一卡，点卡钻入、点播播本榜）',
+    """            if (searched || searching) { // [46v21] 曲库内搜：结果卡片网格（点卡播本页队列）
+                if (searching) {
+                    Text(
+                        text = "正在搜索…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else if (searchResults.isEmpty()) {
+                    Text(
+                        text = "没有搜到结果",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = musicColors().textSecondary,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "搜「" + keyword.trim() + "」· " + searchResults.size + " 条",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = musicColors().textSecondary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "返回浏览",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = musicColors().accent,
+                            modifier = Modifier.clickable { clearSearch() }
+                        )
+                    }
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(searchResults, key = { it.sourceKey + ":" + it.id }) { track ->
+                            SubPeekCard(pic = track.pic, title = track.title, badge = track.remark.takeIf { it.isNotBlank() }, onOpen = { playTrack(track, searchResults) }, onPlay = { playTrack(track, searchResults) })
+                        }
+                    }
+                }
+            } else if (tab == 1 && chartDetail == null) { // [46v19] Peek 式榜单：平铺榜单卡网格（一段一卡，点卡钻入、点播播本榜）""",
+    "search-results-branch",
+)
+
+assert src.count("[46v21]") >= 10
+assert "onSearchClick: () -> Unit" not in src  # 注释里提一句参数名不算残留，只查签名与调用
+assert ".clickable { onSearchClick() }" not in src
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v21 screen")
+PYEOF46V21
+cat > /tmp/patch_mh46v21.py << 'PYEOF46V21'
+import sys
+
+# 46 v21（MH 侧）：订阅模式拿掉“搜索”底栏 tab——
+# ① setContentMode 切到 sub 时 SEARCH 回落到 QUKU；② effectiveTab 的 sub 集去掉 SEARCH；③ QUKU 分支删 onSearchClick 传参；
+# ④ SEARCH 分支删 sub 臂（SubSearchScreen 调用），只剩脚本模式的 SearchTabLanding；⑤ sub 的 tabDefs97 删 SEARCH 一项。
+# 脚本模式的搜索 tab 与 SEARCH 枚举值不动。
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v21]" in src:
+    print("MH already 46v21, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+# 1) 切模式回落：sub 集去掉 SEARCH
+rep(
+    "            if (selectedTab != MusicTab.QUKU && selectedTab != MusicTab.SEARCH && selectedTab != MusicTab.MINE && selectedTab != MusicTab.SETTINGS && selectedTab != MusicTab.HOME) selectedTab = MusicTab.QUKU",
+    "            if (selectedTab != MusicTab.QUKU && selectedTab != MusicTab.MINE && selectedTab != MusicTab.SETTINGS && selectedTab != MusicTab.HOME) selectedTab = MusicTab.QUKU // [46v21] 订阅模式无搜索 tab",
+    "mode-fallback",
+)
+
+# 2) effectiveTab 的 sub 集去掉 SEARCH
+rep(
+    "                if (selectedTab == MusicTab.QUKU || selectedTab == MusicTab.SEARCH || selectedTab == MusicTab.MINE || selectedTab == MusicTab.SETTINGS || selectedTab == MusicTab.HOME) selectedTab else MusicTab.QUKU",
+    "                if (selectedTab == MusicTab.QUKU || selectedTab == MusicTab.MINE || selectedTab == MusicTab.SETTINGS || selectedTab == MusicTab.HOME) selectedTab else MusicTab.QUKU // [46v21] 订阅模式无搜索 tab",
+    "effective-tab",
+)
+
+# 3) QUKU 分支删 onSearchClick 传参
+rep(
+    """                    SubMusicScreen(
+                        sources = subSources,
+                        selectedKey = subSources.firstOrNull { it.key == selectedSubKey }?.key,
+                        diag = sourceDiag,
+                        onSearchClick = { selectedTab = MusicTab.SEARCH }
+                    ) // [46v9]""",
+    """                    SubMusicScreen(
+                        sources = subSources,
+                        selectedKey = subSources.firstOrNull { it.key == selectedSubKey }?.key,
+                        diag = sourceDiag
+                    ) // [46v9] // [46v21] 搜索已并进曲库页""",
+    "quku-callsite",
+)
+
+# 4) SEARCH 分支删 sub 臂，只剩脚本模式
+rep(
+    """                MusicTab.SEARCH -> {
+                    if (contentMode == "sub") {
+                        SubSearchScreen(
+                            sources = subSources,
+                            selectedKey = subSources.firstOrNull { it.key == selectedSubKey }?.key,
+                            diag = sourceDiag
+                        ) // [46v9]
+                    } else {
+                        // 搜索：新版 SearchScreen（数据：SearchTabLanding 的热词/关键词逻辑）
+                        SearchTabLanding(
+                            platform = selectedPlatform,
+                            onSearch = { kw ->
+                                context.startActivity(
+                                    Intent(context, LxMusicSearchActivity::class.java).apply {
+                                        putExtra("platform", selectedPlatform)
+                                        putExtra("keyword", kw)
+                                    }
+                                )
+                            },
+                            onBrowseChart = { chartId ->
+                                pendingChartId = chartId
+                                selectedTab = MusicTab.RANKING
+                            }
+                        )
+                    }
+                }""",
+    """                MusicTab.SEARCH -> { // [46v21] 搜索 tab 只剩脚本模式（订阅模式的搜索已并进曲库页，SubSearchScreen 已删）
+                    // 搜索：新版 SearchScreen（数据：SearchTabLanding 的热词/关键词逻辑）
+                    SearchTabLanding(
+                        platform = selectedPlatform,
+                        onSearch = { kw ->
+                            context.startActivity(
+                                Intent(context, LxMusicSearchActivity::class.java).apply {
+                                    putExtra("platform", selectedPlatform)
+                                    putExtra("keyword", kw)
+                                }
+                            )
+                        },
+                        onBrowseChart = { chartId ->
+                            pendingChartId = chartId
+                            selectedTab = MusicTab.RANKING
+                        }
+                    )
+                }""",
+    "search-branch",
+)
+
+# 5) sub 的 tabDefs97 删 SEARCH 一项（QUKU/MINE 夹住，唯一）
+rep(
+    """                            MusicTab.QUKU to "曲库",
+                            MusicTab.SEARCH to "搜索",
+                            MusicTab.MINE to "我的",""",
+    """                            MusicTab.QUKU to "曲库",
+                            MusicTab.MINE to "我的", // [46v21] 订阅模式无搜索 tab""",
+    "tabdefs-sub",
+)
+
+assert src.count("[46v21]") >= 5
+assert "SubSearchScreen(" not in src  # 注释里提一句文件名不算残留，只查调用
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v21 MH")
+PYEOF46V21
+python3 /tmp/patch_screen46v21.py
+python3 /tmp/patch_mh46v21.py
+rm -f avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubSearchScreen.kt
+[ ! -f avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubSearchScreen.kt ] || { echo "X 46v21 search file still there"; exit 1; }
+grep -rq "SubSearchScreen(" avbox/app/src/main/java/ && { echo "X 46v21 SubSearchScreen refs remain"; exit 1; } || true
+grep -q "46v21" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v21 screen"; exit 1; }
+grep -q "46v21" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt || { echo "X 46v21 MH"; exit 1; }
+echo "OK 46v21"
+echo "=== 46 v21 done ==="
