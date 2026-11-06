@@ -1540,6 +1540,105 @@ if '[39pool3]' not in a:
 else:
     print('SKIP [39pool3] 已应用')
 
+# ============ 13) [39pool4] 池内轮换：验活失败换池内下一源再试（同一档位内，不直接降档） ============
+PA = BASE + 'ui/activity/LxPlayerActivity.kt'
+a = load(PA)
+if '[39pool4]' not in a:
+    # 1) resolveMusicUrlFirst：加排除集参数 + 回源id+地址（调用方才知道是谁给的地址、失败后排除谁）
+    a = rep(a, '''    fun resolveMusicUrlFirst(
+        platform: String,
+        musicInfo: Map<String, Any>,
+        quality: String,
+        callback: (Result<String>) -> Unit
+    ) {
+        val targets = ArrayList<Pair<String, LxScriptEngine>>()
+        val primary = engine
+        if (primary != null && isReady && loadedSourceId != null) {
+            targets.add(loadedSourceId!! to primary)
+        }
+        for ((id, eng) in poolEngines) {
+            if (id == loadedSourceId) continue
+            targets.add(id to eng)
+        }''',
+        '''    fun resolveMusicUrlFirst(
+        platform: String,
+        musicInfo: Map<String, Any>,
+        quality: String,
+        excludedIds: Set<String> = emptySet(), // [39pool4] 池内轮换：验活失败的源排除掉再竞速
+        callback: (Result<Pair<String, String>>) -> Unit // [39pool4] 回源id+地址
+    ) {
+        val targets = ArrayList<Pair<String, LxScriptEngine>>()
+        val primary = engine
+        if (primary != null && isReady && loadedSourceId != null && loadedSourceId !in excludedIds) {
+            targets.add(loadedSourceId!! to primary)
+        }
+        for ((id, eng) in poolEngines) {
+            if (id == loadedSourceId) continue
+            if (id in excludedIds) continue
+            targets.add(id to eng)
+        }''', '39pool4 竞速加排除集')
+    a = rep(a, '''                                if (done.compareAndSet(false, true)) {
+                                    lastGoodSourceId = sid
+                                    callback(Result.success(url))
+                                }''',
+        '''                                if (done.compareAndSet(false, true)) {
+                                    lastGoodSourceId = sid
+                                    callback(Result.success(sid to url)) // [39pool4] 回源id+地址
+                                }''', '39pool4 竞速回源id')
+    # 2) tryQuality：同一档位内排除失败源再试（不直接降档）；换档位时清空排除集
+    a = rep(a, '''        var qualityIndex = 0
+        fun tryQuality() {''',
+        '''        var qualityIndex = 0
+        var excludedSources = mutableSetOf<String>() // [39pool4] 池内轮换：同一档位内验活失败的源排除掉再试
+        fun tryQuality() {''', '39pool4 排除集变量')
+    a = rep(a, '            LxEngineHolder.resolveMusicUrlFirst(sourceId, musicInfo, q) { result -> // [39pool] 多源竞速取地址',
+        '            LxEngineHolder.resolveMusicUrlFirst(sourceId, musicInfo, q, excludedSources) { result -> // [39pool4] 池内轮换：传排除集', '39pool4 呼叫点传排除集')
+    a = rep(a, '''            LxEngineHolder.resolveMusicUrlFirst(sourceId, musicInfo, q, excludedSources) { result -> // [39pool4] 池内轮换：传排除集
+                runOnUiThread {
+                    result.fold(
+                        onSuccess = { url ->
+                            if (url.isNotBlank()) {''',
+        '''            LxEngineHolder.resolveMusicUrlFirst(sourceId, musicInfo, q, excludedSources) { result -> // [39pool4] 池内轮换：传排除集
+                runOnUiThread {
+                    result.fold(
+                        onSuccess = { (urlSourceId, url) -> // [39pool4] 竞速回源id+地址
+                            if (url.isNotBlank()) {''', '39pool4 拆包源id')
+    a = rep(a, '''                                        if (!alive) {
+                                            try { LxRuntimeLog.add("地址验活失败: " + title + " / " + artist + " | 档位 " + q + " " + url.take(80)) } catch (_: Exception) { }
+                                            android.util.Log.w("LxPlayer", "音质 $q 地址验活失败，降级重试")
+                                            qualityIndex++
+                                            tryQuality()''',
+        '''                                        if (!alive) {
+                                            try { LxRuntimeLog.add("地址验活失败: " + title + " / " + artist + " | 档位 " + q + " " + url.take(80)) } catch (_: Exception) { }
+                                            android.util.Log.w("LxPlayer", "音质 $q 地址验活失败，换池内下一源重试") // [39pool4]
+                                            excludedSources.add(urlSourceId) // [39pool4] 排除刚失败的源，同一档位换源再试
+                                            tryQuality()''', '39pool4 验活失败换源')
+    a = rep(a, '''                            } else {
+                                android.util.Log.w("LxPlayer", "音质 $q 返回空地址，降级重试")
+                                qualityIndex++
+                                tryQuality()
+                            }''',
+        '''                            } else {
+                                android.util.Log.w("LxPlayer", "音质 $q 返回空地址，换池内下一源重试") // [39pool4]
+                                excludedSources.add(urlSourceId) // [39pool4]
+                                tryQuality()
+                            }''', '39pool4 空地址换源')
+    a = rep(a, '''                            } else {
+                                android.util.Log.w("LxPlayer", "音质 $q 失败: $errMsg，降级重试")
+                                qualityIndex++
+                                tryQuality()
+                            }''',
+        '''                            } else {
+                                android.util.Log.w("LxPlayer", "音质 $q 失败: $errMsg，降级重试")
+                                qualityIndex++
+                                excludedSources.clear() // [39pool4] 换档位时清空排除集
+                                tryQuality()
+                            }''', '39pool4 换档位清排除集')
+    save(PA, a)
+    print('OK [39pool4] 池内轮换已接')
+else:
+    print('SKIP [39pool4] 已应用')
+
 print('[39] 全部补丁完成')
 PYEOF39
 echo "=== 39 wp5 完成 ==="
