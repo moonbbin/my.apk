@@ -39,7 +39,7 @@
 
 | # | 脚本 | 干嘛的 |
 |---|------|--------|
-| 11 | `11_music_engine.sh` | 洛雪 JS 引擎（LxMusic 脚本沙箱） |
+| 11 | `11_music_engine.sh` | 洛雪 JS 引擎（LxMusic 脚本沙箱） |<br>[11md5]（2026-11-06，用户确认做，配 v7 独家音源）：preload.js 的 lx.utils 补 crypto 对象——原版落雪 preload 暴露原生 str2md5/aes/rsa，本引擎无原生通道，lx.utils 只有 buffer.from；v7 脚本签名请求读 lx.utils.crypto.md5，缺它加载即崩（Cannot read properties of undefined reading 'md5'）。修法：补纯 JS 版 MD5（标准算法，Node 实测与 crypto.md5 逐字一致）挂到 lx.utils.crypto.md5，另附 randomBytes（Math.random）；aes/rsa 未补（纯 JS 实现复杂，v7 未用到）。preload.js 由 11 脚本内嵌 base64 写出，本次直接换新 blob（非版本块，引擎脚本无版本块结构）。
 | 12 | `12_music_ui.sh` | 音乐 UI 基础 |
 | 13 | `13_music_player.sh` | 播放器（ExoPlayer，48KB base64+gzip，**勿重写**）<br>生成 `LxPlayerActivity.kt` + `LxPlayerManager.kt` |
 | 14 | `14_music_search.sh` | 搜索功能<br>v8（2026-11-03）：歌单详情空图搜索补图——酷狗详情 enrich 后仍无图的歌，按歌名在本平台搜一次，标题+歌手精确匹配才填图（失败静默留占位）；详情大封面取首歌图，故首歌补上后歌单海报随之有。<br>v9（2026-11-03，用户确认 QQ 也接上）：QQ 详情空图阻塞版补图——复用 v8 的 normCoverKey，按歌名调 searchQQ 精确匹配填图（getQQPlaylist 本身阻塞、详情调用在 IO 线程，故不用改签名；缺 v8 时块内断言大声失败）；顺序补图，仅空图歌触发搜索。<br>v10（2026-11-03，沙箱实测后用户确认）：酷我歌单——分类 wapi getTagList（专区名+id+digest）、列表 getRcmPlayList/getTagPlayList（id/名/img/播放量/歌数；digest 43 专区走 er.s 一次取全按 offset 切片）、详情 nplserver pl.svc（歌单 pic、歌曲 id/名/歌手/专辑/albumpic/时长秒；albumpic 尾点补 jpg；MINFO 含 flac→SQ、320→HQ）；详情 id 与搜索链同为数字 rid；接线见 45。<br>v11（2026-11-03）：补 `import org.json.JSONArray`——v10 er.s 分支用了 JSONArray 构造器，但文件只导了 JSONObject，致 CI 735/740/741 三连错；本修复只加一行导入，不动任何逻辑。
