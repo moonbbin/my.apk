@@ -1222,6 +1222,172 @@ if '[39rescue]' not in a:
 else:
     print('SKIP [39rescue] 已应用')
 
+# ============ 10) [39pool] 多源引擎池：引擎不再锁死单源，播歌取地址时竞速共用多条 ============
+PA = BASE + 'ui/activity/LxPlayerActivity.kt'
+a = load(PA)
+if '[39pool]' not in a:
+    # A) 池字段：主引擎之外，每个已启用源各一个引擎实例
+    a = rep(a, '''    @Volatile
+    var loadedSourceId: String? = null
+        private set''',
+        '''    @Volatile
+    var loadedSourceId: String? = null
+        private set
+
+    // [39pool] 多源引擎池：每个已启用源各一个引擎实例，播歌取地址时竞速共用，不再锁死单源
+    private val poolEngines = java.util.concurrent.ConcurrentHashMap<String, LxScriptEngine>()
+    private val poolLoading = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+    @Volatile
+    private var poolPreloadJs: String? = null
+    @Volatile
+    var lastGoodSourceId: String? = null
+        private set''', '39pool 池字段')
+    # B) 主源就绪后，后台懒加载其余已启用源进池（不阻塞启动与点歌）
+    a = rep(a, '''                                onSuccess = {
+                                    loadedSourceId = src.id
+                                    isReady = true
+                                    android.util.Log.i("LxEngineHolder", "引擎就绪，当前源: ${src.name}")
+                                },''',
+        '''                                onSuccess = {
+                                    loadedSourceId = src.id
+                                    isReady = true
+                                    android.util.Log.i("LxEngineHolder", "引擎就绪，当前源: ${src.name}")
+                                    warmUpPoolAsync(context) // [39pool] 主源就绪后，后台懒加载其余已启用源进池
+                                },''', '39pool 主源就绪后预热池')
+    # C) 池方法：warmUpPoolAsync + loadPoolEngineSync + resolveMusicUrlFirst，插到 get() 之前
+    a = rep(a, '''    fun get(): LxScriptEngine {''',
+        '''    // [39pool] 后台懒加载其余已启用源进池（不阻塞启动与点歌；逐个同步装，失败静默跳过）
+    private fun warmUpPoolAsync(context: android.content.Context) {
+        Thread {
+            try {
+                val preload = poolPreloadJs ?: try {
+                    context.assets.open("lx/preload.js").bufferedReader().use { it.readText() }
+                } catch (_: Exception) { "" }
+                if (preload.isBlank()) return@Thread
+                poolPreloadJs = preload
+                val ids = try { LxSourceManager.getEnabledSources().map { it.id } } catch (_: Exception) { emptyList<String>() }
+                for (id in ids) {
+                    if (id == loadedSourceId) continue
+                    if (poolEngines.containsKey(id)) continue
+                    if (poolLoading.putIfAbsent(id, true) != null) continue
+                    try {
+                        if (loadPoolEngineSync(context, preload, id)) {
+                            android.util.Log.i("LxEngineHolder", "池引擎就绪: $id")
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.w("LxEngineHolder", "池引擎异常: $id ${e.message}")
+                    } finally {
+                        poolLoading.remove(id)
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("LxEngineHolder", "池预热异常: ${e.message}")
+            }
+        }.start()
+    }
+
+    // [39pool] 同步装一个池引擎（后台线程内等回调，15 秒超时；成功进池，失败销毁）
+    private fun loadPoolEngineSync(context: android.content.Context, preload: String, sourceId: String): Boolean {
+        val content = try { LxSourceManager.getScriptContent(sourceId) } catch (_: Exception) { null } ?: return false
+        if (content.isBlank()) return false
+        val eng = LxScriptEngine()
+        return try {
+            eng.initialize(context)
+            val latch = java.util.concurrent.CountDownLatch(1)
+            val ok = java.util.concurrent.atomic.AtomicBoolean(false)
+            eng.loadPreloadJs(preload) { ready ->
+                if (!ready) { latch.countDown(); return@loadPreloadJs }
+                val info = com.github.tvbox.osc.util.ScriptInfo(id = sourceId, name = "")
+                eng.loadScript(sourceId, content, info) { r ->
+                    ok.set(r.isSuccess)
+                    latch.countDown()
+                }
+            }
+            latch.await(15, java.util.concurrent.TimeUnit.SECONDS)
+            if (ok.get()) {
+                poolEngines[sourceId] = eng
+                true
+            } else {
+                try { eng.destroy() } catch (_: Exception) {}
+                false
+            }
+        } catch (e: Exception) {
+            try { eng.destroy() } catch (_: Exception) {}
+            false
+        }
+    }
+
+    // [39pool] 多源竞速取地址：同时问所有已就绪的引擎（含主引擎），谁先回可用地址用谁；全部失败才报失败
+    fun resolveMusicUrlFirst(
+        platform: String,
+        musicInfo: Map<String, Any>,
+        quality: String,
+        callback: (Result<String>) -> Unit
+    ) {
+        val targets = ArrayList<Pair<String, LxScriptEngine>>()
+        val primary = engine
+        if (primary != null && isReady && loadedSourceId != null) {
+            targets.add(loadedSourceId!! to primary)
+        }
+        for ((id, eng) in poolEngines) {
+            if (id == loadedSourceId) continue
+            targets.add(id to eng)
+        }
+        lastGoodSourceId?.let { good ->
+            val idx = targets.indexOfFirst { it.first == good }
+            if (idx > 0) {
+                val p = targets.removeAt(idx)
+                targets.add(0, p)
+            }
+        }
+        if (targets.isEmpty()) {
+            callback(Result.failure(IllegalStateException("engine not ready")))
+            return
+        }
+        val done = java.util.concurrent.atomic.AtomicBoolean(false)
+        val remaining = java.util.concurrent.atomic.AtomicInteger(targets.size)
+        for ((sid, eng) in targets) {
+            try {
+                eng.requestMusicUrl(platform, musicInfo, quality) { r ->
+                    r.fold(
+                        onSuccess = { url ->
+                            if (url.isNotBlank()) {
+                                if (done.compareAndSet(false, true)) {
+                                    lastGoodSourceId = sid
+                                    callback(Result.success(url))
+                                }
+                            } else {
+                                if (remaining.decrementAndGet() == 0 && done.compareAndSet(false, true)) {
+                                    callback(Result.failure(IllegalStateException("empty music url")))
+                                }
+                            }
+                        },
+                        onFailure = { e ->
+                            if (remaining.decrementAndGet() == 0 && done.compareAndSet(false, true)) {
+                                callback(Result.failure(e))
+                            }
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                if (remaining.decrementAndGet() == 0 && done.compareAndSet(false, true)) {
+                    callback(Result.failure(e))
+                }
+            }
+        }
+    }
+
+    fun get(): LxScriptEngine {''', '39pool 池方法')
+    # D) 点歌链改走多源竞速：去掉单引擎变量，取地址 call 换成池竞速
+    a = rep(a, '        val engine = LxEngineHolder.get()\n',
+        '', '39pool 去单引擎变量')
+    a = rep(a, '            engine.requestMusicUrl(sourceId, musicInfo, q) { result ->',
+        '            LxEngineHolder.resolveMusicUrlFirst(sourceId, musicInfo, q) { result -> // [39pool] 多源竞速取地址', '39pool 点歌链改竞速')
+    save(PA, a)
+    print('OK [39pool] 多源引擎池已接')
+else:
+    print('SKIP [39pool] 已应用')
+
 print('[39] 全部补丁完成')
 PYEOF39
 echo "=== 39 wp5 完成 ==="
