@@ -12650,3 +12650,48 @@ else:
     print("OK 32 v164 验活改走 OkHttp + 8 秒超时完成")
 PYEOF164
 echo "=== 32 v164 完成 ==="
+
+# === 32 v165: 验活失败记实因（诊断用，用户说“别猜”）——isStreamUrlAlive 只回 true/false、异常全吞，验活失败时看不出是几号状态码还是超时还是异常。修法：非 200/206 时记状态码＋地址 host，异常时记异常类名＋消息，均写 LxRuntimeLog（运行日志抽屉可见），供用户装机后截图定位；返回值与超时不变。 ===
+python3 << 'PYEOF165'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v165 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v165]" in s:
+    print("跳过（32 v165 已应用）")
+else:
+    old = """            client.newCall(req).execute().use { resp ->
+                resp.code == 200 || resp.code == 206
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }"""
+    new = """            client.newCall(req).execute().use { resp ->
+                val ok = resp.code == 200 || resp.code == 206
+                if (!ok) { // [32v165] 验活失败记实因（诊断用）：状态码＋地址 host，进运行日志抽屉
+                    try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活失败: HTTP " + resp.code + " " + url.take(100)) } catch (_: Exception) { }
+                }
+                ok
+            }
+        } catch (e: Exception) { // [32v165] 验活异常记实因（诊断用）：异常类名＋消息，进运行日志抽屉
+            try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活异常: " + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
+            false
+        }
+    }"""
+    s = rep(s, old, new, "验活记实因")
+    assert "[32v165]" in s, "v165 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v165 验活失败记实因完成")
+PYEOF165
+echo "=== 32 v165 完成 ==="
