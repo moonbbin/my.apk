@@ -3720,3 +3720,81 @@ PYEOF21V61
 grep -q "21v61" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v61"; exit 1; }
 echo "OK 21 v61"
 echo "=== 21 v61 done ==="
+
+echo "=== 21 v62 ==="
+
+python3 - << 'PYEOF21V62'
+import os
+import sys
+
+# 21 v62：Range 只给订阅源、脚本源回普通 GET——裤佬 mcp 后端处理不了 Range 请求。设备侧证据（同机同网同 URL）：
+# 验活（v164 普通 GET、无 Range）过、探针（Range）失败、播放（v59 强制 Range: bytes=0-）2004。原版落雪播放器首请求是普通 GET。
+# v59 当初为订阅源 DJ 歌（那类源站只认 Range）把默认 Range 加给了所有播放，属矫枉过正。
+# 修法：①applyPlayHeaders 只有调用方传了 headers（订阅源路径）时才补默认 Range；脚本源 headers 为空时不补，回普通 GET；
+# ②probeBytes Range 取不到时用普通 GET（不带 Range）再取一次前 64KB，探针亦恢复。
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+if not os.path.exists(path):
+    path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+src = open(path, encoding="utf-8").read()
+if "[21v62]" in src:
+    print("manager already 21v62, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+base_parens = src.count("(") - src.count(")")
+base_braces = src.count("{") - src.count("}")
+base_brackets = src.count("[") - src.count("]")
+
+rep(
+    """        factory.setDefaultRequestProperties(rest.filterKeys { !it.equals("Range", ignoreCase = true) } + ("Range" to "bytes=0-")) // [21v59] 首请求也带 Range：探针 GET+Range 能通、播放器首请求无 Range 被挡；切歌续播时 DataSpec 自带 Range 会覆盖此默认项""",
+    """        val baseProps = rest.filterKeys { !it.equals("Range", ignoreCase = true) }
+        // [21v62] 默认 Range 只给订阅源（调用方传了 headers 时才补，v59 要的就是它）；脚本源 headers 为空时不补，回普通 GET（mcp 等后端处理不了 Range，跟落雪一致）
+        factory.setDefaultRequestProperties(if (headers.isEmpty()) baseProps else baseProps + ("Range" to "bytes=0-"))""",
+    "playheaders-range-conditional",
+)
+
+rep(
+    """    private fun probeBytes(url: String, size: Int): Pair<ByteArray, Long>? {
+        return try {
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
+            conn.instanceFollowRedirects = true
+            conn.setRequestProperty("Range", "bytes=0-${size - 1}")""",
+    """    private fun probeBytes(url: String, size: Int): Pair<ByteArray, Long>? {
+        // [21v62] Range 取不到时用普通 GET 再取一次（mcp 等后端处理不了 Range；普通 GET 能通时档位照常出）
+        return probeBytesOnce(url, size, true) ?: probeBytesOnce(url, size, false)
+    }
+
+    private fun probeBytesOnce(url: String, size: Int, useRange: Boolean): Pair<ByteArray, Long>? {
+        return try {
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
+            conn.instanceFollowRedirects = true
+            if (useRange) conn.setRequestProperty("Range", "bytes=0-${size - 1}")""",
+    "probebytes-fallback",
+)
+
+# 后验：标记在位，括号平衡不变，标记注释不吞码
+assert src.count("[21v62]") >= 2
+assert src.count("(") - src.count(")") == base_parens
+assert src.count("{") - src.count("}") == base_braces
+assert src.count("[") - src.count("]") == base_brackets
+for line in src.splitlines():
+    if "// [21v62]" in line:
+        after = line.split("// [21v62]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 21v62")
+
+PYEOF21V62
+grep -q "21v62" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v62"; exit 1; }
+echo "OK 21 v62"
+echo "=== 21 v62 done ==="
