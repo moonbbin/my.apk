@@ -1442,6 +1442,104 @@ if '[39pool2]' not in a:
 else:
     print('SKIP [39pool2] 已应用')
 
+# ============ 12) [39pool3] 池加载静默失败记日志 + 超时 30s + 日志带源名 ============
+PA = BASE + 'ui/activity/LxPlayerActivity.kt'
+a = load(PA)
+if '[39pool3]' not in a:
+    # 1) 新增源名解析 helper（池日志只写 id 看不出是哪个源）
+    a = rep(a, '''    private fun loadPoolEngineSync(context: android.content.Context, preload: String, sourceId: String): Boolean {''',
+        '''    // [39pool3] 池日志用源名（id 看不出是哪个源）
+    private fun poolSourceName(sourceId: String): String {
+        return try {
+            LxSourceManager.getEnabledSources().find { it.id == sourceId }?.name ?: sourceId.take(8)
+        } catch (_: Exception) {
+            sourceId.take(8)
+        }
+    }
+
+    private fun loadPoolEngineSync(context: android.content.Context, preload: String, sourceId: String): Boolean {''', '39pool3 源名 helper')
+    # 2) loadPoolEngineSync 全量重写：失败原因记运行日志（此前全部静默返回 false）+ 超时 15s→30s
+    a = rep(a, '''    private fun loadPoolEngineSync(context: android.content.Context, preload: String, sourceId: String): Boolean {
+        val content = try { LxSourceManager.getScriptContent(sourceId) } catch (_: Exception) { null } ?: return false
+        if (content.isBlank()) return false
+        val eng = LxScriptEngine()
+        return try {
+            eng.initialize(context)
+            val latch = java.util.concurrent.CountDownLatch(1)
+            val ok = java.util.concurrent.atomic.AtomicBoolean(false)
+            eng.loadPreloadJs(preload) { ready ->
+                if (!ready) { latch.countDown(); return@loadPreloadJs }
+                val info = com.github.tvbox.osc.util.ScriptInfo(id = sourceId, name = "")
+                eng.loadScript(sourceId, content, info) { r ->
+                    ok.set(r.isSuccess)
+                    latch.countDown()
+                }
+            }
+            latch.await(15, java.util.concurrent.TimeUnit.SECONDS)
+            if (ok.get()) {
+                poolEngines[sourceId] = eng
+                true
+            } else {
+                try { eng.destroy() } catch (_: Exception) {}
+                false
+            }
+        } catch (e: Exception) {
+            try { eng.destroy() } catch (_: Exception) {}
+            false
+        }
+    }''',
+        '''    private fun loadPoolEngineSync(context: android.content.Context, preload: String, sourceId: String): Boolean { // [39pool3] 失败原因记日志 + 超时 30s
+        val name = poolSourceName(sourceId)
+        val content = try { LxSourceManager.getScriptContent(sourceId) } catch (_: Exception) { null }
+        if (content.isNullOrBlank()) {
+            try { LxRuntimeLog.add("池引擎失败: $name 脚本为空") } catch (_: Exception) { }
+            return false
+        }
+        val eng = LxScriptEngine()
+        return try {
+            eng.initialize(context)
+            val latch = java.util.concurrent.CountDownLatch(1)
+            val ok = java.util.concurrent.atomic.AtomicBoolean(false)
+            val preloadOk = java.util.concurrent.atomic.AtomicBoolean(true)
+            eng.loadPreloadJs(preload) { ready ->
+                if (!ready) { preloadOk.set(false); latch.countDown(); return@loadPreloadJs }
+                val info = com.github.tvbox.osc.util.ScriptInfo(id = sourceId, name = "")
+                eng.loadScript(sourceId, content, info) { r ->
+                    ok.set(r.isSuccess)
+                    latch.countDown()
+                }
+            }
+            latch.await(30, java.util.concurrent.TimeUnit.SECONDS)
+            if (ok.get()) {
+                poolEngines[sourceId] = eng
+                true
+            } else {
+                try { eng.destroy() } catch (_: Exception) {}
+                val reason = if (!preloadOk.get()) "预加载失败" else "30秒内未初始化"
+                try { LxRuntimeLog.add("池引擎失败: $name $reason") } catch (_: Exception) { }
+                false
+            }
+        } catch (e: Exception) {
+            try { eng.destroy() } catch (_: Exception) {}
+            try { LxRuntimeLog.add("池引擎失败: $name ${e.message}") } catch (_: Exception) { }
+            false
+        }
+    }''', '39pool3 loadPoolEngineSync 重写')
+    # 3) 池就绪/异常日志带源名（warmUpPoolAsync 路径）
+    a = rep(a, '                            android.util.Log.i("LxEngineHolder", "池引擎就绪: $id")\n                            try { LxRuntimeLog.add("池引擎就绪: $id") } catch (_: Exception) { } // [39pool2] 池状态进运行日志抽屉',
+        '                            android.util.Log.i("LxEngineHolder", "池引擎就绪: ${poolSourceName(id)}")\n                            try { LxRuntimeLog.add("池引擎就绪: ${poolSourceName(id)}") } catch (_: Exception) { } // [39pool3] 池日志带源名', '39pool3 池就绪带源名')
+    a = rep(a, '                        android.util.Log.w("LxEngineHolder", "池引擎异常: $id ${e.message}")\n                        try { LxRuntimeLog.add("池引擎异常: $id ${e.message}") } catch (_: Exception) { } // [39pool2] 池异常进日志',
+        '                        android.util.Log.w("LxEngineHolder", "池引擎异常: ${poolSourceName(id)} ${e.message}")\n                        try { LxRuntimeLog.add("池引擎异常: ${poolSourceName(id)} ${e.message}") } catch (_: Exception) { } // [39pool3] 池异常带源名', '39pool3 池异常带源名')
+    # 4) 池就绪/异常日志带源名（warmUpPoolForSource 路径）
+    a = rep(a, '                    android.util.Log.i("LxEngineHolder", "池引擎就绪: $sourceId")\n                    try { LxRuntimeLog.add("池引擎就绪: $sourceId") } catch (_: Exception) { }',
+        '                    android.util.Log.i("LxEngineHolder", "池引擎就绪: ${poolSourceName(sourceId)}")\n                    try { LxRuntimeLog.add("池引擎就绪: ${poolSourceName(sourceId)}") } catch (_: Exception) { } // [39pool3] 池日志带源名', '39pool3 导入就绪带源名')
+    a = rep(a, '                android.util.Log.w("LxEngineHolder", "池引擎异常: $sourceId ${e.message}")\n                try { LxRuntimeLog.add("池引擎异常: $sourceId ${e.message}") } catch (_: Exception) { }',
+        '                android.util.Log.w("LxEngineHolder", "池引擎异常: ${poolSourceName(sourceId)} ${e.message}")\n                try { LxRuntimeLog.add("池引擎异常: ${poolSourceName(sourceId)} ${e.message}") } catch (_: Exception) { } // [39pool3] 导入异常带源名', '39pool3 导入异常带源名')
+    save(PA, a)
+    print('OK [39pool3] 池加载静默失败记日志已接')
+else:
+    print('SKIP [39pool3] 已应用')
+
 print('[39] 全部补丁完成')
 PYEOF39
 echo "=== 39 wp5 完成 ==="
