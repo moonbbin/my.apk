@@ -3930,3 +3930,73 @@ else:
     print("OK 21 v64 v63 连败计数死锁修复完成")
 PYEOF64
 echo "=== 21 v64 完成 ==="
+
+# === 21 v65: Manager 补池内轮换（用户指“翻翻对话记录有一次是修好了”）——39pool4 的验活失败换源只接在播放页 tryQuality（Activity），Manager.resolveAndPlay（播放页不在前台时回落到此）从未接：它调池竞速不传排除集、拿了地址不验活，裤佬死地址抢赢竞速后直接播、2004、切下一首，无限循环。修法：与 tryQuality 对齐——加 excludedSources，竞速传排除集，拿地址先验活，验活失败排除该源、同档位同平台再竞速；换档位时清空排除集。 ===
+python3 << 'PYEOF65'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v65 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(M, encoding="utf-8").read()
+if "[21v65]" in s:
+    print("跳过（21 v65 已应用）")
+else:
+    # 1) 加排除集变量（放 candidateIndex 旁）
+    old = """                var qualityIndex = 0
+                var candidateIndex = 0"""
+    new = """                var qualityIndex = 0
+                var candidateIndex = 0
+                var excludedSources = mutableSetOf<String>() // [21v65] 池内轮换：同档位验活失败的源排除掉再竞速（与 tryQuality 的 39pool4 对齐）"""
+    s = rep(s, old, new, "排除集变量")
+    # 2) 换档位时清空排除集
+    old = """                    if (candidateIndex >= candidates.size) {
+                        // 当前音质所有平台都要不到，降一档音质重来
+                        qualityIndex++
+                        candidateIndex = 0
+                        tryNext()
+                        return
+                    }"""
+    new = """                    if (candidateIndex >= candidates.size) {
+                        // 当前音质所有平台都要不到，降一档音质重来
+                        qualityIndex++
+                        candidateIndex = 0
+                        excludedSources.clear() // [21v65] 换档位时清空排除集（与 39pool4 对齐）
+                        tryNext()
+                        return
+                    }"""
+    s = rep(s, old, new, "换档位清排除集")
+    # 3) 竞速传排除集
+    old = """                        LxEngineHolder.resolveMusicUrlFirst(cand.plat, cand.info, q) { result -> // [21v61] 队列链/自动切歌也走多源池竞速（播放页不在前台时回落到此）"""
+    new = """                        LxEngineHolder.resolveMusicUrlFirst(cand.plat, cand.info, q, excludedSources) { result -> // [21v61] 队列链/自动切歌也走多源池竞速（播放页不在前台时回落到此）；[21v65] 传排除集"""
+    s = rep(s, old, new, "竞速传排除集")
+    # 4) 拿地址先验活，验活失败排除该源、同档位同平台再竞速
+    old = """                            result.fold(
+                                onSuccess = { (urlSourceId, url) -> // [21v61] 竞速回源id+地址
+                                    if (url.isNotBlank()) {"""
+    new = """                            result.fold(
+                                onSuccess = { (urlSourceId, url) -> // [21v61] 竞速回源id+地址
+                                    if (url.isNotBlank()) {
+                                        // [21v65] 验活：地址先验活，失败则排除该源、同档位同平台再竞速（与 tryQuality 的 39pool4 对齐）
+                                        val alive = try { isStreamUrlAlive(url) } catch (_: Exception) { false }
+                                        if (!alive) {
+                                            try { com.github.tvbox.osc.util.LxRuntimeLog.add("地址验活失败: " + title + " / " + artist + " | 档位 " + q + " " + url.take(80)) } catch (_: Exception) { }
+                                            Log.w(TAG, "音质 $q @平台 ${cand.plat} 地址验活失败，换池内下一源重试")
+                                            excludedSources.add(urlSourceId)
+                                            tryNext()
+                                            return@fold
+                                        }"""
+    s = rep(s, old, new, "验活失败换源")
+    assert "[21v65]" in s, "v65 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 21 v65 Manager 补池内轮换完成")
+PYEOF65
+echo "=== 21 v65 完成 ==="
