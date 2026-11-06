@@ -3866,3 +3866,67 @@ else:
     print("OK 21 v63 自动切歌连败即停完成")
 PYEOF63
 echo "=== 21 v63 完成 ==="
+
+# === 21 v64: v63 连败计数死锁修复（用户报“删裤佬＋重进才能播”，疑修坏）——v63 计数只在 STATE_READY 复位，若连败 3 首后无一首出声，计数永不清零，后续每次 tryAutoNextOnFailure 一律返 false（不再推进），手动点歌也被锁死。修法：手动选歌即复位——setQueue、playNext/Previous 手动调用时清零；tryAutoNextOnFailure 改调 playNextInQueue(manual=false) 不清零。 ===
+python3 << 'PYEOF64'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v64 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(M, encoding="utf-8").read()
+if "[21v64]" in s:
+    print("跳过（21 v64 已应用）")
+else:
+    # 1) setQueue：手动选队列即复位连败计数
+    old = """    fun setQueue(queue: List<Map<String, String>>, index: Int) {
+        playQueue = queue
+        queueIndex = index.coerceIn(0, (queue.size - 1).coerceAtLeast(0))"""
+    new = """    fun setQueue(queue: List<Map<String, String>>, index: Int) {
+        consecutiveAutoFailCount = 0 // [21v64] 手动选歌即复位连败计数（v63 死锁修复）
+        playQueue = queue
+        queueIndex = index.coerceIn(0, (queue.size - 1).coerceAtLeast(0))"""
+    s = rep(s, old, new, "setQueue 复位")
+    # 2) playPreviousInQueue：加 manual 参数，手动调用即复位
+    old = """    fun playPreviousInQueue(): Boolean {
+        if (playQueue.isEmpty()) return false"""
+    new = """    fun playPreviousInQueue(manual: Boolean = true): Boolean {
+        if (manual) consecutiveAutoFailCount = 0 // [21v64] 手动切上一首即复位连败计数
+        if (playQueue.isEmpty()) return false"""
+    s = rep(s, old, new, "playPrevious 手动复位")
+    # 3) tryAutoNextOnFailure：改调 playNextInQueue(manual=false)，不清零
+    old = """        return try {
+            playNextInQueue()
+        } catch (e: Exception) {
+            Log.e(TAG, "自动切歌失败", e)
+            false
+        }
+    }"""
+    new = """        return try {
+            playNextInQueue(manual = false) // [21v64] 自动切歌不清零，由 tryAutoNextOnFailure 计数
+        } catch (e: Exception) {
+            Log.e(TAG, "自动切歌失败", e)
+            false
+        }
+    }"""
+    s = rep(s, old, new, "自动切歌不清零")
+    # 4) playNextInQueue：加 manual 参数，手动调用即复位
+    old = """    fun playNextInQueue(): Boolean {
+        if (playQueue.isEmpty()) return false"""
+    new = """    fun playNextInQueue(manual: Boolean = true): Boolean {
+        if (manual) consecutiveAutoFailCount = 0 // [21v64] 手动切下一首即复位连败计数
+        if (playQueue.isEmpty()) return false"""
+    s = rep(s, old, new, "playNext 手动复位")
+    assert "[21v64]" in s, "v64 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 21 v64 v63 连败计数死锁修复完成")
+PYEOF64
+echo "=== 21 v64 完成 ==="
