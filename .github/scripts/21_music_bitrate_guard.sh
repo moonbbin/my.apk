@@ -3665,3 +3665,58 @@ PYEOF21V60
 grep -q "21v60" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v60"; exit 1; }
 echo "OK 21 v60"
 echo "=== 21 v60 done ==="
+
+echo "=== 21 v61 ==="
+
+python3 - << 'PYEOF21V61'
+import os
+import sys
+
+# 21 v61：队列链/自动切歌也走多源池竞速——播放页不在前台时 onResolveQueueSong 为空（Activity 已销毁），自动切歌回落到
+# Manager.resolveAndPlay；它此前调单引擎 engine.requestMusicUrl（主引擎常为裤佬、mcp 死地址），全部档位/平台耗尽后
+# tryAutoNextOnFailure 又进下一首，循环切歌永不播放。修法：resolveAndPlay 的 tryNext 改调 LxEngineHolder.resolveMusicUrlFirst
+#（39pool 的池竞速，含主引擎+池引擎，首个可用地址即赢；39pool4 后回 Pair<源id, 地址>，此处拆包取地址）。
+# 注意：21 在 39 之前跑，写补丁时 resolveMusicUrlFirst 尚不存在，但编译在全部脚本跑完后，39 已补上，故可引用。
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+if not os.path.exists(path):
+    path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+src = open(path, encoding="utf-8").read()
+if "[21v61]" in src:
+    print("manager already 21v61, skip")
+    sys.exit(0)
+
+def rep(old, new, tag):
+    global src
+    assert src.count(old) == 1, "%s anchor %d" % (tag, src.count(old))
+    src = src.replace(old, new, 1)
+
+base_parens = src.count("(") - src.count(")")
+base_braces = src.count("{") - src.count("}")
+base_brackets = src.count("[") - src.count("]")
+
+rep(
+    """                        engine.requestMusicUrl(cand.plat, cand.info, q) { result ->
+                            result.fold(
+                                onSuccess = { url ->""",
+    """                        LxEngineHolder.resolveMusicUrlFirst(cand.plat, cand.info, q) { result -> // [21v61] 队列链/自动切歌也走多源池竞速（播放页不在前台时回落到此）
+                            result.fold(
+                                onSuccess = { (urlSourceId, url) -> // [21v61] 竞速回源id+地址""",
+    "resolveAndPlay-use-pool",
+)
+
+# 后验：标记在位，括号平衡不变，标记注释不吞码
+assert src.count("[21v61]") >= 2
+assert src.count("(") - src.count(")") == base_parens
+assert src.count("{") - src.count("}") == base_braces
+assert src.count("[") - src.count("]") == base_brackets
+for line in src.splitlines():
+    if "// [21v61]" in line:
+        after = line.split("// [21v61]", 1)[1]
+        assert "{" not in after and "}" not in after and "(" not in after and ")" not in after and "," not in after, "comment-eaten: %s" % line
+open(path, "w", encoding="utf-8").write(src)
+print("patched 21v61")
+
+PYEOF21V61
+grep -q "21v61" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v61"; exit 1; }
+echo "OK 21 v61"
+echo "=== 21 v61 done ==="
