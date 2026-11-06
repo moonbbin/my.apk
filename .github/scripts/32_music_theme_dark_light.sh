@@ -12552,3 +12552,33 @@ else:
     print("OK 32 v162 运行日志抽屉底部锚定完成")
 PYEOF162
 echo "=== 32 v162 完成 ==="
+
+# === 32 v163: 导入新源立即进池（39pool2 的 warmUpPoolForSource，导入成功后直接触发，不等下次 warmUp） ===
+python3 << 'PYEOF163'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v163 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v163]" in s:
+    print("跳过（32 v163 已应用）")
+else:
+    s = rep(s,
+        '                            Toast.makeText(context, "导入成功：「${source.name}」", Toast.LENGTH_SHORT).show()\n                            onImported(source)',
+        '                            Toast.makeText(context, "导入成功：「${source.name}」", Toast.LENGTH_SHORT).show()\n                            onImported(source)\n                            LxEngineHolder.warmUpPoolForSource(context, source.id) // [32v163] 导入新源立即进池（不等下次 warmUp）',
+        "import-hook")
+    assert "[32v163]" in s, "v163 标记未落"
+    assert s.count("warmUpPoolForSource") == 1, "v163 调用数量异常"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v163 导入新源立即进池完成")
+PYEOF163
+echo "=== 32 v163 完成 ==="

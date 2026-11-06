@@ -1388,6 +1388,60 @@ if '[39pool]' not in a:
 else:
     print('SKIP [39pool] 已应用')
 
+# ============ 11) [39pool2] 池加载触发补强：导入新源立即进池 + 已就绪也触发 + 池状态进运行日志 ============
+PA = BASE + 'ui/activity/LxPlayerActivity.kt'
+a = load(PA)
+if '[39pool2]' not in a:
+    # 1) warmUp 已就绪时也触发池加载（否则引擎早就绪、新源永远进不了池）
+    a = rep(a, '''    fun warmUp(context: android.content.Context) {
+        if (isReady) {
+            maybeSwitchToVerifiedSource(context)
+            return
+        }''',
+        '''    fun warmUp(context: android.content.Context) {
+        if (isReady) {
+            maybeSwitchToVerifiedSource(context)
+            warmUpPoolAsync(context) // [39pool2] 引擎已就绪时也触发池加载（否则新源永远进不了池）
+            return
+        }''', '39pool2 warmUp 已就绪也触发池')
+    # 2) 新增公开方法：导入新源时立即把该源装进池（源管理页导入成功后调用）
+    a = rep(a, '''    fun get(): LxScriptEngine {''',
+        '''    // [39pool2] 导入新源时立即把该源装进池（由源管理页导入成功后调用，不等下次 warmUp）
+    fun warmUpPoolForSource(context: android.content.Context, sourceId: String) {
+        if (sourceId == loadedSourceId) return
+        if (poolEngines.containsKey(sourceId)) return
+        if (poolLoading.putIfAbsent(sourceId, true) != null) return
+        Thread {
+            try {
+                val preload = poolPreloadJs ?: try {
+                    context.assets.open("lx/preload.js").bufferedReader().use { it.readText() }
+                } catch (_: Exception) { "" }
+                if (preload.isBlank()) return@Thread
+                poolPreloadJs = preload
+                if (loadPoolEngineSync(context, preload, sourceId)) {
+                    android.util.Log.i("LxEngineHolder", "池引擎就绪: $sourceId")
+                    try { LxRuntimeLog.add("池引擎就绪: $sourceId") } catch (_: Exception) { }
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("LxEngineHolder", "池引擎异常: $sourceId ${e.message}")
+                try { LxRuntimeLog.add("池引擎异常: $sourceId ${e.message}") } catch (_: Exception) { }
+            } finally {
+                poolLoading.remove(sourceId)
+            }
+        }.start()
+    }
+
+    fun get(): LxScriptEngine {''', '39pool2 导入触发方法')
+    # 3) 池状态进运行日志抽屉（此前只写 logcat，用户在抽屉里看不到）
+    a = rep(a, '                            android.util.Log.i("LxEngineHolder", "池引擎就绪: $id")',
+        '                            android.util.Log.i("LxEngineHolder", "池引擎就绪: $id")\n                            try { LxRuntimeLog.add("池引擎就绪: $id") } catch (_: Exception) { } // [39pool2] 池状态进运行日志抽屉', '39pool2 池就绪进日志')
+    a = rep(a, '                        android.util.Log.w("LxEngineHolder", "池引擎异常: $id ${e.message}")',
+        '                        android.util.Log.w("LxEngineHolder", "池引擎异常: $id ${e.message}")\n                        try { LxRuntimeLog.add("池引擎异常: $id ${e.message}") } catch (_: Exception) { } // [39pool2] 池异常进日志', '39pool2 池异常进日志')
+    save(PA, a)
+    print('OK [39pool2] 池加载触发补强已接')
+else:
+    print('SKIP [39pool2] 已应用')
+
 print('[39] 全部补丁完成')
 PYEOF39
 echo "=== 39 wp5 完成 ==="
