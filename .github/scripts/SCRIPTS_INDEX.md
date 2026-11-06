@@ -12,7 +12,7 @@
 
 | 归属 | 脚本 | 管什么 |
 |---|---|---|
-| 播放器层 | `21_music_bitrate_guard.sh` | `LxPlayerManager.kt`：码率守卫、验活、交集（Manager 侧）、播放链路（13 生成，勿重写） |
+| 播放器层 | `21_music_bitrate_guard.sh` | `LxPlayerManager.kt`：码率守卫、验活、交集（Manager 侧）、播放链路（13 生成，勿重写） |<br>v63（21 号，2026-11-07，用户明令先解决池放歌切歌问题）：自动切歌连败即停——tryAutoNextOnFailure 失败就进下一首，源全挂时全队列轮一遍永不停止。修法：连败计数（STATE_READY 真正出声复位），连败 3 首即停，返 false 走 setError，不再推进；手动切歌不受影响。
 | 主题 + 音乐区 UI | `32_music_theme_dark_light.sh` | 主题 Token、胶囊、玻璃、设置页、源管理页 UI、探针弹窗 UI；只接 UI 层小修补 |<br>v165（32 号，2026-11-06，诊断用，用户说“别猜”）：验活失败记实因——isStreamUrlAlive 只回 true/false、异常全吞，验活失败时看不出是几号状态码还是超时还是异常。修法：非 200/206 时记状态码＋地址（LxRuntimeLog，进运行日志抽屉），异常时记异常类名＋消息；返回值与超时不变。供用户装机后截图定位，不改任何放行逻辑。
 | 播放页 | `35_player_baseline.sh` | 播放页 7 文件，单一所有 |
 | 壁纸 + 35 后补丁 | `39_wallpaper.sh` | 壁纸；35 之后跑的补丁：点歌链、搜救、交集链侧 |

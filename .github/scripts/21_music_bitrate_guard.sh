@@ -3798,3 +3798,71 @@ PYEOF21V62
 grep -q "21v62" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v62"; exit 1; }
 echo "OK 21 v62"
 echo "=== 21 v62 done ==="
+
+# === 21 v63: 自动切歌连败即停（用户明令先解决池放歌切歌问题，不修裤佬/落雪）——tryAutoNextOnFailure 失败就进下一首，源全挂时全队列轮一遍永不停止。修法：连败计数，STATE_READY（真正出声）复位；连败 3 首即停，返 false 走 setError，不再推进。 ===
+python3 << 'PYEOF63'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v63 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(M, encoding="utf-8").read()
+if "[21v63]" in s:
+    print("跳过（21 v63 已应用）")
+else:
+    # 1) 加连败计数字段（放 queueIndex 旁）
+    old = """    var queueIndex: Int = 0
+"""
+    new = """    var queueIndex: Int = 0
+    private var consecutiveAutoFailCount = 0 // [21v63] 自动切歌连败计数，STATE_READY 复位，连败 3 首即停
+"""
+    s = rep(s, old, new, "连败计数字段")
+    # 2) tryAutoNextOnFailure：计数＋连败 3 首即停
+    old = """    private fun tryAutoNextOnFailure(): Boolean {
+        // 单曲循环不自动切
+        if (_playMode.value == MODE_LOOP_ONE) return false
+        return try {
+            playNextInQueue()
+        } catch (e: Exception) {
+            Log.e(TAG, "自动切歌失败", e)
+            false
+        }
+    }"""
+    new = """    private fun tryAutoNextOnFailure(): Boolean {
+        // 单曲循环不自动切
+        if (_playMode.value == MODE_LOOP_ONE) return false
+        consecutiveAutoFailCount++ // [21v63] 自动切歌连败计数
+        if (consecutiveAutoFailCount >= 3) { // [21v63] 连败 3 首即停，不无限切歌
+            try { com.github.tvbox.osc.util.LxRuntimeLog.add("自动切歌连败 " + consecutiveAutoFailCount + " 首，停止切歌") } catch (_: Exception) { }
+            return false
+        }
+        return try {
+            playNextInQueue()
+        } catch (e: Exception) {
+            Log.e(TAG, "自动切歌失败", e)
+            false
+        }
+    }"""
+    s = rep(s, old, new, "连败即停")
+    # 3) STATE_READY：真正出声即复位连败计数
+    old = """                            Player.STATE_READY -> {
+                                _isLoading.value = false
+                                setChangingTrack(false) // [21v43] 真正出声才算切歌成功"""
+    new = """                            Player.STATE_READY -> {
+                                _isLoading.value = false
+                                consecutiveAutoFailCount = 0 // [21v63] 出声即复位连败计数
+                                setChangingTrack(false) // [21v43] 真正出声才算切歌成功"""
+    s = rep(s, old, new, "出声复位")
+    assert "[21v63]" in s, "v63 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 21 v63 自动切歌连败即停完成")
+PYEOF63
+echo "=== 21 v63 完成 ==="
