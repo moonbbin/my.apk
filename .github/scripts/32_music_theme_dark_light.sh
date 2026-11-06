@@ -12582,3 +12582,71 @@ else:
     print("OK 32 v163 导入新源立即进池完成")
 PYEOF163
 echo "=== 32 v163 完成 ==="
+
+# === 32 v164: 验活改走 OkHttp + 8 秒超时（HttpURLConnection 在裤佬/v7 中转站上探不通、播放器能播，同机对照；源验证通过、地址验活失败是两道关） ===
+python3 << 'PYEOF164'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v164 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v164]" in s:
+    print("跳过（32 v164 已应用）")
+else:
+    old = """    // [32v121] 取地址时验活；[32v122] 改播放器式拿流：普通 GET（不带 Range）+ 浏览器 UA，200/206 算给流；level=undefined 免网络直接判死
+    fun isStreamUrlAlive(url: String): Boolean {
+        if (url.contains("level=undefined")) return false
+        return try {
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36") // [32v122] 浏览器 UA，按播放器拿流方式验
+            conn.instanceFollowRedirects = true
+            conn.connectTimeout = 3000
+            conn.readTimeout = 3000
+            try {
+                val code = conn.responseCode
+                code == 200 || code == 206
+            } finally {
+                try { conn.disconnect() } catch (_: Exception) { }
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }"""
+    new = """    // [32v121] 取地址时验活；[32v122] 改播放器式拿流；[32v164] 改走 OkHttp + 8 秒超时（HttpURLConnection 在裤佬/v7 中转站上探不通、播放器能播，同机对照）
+    fun isStreamUrlAlive(url: String): Boolean {
+        if (url.contains("level=undefined")) return false
+        return try {
+            val client = okhttp3.OkHttpClient.Builder()
+                .connectTimeout(8000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .readTimeout(8000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .followRedirects(true)
+                .build()
+            val req = okhttp3.Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36")
+                .get()
+                .build()
+            client.newCall(req).execute().use { resp ->
+                resp.code == 200 || resp.code == 206
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }"""
+    s = rep(s, old, new, "验活改 OkHttp")
+    assert "[32v164]" in s, "v164 标记未落"
+    assert "HttpURLConnection" not in s.split("fun isStreamUrlAlive")[1].split("fun ")[0], "v164 旧实现未清"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v164 验活改走 OkHttp + 8 秒超时完成")
+PYEOF164
+echo "=== 32 v164 完成 ==="
