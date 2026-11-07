@@ -2432,3 +2432,136 @@ else:
     print("OK [39pool14] 彻底平级化完成")
 PYEOF39P14
 echo "=== 39 pool14 完成 ==="
+
+# === 39 pool15: 探活整合进降级循环（用户确认）===
+# 痛点：源返回非空死链（如裤佬 mcp kg.php 的 404 地址），循环见非空就立刻 return，播放器拿死链报 2004，不降级。
+# 修法：resolveUrlWithFallback 拿到 URL 后先调 LxPlayerManager.isStreamUrlAlive(url) 探活，活了才 return，死了记冷却继续试下一个；全部日志改 LxRuntimeLog（进抽屉），不用 android.util.Log。
+python3 << 'PYEOF39P15'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool15 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+PA = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+a = open(PA, encoding="utf-8").read()
+if "[39pool15]" in a:
+    print("跳过（39 pool15 已应用）")
+else:
+    # 精确定位 resolveUrlWithFallback 函数体（按花括号配对，不碰其它函数）
+    start = a.find("    suspend fun resolveUrlWithFallback(")
+    assert start != -1, "pool15 锚点 resolveUrlWithFallback 起始未找到"
+    brace_start = a.find("{", start)
+    assert brace_start != -1, "pool15 锚点 resolveUrlWithFallback 花括号未找到"
+    depth = 0
+    end = brace_start
+    for i in range(brace_start, len(a)):
+        if a[i] == "{":
+            depth += 1
+        elif a[i] == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    assert depth == 0, "pool15 锚点 resolveUrlWithFallback 花括号不配对"
+    while end < len(a) and a[end] in "\n":
+        end += 1
+    old_func = a[start:end]
+    # 新函数：探活整合 + 日志全改 LxRuntimeLog
+    new_func = """    // [39pool15] 探活整合：拿到 URL 先探活，活了才 return，死了记冷却继续试下一个；日志全用 LxRuntimeLog（进抽屉）
+    suspend fun resolveUrlWithFallback(
+        platform: String,
+        musicInfo: Map<String, Any>,
+        quality: String,
+        excludedIds: Set<String> = emptySet()
+    ): Pair<String, String> {
+        // 1. 获取所有引擎并平级化
+        val allEngines = getAllEngines()
+        val targets = mutableListOf<Pair<String, LxScriptEngine>>()
+        for ((id, eng) in allEngines) {
+            if (id in excludedIds) continue
+            if (isSourceCoolDown(id)) continue
+            targets.add(id to eng)
+        }
+        // [39pool13] 全冷却时照常用：若过滤后为空，则不过滤冷却、全部源都进列表
+        if (targets.isEmpty()) {
+            for ((id, eng) in allEngines) {
+                if (id in excludedIds) continue
+                targets.add(id to eng)
+            }
+        }
+        // 2. lastGood 排最前
+        lastGoodSourceId?.let { good ->
+            val idx = targets.indexOfFirst { it.first == good }
+            if (idx > 0) {
+                val p = targets.removeAt(idx)
+                targets.add(0, p)
+            }
+        }
+        // 【降级排查】看看池子里到底有几个活着的
+        LxRuntimeLog.d("LxPlayer", "【降级排查】可用源池数量: ${targets.size}，列表: ${targets.map { it.first }}")
+        if (targets.isEmpty()) {
+            throw IllegalStateException("没有可用音源")
+        }
+        var lastError: Throwable? = null
+        // 3. 纯净遍历
+        for ((sid, eng) in targets) {
+            try {
+                LxRuntimeLog.d("LxPlayer", "【降级排查】开始尝试源: $sid")
+                val url = kotlinx.coroutines.withTimeout(8000L) {
+                    kotlin.coroutines.suspendCoroutine<String?> { cont ->
+                        try {
+                            eng.requestMusicUrl(platform, musicInfo, quality) { r ->
+                                r.fold(
+                                    onSuccess = { u -> cont.resumeWith(Result.success(u)) },
+                                    onFailure = { e -> cont.resumeWith(Result.failure(e)) }
+                                )
+                            }
+                        } catch (e: Exception) {
+                            cont.resumeWith(Result.failure(e))
+                        }
+                    }
+                }
+                if (!url.isNullOrBlank()) {
+                    // 【降级排查】拿到链接后，立刻用探针测一下是不是活的
+                    LxRuntimeLog.d("LxPlayer", "【降级排查】源 $sid 拿到地址，开始探活...")
+                    val isAlive = try {
+                        LxPlayerManager.isStreamUrlAlive(url)
+                    } catch (e: Exception) {
+                        false
+                    }
+                    if (isAlive) {
+                        lastGoodSourceId = sid
+                        LxRuntimeLog.d("LxPlayer", "【降级排查】源 $sid 探活成功，确定使用！")
+                        return sid to url
+                    } else {
+                        LxRuntimeLog.w("LxPlayer", "【降级排查】源 $sid 探活失败（死链/防盗链），尝试下一个")
+                        markSourceCoolDown(sid)
+                    }
+                } else {
+                    LxRuntimeLog.w("LxPlayer", "【降级排查】源 $sid 返回空地址，尝试下一个")
+                }
+            } catch (e: Exception) {
+                LxRuntimeLog.e("LxPlayer", "【降级排查】源 $sid 异常: ${e.message}", e)
+                lastError = e
+                markSourceCoolDown(sid)
+                continue
+            }
+        }
+        LxRuntimeLog.e("LxPlayer", "【降级排查】所有源遍历完毕，彻底失败")
+        throw IllegalStateException("所有音源均失效", lastError)
+    }
+
+"""
+    a = a[:start] + new_func + a[end:]
+    assert "[39pool15]" in a, "pool15 标记未落"
+    open(PA, "w", encoding="utf-8").write(a)
+    print("OK [39pool15] 探活整合完成")
+PYEOF39P15
+echo "=== 39 pool15 完成 ==="
