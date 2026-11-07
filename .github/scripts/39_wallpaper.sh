@@ -1628,7 +1628,7 @@ if '[39pool4]' not in a:
                                             try { LxRuntimeLog.add("地址验活失败: " + title + " / " + artist + " | 档位 " + q + " " + url.take(80)) } catch (_: Exception) { }
                                             android.util.Log.w("LxPlayer", "音质 $q 地址验活失败，换池内下一源重试") // [39pool4]
                                             excludedSources.add(urlSourceId) // [39pool4] 排除刚失败的源，同一档位换源再试
-                                            markSourceCoolDown(urlSourceId) // [39pool6] 坏源搁置 5 分钟，下一首不优先试
+                                            LxEngineHolder.markSourceCoolDown(urlSourceId) // [39pool6] 坏源搁置 5 分钟，下一首不优先试
                                             tryQuality()''', '39pool4 验活失败换源')
     a = rep(a, '''                            } else {
                                 android.util.Log.w("LxPlayer", "音质 $q 返回空地址，降级重试")
@@ -1638,7 +1638,7 @@ if '[39pool4]' not in a:
         '''                            } else {
                                 android.util.Log.w("LxPlayer", "音质 $q 返回空地址，换池内下一源重试") // [39pool4]
                                 excludedSources.add(urlSourceId) // [39pool4]
-                                markSourceCoolDown(urlSourceId) // [39pool6] 空地址也搁置
+                                LxEngineHolder.markSourceCoolDown(urlSourceId) // [39pool6] 空地址也搁置
                                 tryQuality()
                             }''', '39pool4 空地址换源')
     a = rep(a, '''                            } else {
