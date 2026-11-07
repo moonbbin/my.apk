@@ -1356,13 +1356,6 @@ if '[39pool]' not in a:
                 targets.add(0, p)
             }
         }
-        // [39pool8] 坏源跳过：冷却期内的源直接去掉不试，5 分钟内零耗时；全冷却时才全试（不至于无源可用）
-        val (goodTargets, coolTargets) = targets.partition { !isSourceCoolDown(it.first) }
-        if (goodTargets.isNotEmpty()) {
-            targets.clear()
-            targets.addAll(goodTargets)
-            // [39pool8] 冷却源不加入，跳过不试
-        }
         if (targets.isEmpty()) {
             callback(Result.failure(IllegalStateException("engine not ready")))
             return
@@ -1898,6 +1891,13 @@ else:
         }
         tryTarget(0)"""
     new = """        // [39pool8] 并行竞速：用户指“能不能同时竞速，不要逐条”——顺序太慢，改回并行；坏源已由冷却跳过，不再抢赢
+        // [39pool8] 坏源跳过：冷却期内的源直接去掉不试，5 分钟内零耗时；全冷却时才全试（不至于无源可用）
+        val (goodTargets, coolTargets) = targets.partition { !isSourceCoolDown(it.first) }
+        if (goodTargets.isNotEmpty()) {
+            targets.clear()
+            targets.addAll(goodTargets)
+            // [39pool8] 冷却源不加入，跳过不试
+        }
         val done = java.util.concurrent.atomic.AtomicBoolean(false)
         val remaining = java.util.concurrent.atomic.AtomicInteger(targets.size)
         for ((sid, eng) in targets) {
