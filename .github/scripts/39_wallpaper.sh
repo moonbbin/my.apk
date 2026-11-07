@@ -2202,3 +2202,74 @@ else:
     print("OK [39pool12] 取消主源锁定完成")
 PYEOF39P12
 echo "=== 39 pool12 完成 ==="
+
+# === 39 pool13: 全冷却时照常用，不抛“没有可用音源”（用户指“播着播着会抽风，所有个都播不了，重进才能播”）===
+# 根因：resolveUrlWithFallback 里冷却源直接跳过，多首连败后所有源都被冷却 5 分钟，targets 为空即抛“没有可用音源”，5 分钟内所有歌都播不了；重进 App 清掉内存里的冷却表才能播。
+# 修法：先按冷却过滤，若过滤后为空，则不过滤冷却、全部源都进列表（全冷却时照常用）；冷却只是排序依据，不是准入条件。
+python3 << 'PYEOF39P13'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool13 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+PA = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+a = open(PA, encoding="utf-8").read()
+if "[39pool13]" in a:
+    print("跳过（39 pool13 已应用）")
+else:
+    old = """        for ((id, eng) in poolEngines) {
+            if (id == loadedSourceId) continue
+            if (id in excludedIds) continue
+            if (isSourceCoolDown(id)) continue
+            targets.add(id to eng)
+        }
+        lastGoodSourceId?.let { good ->
+            val idx = targets.indexOfFirst { it.first == good }
+            if (idx > 0) {
+                val p = targets.removeAt(idx)
+                targets.add(0, p)
+            }
+        }
+        if (targets.isEmpty()) {
+            throw IllegalStateException("没有可用音源")
+        }"""
+    new = """        for ((id, eng) in poolEngines) {
+            if (id == loadedSourceId) continue
+            if (id in excludedIds) continue
+            if (isSourceCoolDown(id)) continue
+            targets.add(id to eng)
+        }
+        // [39pool13] 全冷却时照常用：若过滤后为空（所有源都被冷却），则不过滤冷却、全部源都进列表；冷却只是排序依据，不是准入条件
+        if (targets.isEmpty()) {
+            if (primary != null && isReady && loadedSourceId != null && loadedSourceId !in excludedIds) {
+                targets.add(loadedSourceId!! to primary)
+            }
+            for ((id, eng) in poolEngines) {
+                if (id == loadedSourceId) continue
+                if (id in excludedIds) continue
+                targets.add(id to eng)
+            }
+        }
+        lastGoodSourceId?.let { good ->
+            val idx = targets.indexOfFirst { it.first == good }
+            if (idx > 0) {
+                val p = targets.removeAt(idx)
+                targets.add(0, p)
+            }
+        }
+        if (targets.isEmpty()) {
+            throw IllegalStateException("没有可用音源")
+        }"""
+    a = rep(a, old, new, "全冷却时照常用")
+    assert "[39pool13]" in a, "pool13 标记未落"
+    open(PA, "w", encoding="utf-8").write(a)
+    print("OK [39pool13] 全冷却时照常用完成")
+PYEOF39P13
+echo "=== 39 pool13 完成 ==="
