@@ -1986,3 +1986,103 @@ else:
     print("OK [39pool9] 脚本抛错即冷却完成")
 PYEOF39P9
 echo "=== 39 pool9 完成 ==="
+
+# === 39 pool10: 顺序遍历降级＋防串取号（用户确认）===
+# 痛点：优先级最高的脚本解析失败（空、超时、抛错）时系统直接判播放失败，不试其他已启用脚本。
+# 修法：LxEngineHolder 加挂起函数 resolveUrlWithFallback——for 循环遍历源池，try-catch 抓抛错、校验空地址、withTimeout(8000L) 单源超时、失败记冷却，全挂才抛“所有音源均失效”；resolveMusicUrlFirst 改调它（回调包装协程）。
+python3 << 'PYEOF39P10'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool10 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+PA = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+a = open(PA, encoding="utf-8").read()
+if "[39pool10]" in a:
+    print("跳过（39 pool10 已应用）")
+else:
+    # 1) 在 LxEngineHolder 里加协程作用域（不用 GlobalScope）
+    old = """    // [39pool6] 坏源冷却：验活失败的源搁置 5 分钟，排序时沉底，好源在前（用户指“杰翔不掺裤老就不抽风”）
+    private val sourceCoolDownUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()"""
+    new = """    // [39pool6] 坏源冷却：验活失败的源搁置 5 分钟，排序时沉底，好源在前（用户指“杰翔不掺裤老就不抽风”）
+    private val sourceCoolDownUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    // [39pool10] 顺序遍历降级用协程作用域（不用 GlobalScope，不依赖外部生命周期）
+    private val poolScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())"""
+    a = rep(a, old, new, "poolScope")
+    # 2) 在 resolveMusicUrlFirst 前插入 resolveUrlWithFallback 挂起函数
+    old = """    fun resolveMusicUrlFirst("""
+    new = """    // [39pool10] 顺序遍历降级：for 循环一个个试，哪个先出合法地址就用哪个，全挂才抛“所有音源均失效”
+    suspend fun resolveUrlWithFallback(
+        platform: String,
+        musicInfo: Map<String, Any>,
+        quality: String,
+        excludedIds: Set<String> = emptySet()
+    ): Pair<String, String> {
+        val targets = ArrayList<Pair<String, LxScriptEngine>>()
+        val primary = engine
+        if (primary != null && isReady && loadedSourceId != null && loadedSourceId !in excludedIds && !isSourceCoolDown(loadedSourceId!!)) {
+            targets.add(loadedSourceId!! to primary)
+        }
+        for ((id, eng) in poolEngines) {
+            if (id == loadedSourceId) continue
+            if (id in excludedIds) continue
+            if (isSourceCoolDown(id)) continue
+            targets.add(id to eng)
+        }
+        lastGoodSourceId?.let { good ->
+            val idx = targets.indexOfFirst { it.first == good }
+            if (idx > 0) {
+                val p = targets.removeAt(idx)
+                targets.add(0, p)
+            }
+        }
+        if (targets.isEmpty()) {
+            throw IllegalStateException("没有可用音源")
+        }
+        var lastError: Throwable? = null
+        for ((sid, eng) in targets) {
+            try {
+                val url = kotlinx.coroutines.withTimeout(8000L) {
+                    kotlinx.coroutines.suspendCancellableCoroutine<String?> { cont ->
+                        try {
+                            eng.requestMusicUrl(platform, musicInfo, quality) { r ->
+                                r.fold(
+                                    onSuccess = { u -> cont.resume(u) },
+                                    onFailure = { e -> cont.resumeWithException(e) }
+                                )
+                            }
+                        } catch (e: Exception) {
+                            cont.resumeWithException(e)
+                        }
+                    }
+                }
+                if (!url.isNullOrBlank()) {
+                    lastGoodSourceId = sid
+                    return sid to url
+                } else {
+                    android.util.Log.w("LxPlayer", "源 $sid 返回空地址，尝试下一个")
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("LxPlayer", "源 $sid 解析失败 (${e.javaClass.simpleName}: ${e.message})，尝试下一个")
+                lastError = e
+                markSourceCoolDown(sid)
+                continue
+            }
+        }
+        throw IllegalStateException("所有音源均失效", lastError)
+    }
+
+    fun resolveMusicUrlFirst("""
+    a = rep(a, old, new, "resolveUrlWithFallback")
+    assert "[39pool10]" in a, "pool10 标记未落"
+    open(PA, "w", encoding="utf-8").write(a)
+    print("OK [39pool10] 顺序遍历降级完成")
+PYEOF39P10
+echo "=== 39 pool10 完成 ==="
