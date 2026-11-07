@@ -1935,3 +1935,54 @@ else:
     print("OK [39pool8] 并行竞速＋坏源跳过完成")
 PYEOF39P8
 echo "=== 39 pool8 完成 ==="
+
+# === 39 pool9: 脚本抛错即冷却（用户指“把裤老删掉重进才能播”）===
+# 根因：markSourceCoolDown 只在“取到地址后验活失败”时调，脚本直接抛错（酷狗所有音源均获取失败）没地址时不调，裤佬永不冷却，池子每首都先试裤佬、抛错、再试别的，慢且抽风。
+# 修法：并行竞速时，任一源 requestMusicUrl 抛错（onFailure 或 catch）即记该源冷却 5 分钟，不再等验活。
+python3 << 'PYEOF39P9'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool9 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+PA = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+a = open(PA, encoding="utf-8").read()
+if "[39pool9]" in a:
+    print("跳过（39 pool9 已应用）")
+else:
+    old = """                        onFailure = { e ->
+                            if (remaining.decrementAndGet() == 0 && done.compareAndSet(false, true)) {
+                                callback(Result.failure(e))
+                            }
+                        }"""
+    new = """                        onFailure = { e ->
+                            markSourceCoolDown(sid) // [39pool9] 脚本抛错即冷却 5 分钟，不等验活（裤佬脚本“酷狗所有音源均获取失败”时无地址可验）
+                            if (remaining.decrementAndGet() == 0 && done.compareAndSet(false, true)) {
+                                callback(Result.failure(e))
+                            }
+                        }"""
+    a = rep(a, old, new, "onFailure 记冷却")
+    old = """            } catch (e: Exception) {
+                if (remaining.decrementAndGet() == 0 && done.compareAndSet(false, true)) {
+                    callback(Result.failure(e))
+                }
+            }"""
+    new = """            } catch (e: Exception) {
+                markSourceCoolDown(sid) // [39pool9] 脚本抛错即冷却 5 分钟，不等验活
+                if (remaining.decrementAndGet() == 0 && done.compareAndSet(false, true)) {
+                    callback(Result.failure(e))
+                }
+            }"""
+    a = rep(a, old, new, "catch 记冷却")
+    assert "[39pool9]" in a, "pool9 标记未落"
+    open(PA, "w", encoding="utf-8").write(a)
+    print("OK [39pool9] 脚本抛错即冷却完成")
+PYEOF39P9
+echo "=== 39 pool9 完成 ==="
