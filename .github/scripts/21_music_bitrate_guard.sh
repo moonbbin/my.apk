@@ -3999,5 +3999,29 @@ else:
     assert "[21v65]" in s, "v65 标记未落"
     open(M, "w", encoding="utf-8").write(s)
     print("OK 21 v65 Manager 补池内轮换完成")
+
+# === 21 v67: 通知诊断（用户报锁屏/通知栏均无媒体通知，控制中心有 MediaSession）===
+# LxMediaNotification.show() 被 try/catch 静默吞错，无法判断是否被调、是否抛错。
+# 修法：在 play()/toggle()/pause() 三处 show() 调用点加 LxRuntimeLog 诊断：
+# 调起来记“通知已调: 标题”，抛错记“通知失败: 错类名 消息”。
+if "[21v67]" in s:
+    print("跳过（21 v67 已应用）")
+else:
+    # 1) play()：通知行加诊断
+    old = """            try { appContext?.let { LxMediaNotification.show(it, title, artist, true) } } catch (e: Exception) { }"""
+    new = """            try { appContext?.let { LxMediaNotification.show(it, title, artist, true); try { com.github.tvbox.osc.util.LxRuntimeLog.add("通知已调: " + title) } catch (_: Exception) { } } } catch (e: Exception) { try { com.github.tvbox.osc.util.LxRuntimeLog.add("通知失败: " + e.javaClass.simpleName + " " + (e.message ?: "")) } catch (_: Exception) { } } // [21v67]"""
+    s = rep(s, old, new, "play 通知诊断")
+    # 2) toggle()：通知行加诊断
+    old = """        try { appContext?.let { LxMediaNotification.show(it, _currentTitle.value, _currentArtist.value, player?.isPlaying == true) } } catch (e: Exception) { }"""
+    new = """        try { appContext?.let { LxMediaNotification.show(it, _currentTitle.value, _currentArtist.value, player?.isPlaying == true); try { com.github.tvbox.osc.util.LxRuntimeLog.add("通知已调: " + _currentTitle.value) } catch (_: Exception) { } } } catch (e: Exception) { try { com.github.tvbox.osc.util.LxRuntimeLog.add("通知失败: " + e.javaClass.simpleName + " " + (e.message ?: "")) } catch (_: Exception) { } } // [21v67]"""
+    s = rep(s, old, new, "toggle 通知诊断")
+    # 3) pause()：通知行加诊断
+    old = """        try { appContext?.let { LxMediaNotification.show(it, _currentTitle.value, _currentArtist.value, false) } } catch (e: Exception) { }"""
+    new = """        try { appContext?.let { LxMediaNotification.show(it, _currentTitle.value, _currentArtist.value, false); try { com.github.tvbox.osc.util.LxRuntimeLog.add("通知已调: " + _currentTitle.value) } catch (_: Exception) { } } } catch (e: Exception) { try { com.github.tvbox.osc.util.LxRuntimeLog.add("通知失败: " + e.javaClass.simpleName + " " + (e.message ?: "")) } catch (_: Exception) { } } // [21v67]"""
+    s = rep(s, old, new, "pause 通知诊断")
+    assert "[21v67]" in s, "v67 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 21 v67 通知诊断完成")
+
 PYEOF65
 echo "=== 21 v65 完成 ==="

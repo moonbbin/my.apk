@@ -1356,12 +1356,12 @@ if '[39pool]' not in a:
                 targets.add(0, p)
             }
         }
-        // [39pool6] 坏源搁置：冷却期内的源沉底，好源在前；全冷却时照常用（不至于无源可用）
+        // [39pool8] 坏源跳过：冷却期内的源直接去掉不试，5 分钟内零耗时；全冷却时才全试（不至于无源可用）
         val (goodTargets, coolTargets) = targets.partition { !isSourceCoolDown(it.first) }
         if (goodTargets.isNotEmpty()) {
             targets.clear()
             targets.addAll(goodTargets)
-            targets.addAll(coolTargets)
+            // [39pool8] 冷却源不加入，跳过不试
         }
         if (targets.isEmpty()) {
             callback(Result.failure(IllegalStateException("engine not ready")))
@@ -1828,3 +1828,110 @@ else:
     print("OK [39pool5] 池竞速改顺序兜底完成")
 PYEOF39P5
 echo "=== 39 pool5 完成 ==="
+
+# === 39 pool8: 并行竞速＋坏源跳过（用户指“能不能同时竞速，不要逐条”“坏的搁置”）===
+# pool5 顺序太慢（单源 10 秒超时，三源全试可达 30 秒，用户报“长时间播不了直接 2004”）。
+# 修法：改回并行竞速（同时发，首个成功即回），坏源由冷却跳过（pool6/pool7 机制保留）——
+# 冷却期内的源直接从目标列表去掉不试，好源并行竞速，快且不被坏源拖慢。
+python3 << 'PYEOF39P8'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool8 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+PA = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+a = open(PA, encoding="utf-8").read()
+if "[39pool8]" in a:
+    print("跳过（39 pool8 已应用）")
+else:
+    old = """        // [39pool5] 顺序兜底：并行竞速三引擎同发请求，4G 下后端限流/超时全挂；改逐个试，单个 10 秒超时即跳下一个，首个成功即回
+        val done = java.util.concurrent.atomic.AtomicBoolean(false)
+        fun tryTarget(idx: Int) {
+            if (done.get()) return
+            if (idx >= targets.size) {
+                if (done.compareAndSet(false, true)) {
+                    callback(Result.failure(IllegalStateException("all sources failed")))
+                }
+                return
+            }
+            val (sid, eng) = targets[idx]
+            val settled = java.util.concurrent.atomic.AtomicBoolean(false)
+            val timer = Thread {
+                try {
+                    Thread.sleep(10000) // [39pool5] 单源 10 秒超时
+                    if (settled.compareAndSet(false, true)) {
+                        tryTarget(idx + 1)
+                    }
+                } catch (_: Exception) { }
+            }.apply { isDaemon = true; start() }
+            try {
+                eng.requestMusicUrl(platform, musicInfo, quality) { r ->
+                    if (!settled.compareAndSet(false, true)) return@requestMusicUrl
+                    r.fold(
+                        onSuccess = { url ->
+                            if (url.isNotBlank()) {
+                                if (done.compareAndSet(false, true)) {
+                                    lastGoodSourceId = sid
+                                    callback(Result.success(sid to url))
+                                }
+                            } else {
+                                tryTarget(idx + 1)
+                            }
+                        },
+                        onFailure = { _ ->
+                            tryTarget(idx + 1)
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                if (settled.compareAndSet(false, true)) {
+                    tryTarget(idx + 1)
+                }
+            }
+        }
+        tryTarget(0)"""
+    new = """        // [39pool8] 并行竞速：用户指“能不能同时竞速，不要逐条”——顺序太慢，改回并行；坏源已由冷却跳过，不再抢赢
+        val done = java.util.concurrent.atomic.AtomicBoolean(false)
+        val remaining = java.util.concurrent.atomic.AtomicInteger(targets.size)
+        for ((sid, eng) in targets) {
+            try {
+                eng.requestMusicUrl(platform, musicInfo, quality) { r ->
+                    r.fold(
+                        onSuccess = { url ->
+                            if (url.isNotBlank()) {
+                                if (done.compareAndSet(false, true)) {
+                                    lastGoodSourceId = sid
+                                    callback(Result.success(sid to url))
+                                }
+                            } else {
+                                if (remaining.decrementAndGet() == 0 && done.compareAndSet(false, true)) {
+                                    callback(Result.failure(IllegalStateException("empty music url")))
+                                }
+                            }
+                        },
+                        onFailure = { e ->
+                            if (remaining.decrementAndGet() == 0 && done.compareAndSet(false, true)) {
+                                callback(Result.failure(e))
+                            }
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                if (remaining.decrementAndGet() == 0 && done.compareAndSet(false, true)) {
+                    callback(Result.failure(e))
+                }
+            }
+        }"""
+    a = rep(a, old, new, "顺序改回并行")
+    assert "[39pool8]" in a, "pool8 标记未落"
+    open(PA, "w", encoding="utf-8").write(a)
+    print("OK [39pool8] 并行竞速＋坏源跳过完成")
+PYEOF39P8
+echo "=== 39 pool8 完成 ==="
