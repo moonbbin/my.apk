@@ -2238,6 +2238,14 @@ else:
             if (isSourceCoolDown(id)) continue
             targets.add(id to eng)
         }
+        // [39pool12] 打乱首位：若首位是冷却刚过期或上次失败的源，不让它恒占首位；lastGood 仍优先
+        if (targets.size > 1) {
+            val firstId = targets[0].first
+            if (firstId != lastGoodSourceId && isSourceCoolDown(firstId)) {
+                val p = targets.removeAt(0)
+                targets.add(p)
+            }
+        }
         lastGoodSourceId?.let { good ->
             val idx = targets.indexOfFirst { it.first == good }
             if (idx > 0) {
