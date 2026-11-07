@@ -2281,3 +2281,130 @@ else:
     print("OK [39pool13] 全冷却时照常用完成")
 PYEOF39P13
 echo "=== 39 pool13 完成 ==="
+
+# === 39 pool14: 彻底平级化，废弃主源+备用池分层（用户确认）===
+# 痛点：主源（如裤佬）失败时降级循环没正确执行，主源特殊地位导致边界 Bug。
+# 修法：resolveUrlWithFallback 重构为纯粹平级遍历——getAllEngines() 统一收集主源+池源，过滤 excludedIds 与冷却源，lastGood 排最前，for 循环一个个试，withTimeout(8000L)，失败记冷却，全挂才抛“所有音源均失效”；含【降级排查】日志。
+# 注意：suspendCancellableCoroutine 在项目协程版本里签名不对，改用 suspendCoroutine + resumeWith(Result)（pool10 fix 已证实）。
+python3 << 'PYEOF39P14'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool14 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+PA = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+a = open(PA, encoding="utf-8").read()
+if "[39pool14]" in a:
+    print("跳过（39 pool14 已应用）")
+else:
+    # 1) 在 LxEngineHolder 里加 getAllEngines()，统一返回主源+池源
+    old = """    // [39pool10] 顺序遍历降级用协程作用域（不用 GlobalScope，不依赖外部生命周期）
+    private val poolScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())"""
+    new = """    // [39pool10] 顺序遍历降级用协程作用域（不用 GlobalScope，不依赖外部生命周期）
+    private val poolScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+    // [39pool14] 统一收集所有已启用引擎（主源+池源平级化，不分主从）
+    private fun getAllEngines(): List<Pair<String, LxScriptEngine>> {
+        val list = ArrayList<Pair<String, LxScriptEngine>>()
+        val primary = engine
+        if (primary != null && isReady && loadedSourceId != null) {
+            list.add(loadedSourceId!! to primary)
+        }
+        for ((id, eng) in poolEngines) {
+            if (id == loadedSourceId) continue
+            list.add(id to eng)
+        }
+        return list
+    }"""
+    a = rep(a, old, new, "getAllEngines")
+    # 2) 重构 resolveUrlWithFallback 为纯粹平级遍历（替换整个函数体）
+    start = a.find("    // [39pool10] 顺序遍历降级")
+    assert start != -1, "pool14 锚点 resolveUrlWithFallback 起始未找到"
+    end = a.find("    fun resolveMusicUrlFirst(", start)
+    assert end != -1, "pool14 锚点 resolveMusicUrlFirst 未找到"
+    old_func = a[start:end]
+    new_func = """    // [39pool14] 纯粹平级遍历：废弃主源+备用池分层，所有已启用源平等；for 循环一个个试，哪个先出合法地址就用哪个
+    suspend fun resolveUrlWithFallback(
+        platform: String,
+        musicInfo: Map<String, Any>,
+        quality: String,
+        excludedIds: Set<String> = emptySet()
+    ): Pair<String, String> {
+        // 1. 获取所有引擎并平级化
+        val allEngines = getAllEngines()
+        val targets = mutableListOf<Pair<String, LxScriptEngine>>()
+        for ((id, eng) in allEngines) {
+            if (id in excludedIds) continue
+            if (isSourceCoolDown(id)) continue
+            targets.add(id to eng)
+        }
+        // [39pool13] 全冷却时照常用：若过滤后为空，则不过滤冷却、全部源都进列表
+        if (targets.isEmpty()) {
+            for ((id, eng) in allEngines) {
+                if (id in excludedIds) continue
+                targets.add(id to eng)
+            }
+        }
+        // 2. lastGood 排最前
+        lastGoodSourceId?.let { good ->
+            val idx = targets.indexOfFirst { it.first == good }
+            if (idx > 0) {
+                val p = targets.removeAt(idx)
+                targets.add(0, p)
+            }
+        }
+        // 【降级排查】看看池子里到底有几个活着的
+        android.util.Log.d("LxPlayer", "【降级排查】可用源池数量: ${targets.size}，列表: ${targets.map { it.first }}")
+        if (targets.isEmpty()) {
+            throw IllegalStateException("没有可用音源")
+        }
+        var lastError: Throwable? = null
+        // 3. 纯净遍历
+        for ((sid, eng) in targets) {
+            try {
+                android.util.Log.d("LxPlayer", "【降级排查】开始尝试源: $sid")
+                val url = kotlinx.coroutines.withTimeout(8000L) {
+                    kotlin.coroutines.suspendCoroutine<String?> { cont ->
+                        try {
+                            eng.requestMusicUrl(platform, musicInfo, quality) { r ->
+                                r.fold(
+                                    onSuccess = { u -> cont.resumeWith(Result.success(u)) },
+                                    onFailure = { e -> cont.resumeWith(Result.failure(e)) }
+                                )
+                            }
+                        } catch (e: Exception) {
+                            cont.resumeWith(Result.failure(e))
+                        }
+                    }
+                }
+                if (!url.isNullOrBlank()) {
+                    lastGoodSourceId = sid
+                    android.util.Log.d("LxPlayer", "【降级排查】源 $sid 解析成功！")
+                    return sid to url
+                } else {
+                    android.util.Log.w("LxPlayer", "【降级排查】源 $sid 返回空地址，尝试下一个")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("LxPlayer", "【降级排查】源 $sid 异常: ${e.message}", e)
+                lastError = e
+                markSourceCoolDown(sid)
+                continue
+            }
+        }
+        android.util.Log.e("LxPlayer", "【降级排查】所有源遍历完毕，彻底失败")
+        throw IllegalStateException("所有音源均失效", lastError)
+    }
+
+"""
+    a = a[:start] + new_func + a[end:]
+    assert "[39pool14]" in a, "pool14 标记未落"
+    open(PA, "w", encoding="utf-8").write(a)
+    print("OK [39pool14] 彻底平级化完成")
+PYEOF39P14
+echo "=== 39 pool14 完成 ==="
