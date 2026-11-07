@@ -1241,7 +1241,23 @@ if '[39pool]' not in a:
     private var poolPreloadJs: String? = null
     @Volatile
     var lastGoodSourceId: String? = null
-        private set''', '39pool 池字段')
+        private set
+    // [39pool6] 坏源冷却：验活失败的源搁置 5 分钟，排序时沉底，好源在前（用户指“杰翔不掺裤老就不抽风”）
+    private val sourceCoolDownUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    fun markSourceCoolDown(sourceId: String, coolDownMs: Long = 300000) { // [39pool6] 默认冷却 5 分钟
+        sourceCoolDownUntil[sourceId] = System.currentTimeMillis() + coolDownMs
+    }
+    fun isSourceCoolDown(sourceId: String): Boolean { // [39pool6] 是否在冷却期内
+        val until = sourceCoolDownUntil[sourceId] ?: return false
+        if (System.currentTimeMillis() >= until) {
+            sourceCoolDownUntil.remove(sourceId)
+            return false
+        }
+        return true
+    }
+    fun clearSourceCoolDown(sourceId: String) { // [39pool6] 源恢复时清冷却
+        sourceCoolDownUntil.remove(sourceId)
+    }''', '39pool 池字段')
     # B) 主源就绪后，后台懒加载其余已启用源进池（不阻塞启动与点歌）
     a = rep(a, '''                                onSuccess = {
                                     loadedSourceId = src.id
@@ -1339,6 +1355,13 @@ if '[39pool]' not in a:
                 val p = targets.removeAt(idx)
                 targets.add(0, p)
             }
+        }
+        // [39pool6] 坏源搁置：冷却期内的源沉底，好源在前；全冷却时照常用（不至于无源可用）
+        val (goodTargets, coolTargets) = targets.partition { !isSourceCoolDown(it.first) }
+        if (goodTargets.isNotEmpty()) {
+            targets.clear()
+            targets.addAll(goodTargets)
+            targets.addAll(coolTargets)
         }
         if (targets.isEmpty()) {
             callback(Result.failure(IllegalStateException("engine not ready")))
@@ -1612,6 +1635,7 @@ if '[39pool4]' not in a:
                                             try { LxRuntimeLog.add("地址验活失败: " + title + " / " + artist + " | 档位 " + q + " " + url.take(80)) } catch (_: Exception) { }
                                             android.util.Log.w("LxPlayer", "音质 $q 地址验活失败，换池内下一源重试") // [39pool4]
                                             excludedSources.add(urlSourceId) // [39pool4] 排除刚失败的源，同一档位换源再试
+                                            markSourceCoolDown(urlSourceId) // [39pool6] 坏源搁置 5 分钟，下一首不优先试
                                             tryQuality()''', '39pool4 验活失败换源')
     a = rep(a, '''                            } else {
                                 android.util.Log.w("LxPlayer", "音质 $q 返回空地址，降级重试")
@@ -1621,6 +1645,7 @@ if '[39pool4]' not in a:
         '''                            } else {
                                 android.util.Log.w("LxPlayer", "音质 $q 返回空地址，换池内下一源重试") // [39pool4]
                                 excludedSources.add(urlSourceId) // [39pool4]
+                                markSourceCoolDown(urlSourceId) // [39pool6] 空地址也搁置
                                 tryQuality()
                             }''', '39pool4 空地址换源')
     a = rep(a, '''                            } else {

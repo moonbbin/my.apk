@@ -3991,6 +3991,7 @@ else:
                                             try { com.github.tvbox.osc.util.LxRuntimeLog.add("地址验活失败: " + title + " / " + artist + " | 档位 " + q + " " + url.take(80)) } catch (_: Exception) { }
                                             Log.w(TAG, "音质 $q @平台 ${cand.plat} 地址验活失败，换池内下一源重试")
                                             excludedSources.add(urlSourceId)
+                                            try { LxEngineHolder.markSourceCoolDown(urlSourceId) } catch (_: Exception) { } // [21v66] 坏源搁置 5 分钟，下一首不优先试（与 39pool6 对齐）
                                             tryNext()
                                             return@fold
                                         }"""
