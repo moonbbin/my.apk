@@ -2054,12 +2054,12 @@ else:
                         try {
                             eng.requestMusicUrl(platform, musicInfo, quality) { r ->
                                 r.fold(
-                                    onSuccess = { u -> cont.resume(u) },
-                                    onFailure = { e -> cont.resumeWithException(e) }
+                                    onSuccess = { u -> cont.resumeWith(Result.success(u)) },
+                                    onFailure = { e -> cont.resumeWith(Result.failure(e)) }
                                 )
                             }
                         } catch (e: Exception) {
-                            cont.resumeWithException(e)
+                            cont.resumeWith(Result.failure(e))
                         }
                     }
                 }
