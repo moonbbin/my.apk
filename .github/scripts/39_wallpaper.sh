@@ -2050,7 +2050,7 @@ else:
         for ((sid, eng) in targets) {
             try {
                 val url = kotlinx.coroutines.withTimeout(8000L) {
-                    kotlinx.coroutines.suspendCancellableCoroutine<String?> { cont ->
+                    kotlin.coroutines.suspendCoroutine<String?> { cont ->
                         try {
                             eng.requestMusicUrl(platform, musicInfo, quality) { r ->
                                 r.fold(
