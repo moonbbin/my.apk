@@ -2086,3 +2086,59 @@ else:
     print("OK [39pool10] 顺序遍历降级完成")
 PYEOF39P10
 echo "=== 39 pool10 完成 ==="
+
+# === 39 pool11: resolveMusicUrlFirst 改调 resolveUrlWithFallback（pool10 漏接线）===
+# 根因：pool10 只加了 resolveUrlWithFallback 挂起函数，没改 resolveMusicUrlFirst 去调它；调用方（tryQuality/Manager）仍走旧的并行 resolveMusicUrlFirst，裤佬死链继续锁死。
+# 修法：resolveMusicUrlFirst 函数体改成 poolScope.launch 调 resolveUrlWithFallback，成功回 Pair，失败回 failure。
+python3 << 'PYEOF39P11'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool11 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+PA = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+a = open(PA, encoding="utf-8").read()
+if "[39pool11]" in a:
+    print("跳过（39 pool11 已应用）")
+else:
+    # Find resolveMusicUrlFirst function body and replace it with delegation to resolveUrlWithFallback
+    # The function starts with "    fun resolveMusicUrlFirst(" and ends before the next "    fun " or "    }" at same level
+    # Simpler: replace the entire function by finding its start and the pool8 parallel block
+    old = """    fun resolveMusicUrlFirst(
+        platform: String,
+        musicInfo: Map<String, Any>,
+        quality: String,
+        excludedIds: Set<String> = emptySet(), // [39pool4] 池内轮换：验活失败的源排除掉再竞速
+        callback: (Result<Pair<String, String>>) -> Unit // [39pool4] 回源id+地址
+    ) {"""
+    new = """    fun resolveMusicUrlFirst(
+        platform: String,
+        musicInfo: Map<String, Any>,
+        quality: String,
+        excludedIds: Set<String> = emptySet(), // [39pool4] 池内轮换：验活失败的源排除掉再竞速
+        callback: (Result<Pair<String, String>>) -> Unit // [39pool4] 回源id+地址
+    ) { // [39pool11] 改调 resolveUrlWithFallback（顺序遍历降级），回调包装协程
+        poolScope.launch {
+            try {
+                val r = resolveUrlWithFallback(platform, musicInfo, quality, excludedIds)
+                callback(Result.success(r))
+            } catch (e: Exception) {
+                callback(Result.failure(e))
+            }
+        }
+        // [39pool11] 以下旧并行逻辑已废弃，由 resolveUrlWithFallback 接管（保留占位，永不执行）
+        if (true) return
+        // --- 旧逻辑开始（永不执行）---"""
+    a = rep(a, old, new, "resolveMusicUrlFirst 改调 fallback")
+    assert "[39pool11]" in a, "pool11 标记未落"
+    open(PA, "w", encoding="utf-8").write(a)
+    print("OK [39pool11] resolveMusicUrlFirst 改调 fallback 完成")
+PYEOF39P11
+echo "=== 39 pool11 完成 ==="
