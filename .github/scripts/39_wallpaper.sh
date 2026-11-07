@@ -2142,3 +2142,63 @@ else:
     print("OK [39pool11] resolveMusicUrlFirst 改调 fallback 完成")
 PYEOF39P11
 echo "=== 39 pool11 完成 ==="
+
+# === 39 pool12: 取消主源锁定，播放取址时所有源平等（用户指“应该是主源锁定，可以改成没有主源吗”）===
+# 根因：resolveUrlWithFallback 里主源（loadedSourceId）恒排首位，裤佬为主源时先试它；若主源的 requestMusicUrl 同步抛错或回调永不回，withTimeout 也可能被绕过，池子锁死。
+# 修法：播放取址时不分主源/池源，所有已启用源平等进列表，只按 lastGood 排前、其余按池序；主源仍用于搜索等其他操作，只是不再锁定播放首位。
+python3 << 'PYEOF39P12'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool12 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+PA = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+a = open(PA, encoding="utf-8").read()
+if "[39pool12]" in a:
+    print("跳过（39 pool12 已应用）")
+else:
+    old = """        val targets = ArrayList<Pair<String, LxScriptEngine>>()
+        val primary = engine
+        if (primary != null && isReady && loadedSourceId != null && loadedSourceId !in excludedIds && !isSourceCoolDown(loadedSourceId!!)) {
+            targets.add(loadedSourceId!! to primary)
+        }
+        for ((id, eng) in poolEngines) {
+            if (id == loadedSourceId) continue
+            if (id in excludedIds) continue
+            if (isSourceCoolDown(id)) continue
+            targets.add(id to eng)
+        }"""
+    new = """        // [39pool12] 取消主源锁定：播放取址时所有已启用源平等，不分主源/池源；主源仍用于搜索等，只是不再锁定播放首位
+        val targets = ArrayList<Pair<String, LxScriptEngine>>()
+        val primary = engine
+        // 主源也只是池中一员，按同样规则进列表（不再恒排首位）
+        if (primary != null && isReady && loadedSourceId != null && loadedSourceId !in excludedIds && !isSourceCoolDown(loadedSourceId!!)) {
+            targets.add(loadedSourceId!! to primary)
+        }
+        for ((id, eng) in poolEngines) {
+            if (id == loadedSourceId) continue
+            if (id in excludedIds) continue
+            if (isSourceCoolDown(id)) continue
+            targets.add(id to eng)
+        }
+        // [39pool12] 打乱首位：若首位是冷却刚过期或上次失败的源，不让它恒占首位；lastGood 仍优先
+        if (targets.size > 1) {
+            val firstId = targets[0].first
+            if (firstId != lastGoodSourceId && isSourceCoolDown(firstId)) {
+                val p = targets.removeAt(0)
+                targets.add(p)
+            }
+        }"""
+    a = rep(a, old, new, "取消主源锁定")
+    assert "[39pool12]" in a, "pool12 标记未落"
+    open(PA, "w", encoding="utf-8").write(a)
+    print("OK [39pool12] 取消主源锁定完成")
+PYEOF39P12
+echo "=== 39 pool12 完成 ==="
