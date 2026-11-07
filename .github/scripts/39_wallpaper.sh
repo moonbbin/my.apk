@@ -1642,3 +1642,164 @@ else:
 print('[39] 全部补丁完成')
 PYEOF39
 echo "=== 39 wp5 完成 ==="
+
+# ============ 11) [39pool5] 池竞速改顺序兜底（用户明令“修复池子不能共享播放”）——并行竞速三引擎同发请求，4G 下后端限流/超时全挂，落雪单发却能播。修法：竞速改顺序试——按 lastGood→主源→池序逐个试，单个 10 秒超时即跳下一个，首个成功即回；全败才报失败。 ===
+python3 << 'PYEOF39P5'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool5 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+PA = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+a = open(PA, encoding="utf-8").read()
+if "[39pool5]" in a:
+    print("跳过（39pool5 已应用）")
+else:
+    old = """    fun resolveMusicUrlFirst(
+        platform: String,
+        musicInfo: Map<String, Any>,
+        quality: String,
+        excludedIds: Set<String> = emptySet(), // [39pool4] 池内轮换：验活失败的源排除掉再竞速
+        callback: (Result<Pair<String, String>>) -> Unit // [39pool4] 回源id+地址
+    ) {
+        val targets = ArrayList<Pair<String, LxScriptEngine>>()
+        val primary = engine
+        if (primary != null && isReady && loadedSourceId != null && loadedSourceId !in excludedIds) {
+            targets.add(loadedSourceId!! to primary)
+        }
+        for ((id, eng) in poolEngines) {
+            if (id == loadedSourceId) continue
+            if (id in excludedIds) continue
+            targets.add(id to eng)
+        }
+        lastGoodSourceId?.let { good ->
+            val idx = targets.indexOfFirst { it.first == good }
+            if (idx > 0) {
+                val p = targets.removeAt(idx)
+                targets.add(0, p)
+            }
+        }
+        if (targets.isEmpty()) {
+            callback(Result.failure(IllegalStateException("engine not ready")))
+            return
+        }
+        val done = java.util.concurrent.atomic.AtomicBoolean(false)
+        val remaining = java.util.concurrent.atomic.AtomicInteger(targets.size)
+        for ((sid, eng) in targets) {
+            try {
+                eng.requestMusicUrl(platform, musicInfo, quality) { r ->
+                    r.fold(
+                        onSuccess = { url ->
+                            if (url.isNotBlank()) {
+                                if (done.compareAndSet(false, true)) {
+                                    lastGoodSourceId = sid
+                                    callback(Result.success(sid to url)) // [39pool4] 回源id+地址
+                                }
+                            } else {
+                                if (remaining.decrementAndGet() == 0 && done.compareAndSet(false, true)) {
+                                    callback(Result.failure(IllegalStateException("empty music url")))
+                                }
+                            }
+                        },
+                        onFailure = { e ->
+                            if (remaining.decrementAndGet() == 0 && done.compareAndSet(false, true)) {
+                                callback(Result.failure(e))
+                            }
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                if (remaining.decrementAndGet() == 0 && done.compareAndSet(false, true)) {
+                    callback(Result.failure(e))
+                }
+            }
+        }
+    }"""
+    new = """    fun resolveMusicUrlFirst(
+        platform: String,
+        musicInfo: Map<String, Any>,
+        quality: String,
+        excludedIds: Set<String> = emptySet(), // [39pool4] 池内轮换：验活失败的源排除掉再竞速
+        callback: (Result<Pair<String, String>>) -> Unit // [39pool4] 回源id+地址
+    ) {
+        val targets = ArrayList<Pair<String, LxScriptEngine>>()
+        val primary = engine
+        if (primary != null && isReady && loadedSourceId != null && loadedSourceId !in excludedIds) {
+            targets.add(loadedSourceId!! to primary)
+        }
+        for ((id, eng) in poolEngines) {
+            if (id == loadedSourceId) continue
+            if (id in excludedIds) continue
+            targets.add(id to eng)
+        }
+        lastGoodSourceId?.let { good ->
+            val idx = targets.indexOfFirst { it.first == good }
+            if (idx > 0) {
+                val p = targets.removeAt(idx)
+                targets.add(0, p)
+            }
+        }
+        if (targets.isEmpty()) {
+            callback(Result.failure(IllegalStateException("engine not ready")))
+            return
+        }
+        // [39pool5] 顺序兜底：并行竞速三引擎同发请求，4G 下后端限流/超时全挂；改逐个试，单个 10 秒超时即跳下一个，首个成功即回
+        val done = java.util.concurrent.atomic.AtomicBoolean(false)
+        fun tryTarget(idx: Int) {
+            if (done.get()) return
+            if (idx >= targets.size) {
+                if (done.compareAndSet(false, true)) {
+                    callback(Result.failure(IllegalStateException("all sources failed")))
+                }
+                return
+            }
+            val (sid, eng) = targets[idx]
+            val settled = java.util.concurrent.atomic.AtomicBoolean(false)
+            val timer = Thread {
+                try {
+                    Thread.sleep(10000) // [39pool5] 单源 10 秒超时
+                    if (settled.compareAndSet(false, true)) {
+                        tryTarget(idx + 1)
+                    }
+                } catch (_: Exception) { }
+            }.apply { isDaemon = true; start() }
+            try {
+                eng.requestMusicUrl(platform, musicInfo, quality) { r ->
+                    if (!settled.compareAndSet(false, true)) return@requestMusicUrl
+                    r.fold(
+                        onSuccess = { url ->
+                            if (url.isNotBlank()) {
+                                if (done.compareAndSet(false, true)) {
+                                    lastGoodSourceId = sid
+                                    callback(Result.success(sid to url))
+                                }
+                            } else {
+                                tryTarget(idx + 1)
+                            }
+                        },
+                        onFailure = { _ ->
+                            tryTarget(idx + 1)
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                if (settled.compareAndSet(false, true)) {
+                    tryTarget(idx + 1)
+                }
+            }
+        }
+        tryTarget(0)
+    }"""
+    a = rep(a, old, new, "池竞速改顺序兜底")
+    assert "[39pool5]" in a, "pool5 标记未落"
+    open(PA, "w", encoding="utf-8").write(a)
+    print("OK [39pool5] 池竞速改顺序兜底完成")
+PYEOF39P5
+echo "=== 39 pool5 完成 ==="
