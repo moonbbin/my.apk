@@ -2332,10 +2332,26 @@ else:
     }"""
     a = rep(a, old, new, "getAllEngines")
     # 2) 重构 resolveUrlWithFallback 为纯粹平级遍历（替换整个函数体）
-    start = a.find("    // [39pool10] 顺序遍历降级")
+    # pool14 fix3: 精确定位 resolveUrlWithFallback 函数体（按花括号配对，不碰其它函数）
+    start = a.find("    suspend fun resolveUrlWithFallback(")
     assert start != -1, "pool14 锚点 resolveUrlWithFallback 起始未找到"
-    end = a.find("    fun resolveMusicUrlFirst(", start)
-    assert end != -1, "pool14 锚点 resolveMusicUrlFirst 未找到"
+    # 从函数起始的花括号开始计数，找到配对的闭合花括号
+    brace_start = a.find("{", start)
+    assert brace_start != -1, "pool14 锚点 resolveUrlWithFallback 花括号未找到"
+    depth = 0
+    end = brace_start
+    for i in range(brace_start, len(a)):
+        if a[i] == "{":
+            depth += 1
+        elif a[i] == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    assert depth == 0, "pool14 锚点 resolveUrlWithFallback 花括号不配对"
+    # end 指向函数闭合花括号之后，包含其后的换行
+    while end < len(a) and a[end] in "\n":
+        end += 1
     old_func = a[start:end]
     new_func = """    // [39pool14] 纯粹平级遍历：废弃主源+备用池分层，所有已启用源平等；for 循环一个个试，哪个先出合法地址就用哪个
     suspend fun resolveUrlWithFallback(
