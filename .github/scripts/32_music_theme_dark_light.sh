@@ -12885,3 +12885,39 @@ else:
     print("OK 32 v168 验活用 ExoPlayer 数据源完成")
 PYEOF168
 echo "=== 32 v168 完成 ==="
+
+# === 32 v169: 探活只开连接不读数据（用户确认，优化 A）===
+# 痛点：切歌慢。v168 探活用 ExoPlayer 数据源 open + 读 1KB，比 OkHttp 慢，每首歌都要探一遍。
+# 修法：isStreamUrlAlive 只 open() 不读数据，open 成功就判活，省一次网络往返。open 能成功说明 ExoPlayer 一定能播。
+python3 << 'PYEOF169'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v169 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v169]" in s:
+    print("跳过（32 v169 已应用）")
+else:
+    old = """                val uri = android.net.Uri.parse(url)
+                ds.open(androidx.media3.datasource.DataSpec(uri))
+                val buf = ByteArray(1024)
+                val n = ds.read(buf, 0, 1024)
+                n >= 0"""
+    new = """                val uri = android.net.Uri.parse(url)
+                ds.open(androidx.media3.datasource.DataSpec(uri)) // [32v169] 只开连接不读数据：open 成功就判活，省一次网络往返
+                true"""
+    s = rep(s, old, new, "探活只开连接")
+    assert "[32v169]" in s, "v169 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v169 探活只开连接完成")
+PYEOF169
+echo "=== 32 v169 完成 ==="

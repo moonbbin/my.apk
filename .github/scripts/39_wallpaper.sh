@@ -2735,3 +2735,109 @@ else:
     print("OK 39 pool17 内置平台 ID 转池源搜索完成")
 PYEOF17
 echo "=== 39 pool17 完成 ==="
+
+# === 39 pool18: 池子并行探活（用户确认，优化 C）===
+# 痛点：切歌慢。resolveUrlWithFallback 顺序遍历，一个源探活失败要等 8 秒超时才试下一个。
+# 修法：改成并行探活，几个源同时拿地址+探活，哪个先活就用哪个，不用等一个失败再试下一个。用 coroutineScope + async 并行，awaitAll 等全部完成取第一个成功的。
+python3 << 'PYEOF18'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[39pool18]" in s:
+    print("跳过（39 pool18 已应用）")
+else:
+    # Find resolveUrlWithFallback and replace the sequential loop with parallel
+    start_marker = "    // [39pool15] 探活整合"
+    start = s.find(start_marker)
+    assert start != -1, "pool18 锚点：函数头未找到"
+    brace_start = s.find("{", s.find("fun resolveUrlWithFallback", start))
+    assert brace_start != -1, "pool18 锚点：函数左括号未找到"
+    depth = 0
+    i = brace_start
+    while i < len(s):
+        if s[i] == '{':
+            depth += 1
+        elif s[i] == '}':
+            depth -= 1
+            if depth == 0:
+                break
+        i += 1
+    assert depth == 0, "pool18 锚点：括号不平衡"
+    func_end = i + 1
+    old_func = s[start:func_end]
+    # Replace the sequential for loop with parallel version
+    # The old loop is: var lastError... for ((sid, eng) in targets) { try { ... } }
+    # We need to replace it with parallel async
+    old_loop_start = old_func.find("        var lastError: Throwable? = null")
+    assert old_loop_start != -1, "pool18 锚点：循环起始未找到"
+    old_loop = old_func[old_loop_start:]
+    # The loop ends with "throw IllegalStateException"
+    new_loop = """        var lastError: Throwable? = null
+        // [39pool18] 并行探活：几个源同时拿地址+探活，哪个先活就用哪个
+        val results = kotlinx.coroutines.coroutineScope {
+            targets.map { (sid, eng) ->
+                kotlinx.coroutines.async {
+                    try {
+                        LxRuntimeLog.add("【降级排查】开始尝试源: $sid")
+                        val url = kotlinx.coroutines.withTimeout(8000L) {
+                            kotlin.coroutines.suspendCoroutine<String?> { cont ->
+                                try {
+                                    eng.requestMusicUrl(platform, musicInfo, quality) { r ->
+                                        r.fold(
+                                            onSuccess = { u -> cont.resumeWith(Result.success(u)) },
+                                            onFailure = { e -> cont.resumeWith(Result.failure(e)) }
+                                        )
+                                    }
+                                } catch (e: Exception) {
+                                    cont.resumeWith(Result.failure(e))
+                                }
+                            }
+                        }
+                        if (!url.isNullOrBlank()) {
+                            LxRuntimeLog.add("【降级排查】源 $sid 拿到地址，开始探活...")
+                            val isAlive = try {
+                                LxPlayerManager.isStreamUrlAlive(url)
+                            } catch (e: Exception) {
+                                false
+                            }
+                            if (isAlive) {
+                                LxRuntimeLog.add("【降级排查】源 $sid 探活成功，确定使用！")
+                                sid to url
+                            } else {
+                                LxRuntimeLog.add("【降级排查】源 $sid 探活失败（死链/防盗链），尝试下一个")
+                                markSourceCoolDown(sid)
+                                null
+                            }
+                        } else {
+                            null
+                        }
+                    } catch (e: Exception) {
+                        lastError = e
+                        markSourceCoolDown(sid)
+                        null
+                    }
+                }
+            }.mapNotNull { it.await() }.firstOrNull()
+        }
+        if (results != null) {
+            lastGoodSourceId = results.first
+            return results
+        }
+        throw IllegalStateException("所有音源均失效", lastError)
+    }"""
+    new_func = old_func[:old_loop_start] + new_loop
+    # Update the function header comment to include pool18
+    new_func = new_func.replace("[39pool15] 探活整合", "[39pool15] 探活整合；[39pool18] 并行探活", 1)
+    s = s[:start] + new_func + s[func_end:]
+    assert "[39pool18]" in s, "pool18 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 39 pool18 池子并行探活完成")
+PYEOF18
+echo "=== 39 pool18 完成 ==="
