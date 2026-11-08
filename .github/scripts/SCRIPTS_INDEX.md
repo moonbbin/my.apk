@@ -54,7 +54,7 @@
 | # | 脚本 | 干嘛的 |
 |---|------|--------|
 | 20 | `20_music_theme.sh` | 全局主题定稿（Color.kt/Type.kt/Theme.kt）<br>定义所有 Token：颜色、圆角、字号。页面 UI 只准用 Token，不准写死 Hex。<br>2026-10-22 C 结案：已删除 LxPlayerActivity 的 PATCHES 条目，不再触碰播放页（仍处理搜索/歌手/主页/历史 4 文件）。 |
-| 23 | `23_music_theme_unify.sh` | 主题统一：补 TextOnAccent/SliderTrack 常量；pool17 内置平台 ID 转池源搜索（用户确认：搜歌手名出的内置平台歌带网易 ID 400581054，池源拿网易 ID 查 mcp 301、cenguigui 超时、music.163 302 全被 v168 拦了；pool18 池子并行探活（优化 C：切歌慢，resolveUrlWithFallback 顺序遍历，一个源探活失败要等 8 秒才试下一个；修法：改成并行探活，几个源同时拿地址+探活，哪个先活就用哪个）；v169 探活只开连接不读数据（优化 A：切歌慢，v168 探活用 ExoPlayer 数据源 open + 读 1KB 比 OkHttp 慢；修法：只 open() 不读数据，open 成功就判活）；修法：resolveUrlWithFallback 开头，若 platform 是内置平台，先按歌名搜池源拿池源自己的 ID）；DarkMusicColors 全改引 Token |
+| 23 | `23_music_theme_unify.sh` | 主题统一：补 TextOnAccent/SliderTrack 常量；pool17 内置平台 ID 转池源搜索（用户确认：搜歌手名出的内置平台歌带网易 ID 400581054，池源拿网易 ID 查 mcp 301、cenguigui 超时、music.163 302 全被 v168 拦了；pool18 池子并行探活（优化 C：切歌慢，resolveUrlWithFallback 顺序遍历，一个源探活失败要等 8 秒才试下一个；修法：改成并行探活，几个源同时拿地址+探活，哪个先活就用哪个）；v169 探活只开连接不读数据（优化 A：切歌慢，v168 探活用 ExoPlayer 数据源 open + 读 1KB 比 OkHttp 慢；修法：只 open() 不读数据，open 成功就判活）；修法：resolveUrlWithFallback 开头，若 platform 是内置平台，先按歌名搜池源拿池源自己的 ID）；DarkMusicColors 全改引 Token |；pool19 ID 映射缓存（用户确认，战役二：Key=源平台_目标平台_原ID，Value=目标ID|时间戳，SharedPreferences 存，7 天过期，上限 500 条；查缓存命中直接用不走 2 秒搜索，搜到后写缓存，缓存 ID 失败立刻删）
 
 ## 音质验货与显示（21/22）⚠️ 核心
 
