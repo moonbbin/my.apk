@@ -4106,12 +4106,9 @@ else:
                         autoRetryCount = 0"""
     s = rep(s, old2, new2, "onPlayerError 换源")
     # 3. Reset autoRetryCount on STATE_READY
-    old3 = "                        _isLoading.value = false
-                        _error.value = null"
+    old3 = "                        _isLoading.value = false" + chr(10) + "                        _error.value = null"
     if s.count(old3) == 1:
-        new3 = "                        _isLoading.value = false
-                        autoRetryCount = 0 // [21v68] 出声了复位重试计数
-                        _error.value = null"
+        new3 = "                        _isLoading.value = false" + chr(10) + "                        autoRetryCount = 0 // [21v68] 出声了复位重试计数" + chr(10) + "                        _error.value = null"
         s = rep(s, old3, new3, "复位计数")
     assert "[21v68]" in s, "v68 标记未落"
     open(M, "w", encoding="utf-8").write(s)
