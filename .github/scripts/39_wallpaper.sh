@@ -2777,8 +2777,9 @@ else:
     new_loop = """        var lastError: Throwable? = null
         // [39pool18] 并行探活：几个源同时拿地址+探活，哪个先活就用哪个
         val results = kotlinx.coroutines.coroutineScope {
+            val scope = this
             targets.map { (sid, eng) ->
-                kotlinx.coroutines.async {
+                scope.async {
                     try {
                         LxRuntimeLog.add("【降级排查】开始尝试源: $sid")
                         val url = kotlinx.coroutines.withTimeout(8000L) {
