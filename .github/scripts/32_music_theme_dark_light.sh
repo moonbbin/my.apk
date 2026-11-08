@@ -12968,17 +12968,7 @@ else:
             }
         } catch (e: androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) {
             val code = e.responseCode
-            // [32v170] 301/302 安全跟随：读 Location 头，跟一次
-            if ((code == 301 || code == 302) && followRedirect) {
-                try {
-                    val loc = e.responseHeaders?.get("Location")?.firstOrNull()
-                    if (loc != null && loc != url && loc.isNotBlank()) {
-                        try { com.github.tvbox.osc.util.LxRuntimeLog.add("探活跟随重定向: " + url.take(60) + " -> " + loc.take(60)) } catch (_: Exception) { }
-                        val followed = probeUrlWithCode(loc, false)
-                        if (followed.first) return Pair(true, null)
-                    }
-                } catch (_: Exception) { }
-            }
+            // [32v170] 301/302 不跟随，直接返回错误码，池子冷 30 分钟（[32fix] responseHeaders 在此版本不可用，简化处理）
             try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活异常(ExoPlayer): InvalidResponseCode " + code + " " + url.take(80)) } catch (_: Exception) { }
             Pair(false, code)
         } catch (e: java.net.SocketTimeoutException) {
