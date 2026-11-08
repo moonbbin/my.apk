@@ -2584,6 +2584,9 @@ def rep(src, old, new, name):
 find_root()
 PA = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
 a = open(PA, encoding="utf-8").read()
+# [39pool16] 补协程 import（async/awaitAll/coroutineScope 需 import 才能用）
+if "import kotlinx.coroutines.async" not in a:
+    a = a.replace("import kotlinx.coroutines.withContext", "import kotlinx.coroutines.withContext\nimport kotlinx.coroutines.async\nimport kotlinx.coroutines.awaitAll\nimport kotlinx.coroutines.coroutineScope", 1)
 if "[39pool16]" in a:
     print("跳过（39 pool16 已应用）")
 else:
@@ -2612,7 +2615,7 @@ else:
             kotlinx.coroutines.withTimeout(2000L) {
                 kotlinx.coroutines.coroutineScope {
                     val jobs = engines.map { eng ->
-                        kotlinx.coroutines.async {
+                        async {
                             try {
                                 searchOnEngine(eng, keyword)
                             } catch (e: Exception) {
