@@ -2606,13 +2606,13 @@ else:
     // [39pool16] 并发搜所有池源：每个源用自己的方式搜，不共用主源 ID
     suspend fun searchAllPoolSources(keyword: String): List<Map<String, Any>> = withContext(Dispatchers.IO) {
         if (keyword.isBlank()) return@withContext emptyList()
-        val engines = getAllEngines()
+        val engines = getAllEngines().map { it.second }
         if (engines.isEmpty()) return@withContext emptyList()
         try {
-            withTimeout(2000L) {
-                coroutineScope {
+            kotlinx.coroutines.withTimeout(2000L) {
+                kotlinx.coroutines.coroutineScope {
                     val jobs = engines.map { eng ->
-                        async {
+                        kotlinx.coroutines.async {
                             try {
                                 searchOnEngine(eng, keyword)
                             } catch (e: Exception) {
@@ -2632,16 +2632,16 @@ else:
 
     // [39pool16] 在单个引擎上搜歌
     private suspend fun searchOnEngine(eng: LxScriptEngine, keyword: String): List<Map<String, Any>> {
-        return suspendCoroutine { cont ->
+        return kotlin.coroutines.suspendCoroutine { cont ->
             try {
                 eng.searchMusic(keyword) { result ->
                     result.fold(
                         onSuccess = { list -> cont.resumeWith(Result.success(list)) },
-                        onFailure = { e -> cont.resumeWith(Result.success(emptyList())) }
+                        onFailure = { e -> cont.resumeWith(Result.success(emptyList<Map<String, Any>>())) }
                     )
                 }
             } catch (e: Exception) {
-                cont.resumeWith(Result.success(emptyList()))
+                cont.resumeWith(Result.success(emptyList<Map<String, Any>>()))
             }
         }
     }
