@@ -2718,8 +2718,7 @@ else:
     # Replace platform/musicInfo with effPlatform/effInfo in the requestMusicUrl calls within this function
     # Find the function and replace the calls
     func_start = s.find("    suspend fun resolveUrlWithFallback(")
-    func_end = s.find("
-    fun ", func_start + 100)
+    func_end = s.find(chr(10) + "    fun ", func_start + 100)
     if func_end == -1:
         func_end = len(s)
     func_text = s[func_start:func_end]
