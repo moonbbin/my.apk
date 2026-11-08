@@ -2565,3 +2565,90 @@ else:
     print("OK [39pool15] 探活整合完成")
 PYEOF39P15
 echo "=== 39 pool15 完成 ==="
+
+# === 39 pool16: 并发搜所有池源，各源用自己的方式搜，不共用主源 ID（用户确认）===
+# 痛点：搜歌只走主源，返回的歌 ID 是主源平台的 ID，池子拿这个 ID 去问别的源，别的源查不到。删裤佬重进能播，就是因为主源变了，ID 对上了。
+# 修法：LxEngineHolder 加 searchAllPoolSources(keyword)：同时调池子里所有源的 searchMusic（每个源的 JS 脚本用自己的方式搜），2 秒限时，返回合并结果。11 号脚本 LxScriptEngine 加 searchMusic 方法。
+python3 << 'PYEOF39P16'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool16 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+PA = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+a = open(PA, encoding="utf-8").read()
+if "[39pool16]" in a:
+    print("跳过（39 pool16 已应用）")
+else:
+    # 在 resolveUrlWithFallback 函数后插入 searchAllPoolSources
+    start = a.find("    suspend fun resolveUrlWithFallback(")
+    assert start != -1, "pool16 锚点 resolveUrlWithFallback 起始未找到"
+    brace_start = a.find("{", start)
+    depth = 0
+    end = brace_start
+    for i in range(brace_start, len(a)):
+        if a[i] == "{":
+            depth += 1
+        elif a[i] == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    assert depth == 0, "pool16 锚点 resolveUrlWithFallback 花括号不配对"
+    new_func = '''
+    // [39pool16] 并发搜所有池源：每个源用自己的方式搜，不共用主源 ID
+    suspend fun searchAllPoolSources(keyword: String): List<Map<String, Any>> = withContext(Dispatchers.IO) {
+        if (keyword.isBlank()) return@withContext emptyList()
+        val engines = getAllEngines()
+        if (engines.isEmpty()) return@withContext emptyList()
+        try {
+            withTimeout(2000L) {
+                coroutineScope {
+                    val jobs = engines.map { eng ->
+                        async {
+                            try {
+                                searchOnEngine(eng, keyword)
+                            } catch (e: Exception) {
+                                try { LxRuntimeLog.add("【并发搜】源搜索失败: " + e.message) } catch (_: Exception) {}
+                                emptyList<Map<String, Any>>()
+                            }
+                        }
+                    }
+                    jobs.awaitAll().flatten()
+                }
+            }
+        } catch (e: Exception) {
+            try { LxRuntimeLog.add("【并发搜】搜索超时，返回已完成结果") } catch (_: Exception) {}
+            emptyList()
+        }
+    }
+
+    // [39pool16] 在单个引擎上搜歌
+    private suspend fun searchOnEngine(eng: LxScriptEngine, keyword: String): List<Map<String, Any>> {
+        return suspendCoroutine { cont ->
+            try {
+                eng.searchMusic(keyword) { result ->
+                    result.fold(
+                        onSuccess = { list -> cont.resumeWith(Result.success(list)) },
+                        onFailure = { e -> cont.resumeWith(Result.success(emptyList())) }
+                    )
+                }
+            } catch (e: Exception) {
+                cont.resumeWith(Result.success(emptyList()))
+            }
+        }
+    }
+'''
+    a = a[:end] + "\n" + new_func + a[end:]
+    assert "[39pool16]" in a, "pool16 标记未落"
+    open(PA, "w", encoding="utf-8").write(a)
+    print("OK [39pool16] 并发搜所有池源完成")
+PYEOF39P16
+echo "=== 39 pool16 完成 ==="
