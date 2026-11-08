@@ -12695,3 +12695,82 @@ else:
     print("OK 32 v165 验活失败记实因完成")
 PYEOF165
 echo "=== 32 v165 完成 ==="
+
+# === 32 v166: 验活先带 Range 试一次（用户确认）===
+# 痛点：isStreamUrlAlive 用 OkHttp GET 不带 Range，探针成功但 ExoPlayer（带 Range）播失败，探针拦不住死链。
+# 修法：先带 Range: bytes=0-1023 试一次，返回 200/206 算活；Range 不通再回退普通 GET（不带 Range），兼容 v164 的裤佬中转站场景。
+python3 << 'PYEOF32V166'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v166 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v166]" in s:
+    print("跳过（32 v166 已应用）")
+else:
+    old = """    // [32v121] 取地址时验活；[32v122] 改播放器式拿流；[32v164] 改走 OkHttp + 8 秒超时（HttpURLConnection 在裤佬/v7 中转站上探不通、播放器能播，同机对照）
+    fun isStreamUrlAlive(url: String): Boolean {
+        if (url.contains("level=undefined")) return false
+        return try {
+            val client = okhttp3.OkHttpClient.Builder()
+                .connectTimeout(8000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .readTimeout(8000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .followRedirects(true)
+                .build()
+            val req = okhttp3.Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36")
+                .get()
+                .build()
+            client.newCall(req).execute().use { resp ->
+                resp.code == 200 || resp.code == 206
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }"""
+    new = """    // [32v121] 取地址时验活；[32v122] 改播放器式拿流；[32v164] 改走 OkHttp + 8 秒超时；[32v166] 先带 Range 试一次（跟播放器一样），Range 通了才算活，Range 不通再回退普通 GET
+    fun isStreamUrlAlive(url: String): Boolean {
+        if (url.contains("level=undefined")) return false
+        val ua = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36"
+        fun probe(withRange: Boolean): Boolean {
+            return try {
+                val client = okhttp3.OkHttpClient.Builder()
+                    .connectTimeout(8000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    .readTimeout(8000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    .followRedirects(true)
+                    .build()
+                val builder = okhttp3.Request.Builder()
+                    .url(url)
+                    .header("User-Agent", ua)
+                if (withRange) {
+                    builder.header("Range", "bytes=0-1023")
+                }
+                val req = builder.get().build()
+                client.newCall(req).execute().use { resp ->
+                    resp.code == 200 || resp.code == 206
+                }
+            } catch (_: Exception) {
+                false
+            }
+        }
+        // 先带 Range 试（跟播放器一样），通了直接算活
+        if (probe(true)) return true
+        // Range 不通，回退普通 GET（兼容 v164 的裤佬中转站场景）
+        return probe(false)
+    }"""
+    s = rep(s, old, new, "验活先带 Range")
+    assert "[32v166]" in s, "v166 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v166 验活先带 Range 完成")
+PYEOF32V166
+echo "=== 32 v166 完成 ==="
