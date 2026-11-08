@@ -2863,36 +2863,40 @@ else:
     # 1. Add cache helper functions in LxEngineHolder
     old = "    var lastGoodSourceId: String? = null"
     new = """    var lastGoodSourceId: String? = null
-    // [39pool19] ID 映射缓存：内存版，Key=源平台_目标平台_原ID，Value=目标ID|时间戳，7 天过期，上限 500 条（[39fix] 改内存版，不用 SharedPreferences，不用 Context）
+    // [39pool19] ID 映射缓存：Key=源平台_目标平台_原ID，Value=目标ID|时间戳，7 天过期，上限 500 条
+    private const val ID_MAP_PREFS = "id_map_cache"
     private const val ID_MAP_EXPIRE_MS = 7 * 24 * 60 * 60 * 1000L
     private const val ID_MAP_MAX = 500
-    private val idMapCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private fun idMapPrefs() = try { appContext?.getSharedPreferences(ID_MAP_PREFS, 0) } catch (_: Exception) { null }
     fun lookupIdMap(srcPlatform: String, dstPlatform: String, srcId: String): String? {
         return try {
+            val prefs = idMapPrefs() ?: return null
             val key = srcPlatform.lowercase() + "_" + dstPlatform.lowercase() + "_" + srcId
-            val v = idMapCache[key] ?: return null
+            val v = prefs.getString(key, null) ?: return null
             val parts = v.split("|")
-            if (parts.size != 2) { idMapCache.remove(key); return null }
+            if (parts.size != 2) { prefs.edit().remove(key).apply(); return null }
             val ts = parts[1].toLongOrNull() ?: 0L
-            if (System.currentTimeMillis() - ts > ID_MAP_EXPIRE_MS) { idMapCache.remove(key); return null }
+            if (System.currentTimeMillis() - ts > ID_MAP_EXPIRE_MS) { prefs.edit().remove(key).apply(); return null }
             parts[0].takeIf { it.isNotBlank() }
         } catch (_: Exception) { null }
     }
     fun saveIdMap(srcPlatform: String, dstPlatform: String, srcId: String, dstId: String) {
         try {
+            val prefs = idMapPrefs() ?: return
             val key = srcPlatform.lowercase() + "_" + dstPlatform.lowercase() + "_" + srcId
             val v = dstId + "|" + System.currentTimeMillis().toString()
-            if (idMapCache.size >= ID_MAP_MAX && !idMapCache.containsKey(key)) {
-                val oldest = idMapCache.entries.minByOrNull { it.value.split("|").getOrNull(1)?.toLongOrNull() ?: 0L }?.key
-                if (oldest != null) idMapCache.remove(oldest)
+            val all = prefs.all
+            if (all.size >= ID_MAP_MAX && !all.containsKey(key)) {
+                val oldest = all.entries.minByOrNull { (it.value as? String)?.split("|")?.getOrNull(1)?.toLongOrNull() ?: 0L }?.key
+                if (oldest != null) prefs.edit().remove(oldest).apply()
             }
-            idMapCache[key] = v
+            prefs.edit().putString(key, v).apply()
         } catch (_: Exception) { }
     }
     fun deleteIdMap(srcPlatform: String, dstPlatform: String, srcId: String) {
         try {
             val key = srcPlatform.lowercase() + "_" + dstPlatform.lowercase() + "_" + srcId
-            idMapCache.remove(key)
+            idMapPrefs()?.edit()?.remove(key)?.apply()
         } catch (_: Exception) { }
     }"""
     s = rep(s, old, new, "缓存函数")
@@ -2964,230 +2968,3 @@ else:
     print("OK 39pool19 ID 映射缓存完成")
 PYEOF19
 echo "=== 39pool19 完成 ==="
-
-# === 39pool20: 分级冷却 + 源级熔断（用户确认，战役三）===
-# 痛点：所有失败都冷 5 分钟，404 死链反复试浪费时间；mcp 301 是 http→https 跳转，直接判死太浪费。
-# 修法：1）probeUrlWithCode 带错误码回来；2）404/410 只冷单首歌（源+歌 Key），301 冷整个源 30 分钟，超时冷 5 分钟；3）源级熔断：1 分钟内同一源连续 3 次 404，整个源冷 30 分钟并清计数器；4）301/302 读 Location 头跟随一次。
-python3 << 'PYEOF20'
-import os
-
-def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
-        os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
-
-def rep(src, old, new, name):
-    assert src.count(old) == 1, "pool20 锚点 %s: %d" % (name, src.count(old))
-    return src.replace(old, new, 1)
-
-find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
-s = open(M, encoding="utf-8").read()
-if "[39pool20]" in s:
-    print("跳过（39pool20 已应用）")
-else:
-    # 1. Add per-song cooldown map and markSourceCoolDownByError
-    old = "    fun markSourceCoolDown(sourceId: String, coolDownMs: Long = 300000) { // [39pool6] 默认冷却 5 分钟\n        sourceCoolDownUntil[sourceId] = System.currentTimeMillis() + coolDownMs\n    }"
-    new = """    fun markSourceCoolDown(sourceId: String, coolDownMs: Long = 300000) { // [39pool6] 默认冷却 5 分钟
-        sourceCoolDownUntil[sourceId] = System.currentTimeMillis() + coolDownMs
-    }
-    // [39pool20] 单首歌冷却：Key=源ID|歌ID，404/410 只冷这首歌不冷整个源
-    private val songSourceCoolDownUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
-    fun isSongSourceCoolDown(sourceId: String, songId: String): Boolean {
-        val key = sourceId + "|" + songId
-        val until = songSourceCoolDownUntil[key] ?: return false
-        if (System.currentTimeMillis() >= until) { songSourceCoolDownUntil.remove(key); return false }
-        return true
-    }
-    // [39pool20] 分级冷却 + 源级熔断：404/410 冷单首歌 30 分钟并计数，1 分钟内同一源 3 次 404 则整个源冷 30 分钟；301 冷整个源 30 分钟；超时冷 5 分钟
-    fun markSourceCoolDownByError(sourceId: String, songId: String?, errorCode: Int?) {
-        when (errorCode) {
-            404, 410 -> {
-                // 单首歌冷却 30 分钟
-                if (songId != null) {
-                    val key = sourceId + "|" + songId
-                    songSourceCoolDownUntil[key] = System.currentTimeMillis() + 30 * 60 * 1000L
-                }
-                // 熔断计数：1 分钟内同一源连续 3 次 404，整个源冷 30 分钟
-                try {
-                    val now = System.currentTimeMillis()
-                    val lastTime = com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime[sourceId] ?: 0L
-                    val count = if (now - lastTime > 60000L) 1 else (com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount[sourceId] ?: 0) + 1
-                    com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount[sourceId] = count
-                    com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime[sourceId] = now
-                    if (count >= 3) {
-                        sourceCoolDownUntil[sourceId] = now + 30 * 60 * 1000L
-                        com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount.remove(sourceId)
-                        com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime.remove(sourceId)
-                        try { com.github.tvbox.osc.util.LxRuntimeLog.add("【熔断】源 " + sourceId + " 短时间内连续 3 次 404，全面冷却 30 分钟") } catch (_: Exception) { }
-                    }
-                } catch (_: Exception) { }
-            }
-            301, 302 -> {
-                sourceCoolDownUntil[sourceId] = System.currentTimeMillis() + 30 * 60 * 1000L
-            }
-            else -> {
-                sourceCoolDownUntil[sourceId] = System.currentTimeMillis() + 300000L
-            }
-        }
-    }"""
-    s = rep(s, old, new, "分级冷却")
-    assert "[39pool20]" in s, "pool20 标记未落"
-    open(M, "w", encoding="utf-8").write(s)
-    print("OK 39pool20 分级冷却完成")
-PYEOF20
-echo "=== 39pool20 完成 ==="
-
-# === 39pool20b: 池子探活改调 probeUrlWithCode + 分级冷却（战役三接线）===
-python3 << 'PYEOF20B'
-import os
-
-def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
-        os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
-
-def rep(src, old, new, name):
-    assert src.count(old) == 1, "pool20b 锚点 %s: %d" % (name, src.count(old))
-    return src.replace(old, new, 1)
-
-find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
-s = open(M, encoding="utf-8").read()
-if "[39pool20b]" in s:
-    print("跳过（39pool20b 已应用）")
-else:
-    # Modify the pool18 parallel probe to use probeUrlWithCode and markSourceCoolDownByError
-    old = """                        if (!url.isNullOrBlank()) {
-                            LxRuntimeLog.add("【降级排查】源 $sid 拿到地址，开始探活...")
-                            val isAlive = try {
-                                LxPlayerManager.isStreamUrlAlive(url)
-                            } catch (e: Exception) {
-                                false
-                            }
-                            if (isAlive) {
-                                LxRuntimeLog.add("【降级排查】源 $sid 探活成功，确定使用！")
-                                sid to url
-                            } else {
-                                LxRuntimeLog.add("【降级排查】源 $sid 探活失败（死链/防盗链），尝试下一个")
-                                markSourceCoolDown(sid)
-                                null
-                            }
-                        } else {
-                            null
-                        }"""
-    new = """                        if (!url.isNullOrBlank()) {
-                            LxRuntimeLog.add("【降级排查】源 $sid 拿到地址，开始探活...")
-                            val (isAlive, errCode) = try {
-                                LxPlayerManager.probeUrlWithCode(url)
-                            } catch (e: Exception) {
-                                Pair(false, null)
-                            }
-                            if (isAlive) {
-                                LxRuntimeLog.add("【降级排查】源 $sid 探活成功，确定使用！")
-                                sid to url
-                            } else {
-                                LxRuntimeLog.add("【降级排查】源 $sid 探活失败（死链/防盗链），尝试下一个")
-                                // [39pool20b] 分级冷却：404 只冷单首歌+熔断计数，301 冷整个源 30 分钟，超时冷 5 分钟
-                                val songIdForCool = (musicInfo["songId"] ?: musicInfo["id"] ?: "").toString().takeIf { it.isNotBlank() }
-                                markSourceCoolDownByError(sid, songIdForCool, errCode)
-                                null
-                            }
-                        } else {
-                            null
-                        }"""
-    s = rep(s, old, new, "并行探活接线")
-    assert "[39pool20b]" in s or "probeUrlWithCode" in s, "pool20b 标记未落"
-    open(M, "w", encoding="utf-8").write(s)
-    print("OK 39pool20b 池子探活接线完成")
-PYEOF20B
-echo "=== 39pool20b 完成 ==="
-
-# === 39pool20 fix: 补单歌冷却过滤 + 计数器竞态 + 内存清理（用户确认，战役三修复）===
-python3 << 'PYEOF20FIX'
-import os
-
-def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
-        os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
-
-def rep(src, old, new, name):
-    assert src.count(old) == 1, "pool20fix 锚点 %s: %d" % (name, src.count(old))
-    return src.replace(old, new, 1)
-
-find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
-s = open(M, encoding="utf-8").read()
-if "[39pool20fix]" in s:
-    print("跳过（39pool20fix 已应用）")
-else:
-    # 1. Fix counter race: use merge() instead of read-modify-write
-    old1 = """                // 熔断计数：1 分钟内同一源连续 3 次 404，整个源冷 30 分钟
-                try {
-                    val now = System.currentTimeMillis()
-                    val lastTime = com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime[sourceId] ?: 0L
-                    val count = if (now - lastTime > 60000L) 1 else (com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount[sourceId] ?: 0) + 1
-                    com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount[sourceId] = count
-                    com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime[sourceId] = now
-                    if (count >= 3) {
-                        sourceCoolDownUntil[sourceId] = now + 30 * 60 * 1000L
-                        com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount.remove(sourceId)
-                        com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime.remove(sourceId)
-                        try { com.github.tvbox.osc.util.LxRuntimeLog.add("【熔断】源 " + sourceId + " 短时间内连续 3 次 404，全面冷却 30 分钟") } catch (_: Exception) { }
-                    }
-                } catch (_: Exception) { }"""
-    new1 = """                // 熔断计数：1 分钟内同一源连续 3 次 404，整个源冷 30 分钟（[39pool20fix] 用 merge 原子操作防竞态）
-                try {
-                    val now = System.currentTimeMillis()
-                    val lastTime = com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime[sourceId] ?: 0L
-                    val count = if (now - lastTime > 60000L) {
-                        com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount[sourceId] = 1
-                        1
-                    } else {
-                        com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount.merge(sourceId, 1, Int::plus) ?: 1
-                    }
-                    com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime[sourceId] = now
-                    if (count >= 3) {
-                        sourceCoolDownUntil[sourceId] = now + 30 * 60 * 1000L
-                        com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount.remove(sourceId)
-                        com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime.remove(sourceId)
-                        try { com.github.tvbox.osc.util.LxRuntimeLog.add("【熔断】源 " + sourceId + " 短时间内连续 3 次 404，全面冷却 30 分钟") } catch (_: Exception) { }
-                    }
-                } catch (_: Exception) { }"""
-    s = rep(s, old1, new1, "计数器竞态")
-    # 2. Add memory cleanup in markSourceCoolDownByError for songSourceCoolDownUntil
-    old2 = """            404, 410 -> {
-                // 单首歌冷却 30 分钟
-                if (songId != null) {
-                    val key = sourceId + "|" + songId
-                    songSourceCoolDownUntil[key] = System.currentTimeMillis() + 30 * 60 * 1000L
-                }"""
-    new2 = """            404, 410 -> {
-                // 单首歌冷却 30 分钟（[39pool20fix] 写时清理过期项，超 500 条清全表防内存泄漏）
-                if (songId != null) {
-                    val key = sourceId + "|" + songId
-                    songSourceCoolDownUntil[key] = System.currentTimeMillis() + 30 * 60 * 1000L
-                    if (songSourceCoolDownUntil.size > 500) {
-                        try {
-                            val now2 = System.currentTimeMillis()
-                            val iter = songSourceCoolDownUntil.entries.iterator()
-                            while (iter.hasNext()) { if (iter.next().value < now2) iter.remove() }
-                            if (songSourceCoolDownUntil.size > 500) songSourceCoolDownUntil.clear()
-                        } catch (_: Exception) { }
-                    }
-                }"""
-    s = rep(s, old2, new2, "内存清理")
-    # 3. Add per-song cooldown check in targets filtering (pool18 parallel probe)
-    # Find the partition line and add song check
-    old3 = "        val (goodTargets, coolTargets) = targets.partition { !isSourceCoolDown(it.first) }"
-    new3 = "        val songIdForFilter = (musicInfo[\"songId\"] ?: musicInfo[\"id\"] ?: \"\").toString()\n        val (goodTargets, coolTargets) = targets.partition { !isSourceCoolDown(it.first) && !isSongSourceCoolDown(it.first, songIdForFilter) } // [39pool20fix] 单歌冷却过滤：源冷或单歌冷都跳过"
-    if s.count(old3) == 1:
-        s = rep(s, old3, new3, "单歌过滤")
-    else:
-        print("WARN: partition line count=" + str(s.count(old3)) + ", skip")
-    assert "[39pool20fix]" in s, "pool20fix 标记未落"
-    open(M, "w", encoding="utf-8").write(s)
-    print("OK 39pool20fix 完成")
-PYEOF20FIX
-echo "=== 39pool20fix 完成 ==="
