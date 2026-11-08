@@ -4055,10 +4055,12 @@ else:
     old2 = """                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                         Log.e(TAG,"播错",error)
                         _isLoading.value = false
+                        setChangingTrack(false) // [21v43] 报错先解旧锁，后续自动切歌会重新置位
                         val code = error.errorCode"""
     new2 = """                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                         Log.e(TAG,"播错",error)
                         _isLoading.value = false
+                        setChangingTrack(false) // [21v43] 报错先解旧锁，后续自动切歌会重新置位
                         val code = error.errorCode
                         // [21v68] 播放中途断流兜底：2004/IO_BAD_HTTP_STATUS 先静默换源重播同一首歌，不直接报错或切下一首
                         val isSourceError = code == 2004 || code == androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS || code == androidx.media3.common.PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE
