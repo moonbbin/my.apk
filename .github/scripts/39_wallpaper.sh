@@ -3106,3 +3106,92 @@ else:
     print("OK 39pool20b 池子探活接线完成")
 PYEOF20B
 echo "=== 39pool20b 完成 ==="
+
+# === 39pool20 fix: 补单歌冷却过滤 + 计数器竞态 + 内存清理（用户确认，战役三修复）===
+python3 << 'PYEOF20FIX'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool20fix 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[39pool20fix]" in s:
+    print("跳过（39pool20fix 已应用）")
+else:
+    # 1. Fix counter race: use merge() instead of read-modify-write
+    old1 = """                // 熔断计数：1 分钟内同一源连续 3 次 404，整个源冷 30 分钟
+                try {
+                    val now = System.currentTimeMillis()
+                    val lastTime = com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime[sourceId] ?: 0L
+                    val count = if (now - lastTime > 60000L) 1 else (com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount[sourceId] ?: 0) + 1
+                    com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount[sourceId] = count
+                    com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime[sourceId] = now
+                    if (count >= 3) {
+                        sourceCoolDownUntil[sourceId] = now + 30 * 60 * 1000L
+                        com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount.remove(sourceId)
+                        com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime.remove(sourceId)
+                        try { com.github.tvbox.osc.util.LxRuntimeLog.add("【熔断】源 " + sourceId + " 短时间内连续 3 次 404，全面冷却 30 分钟") } catch (_: Exception) { }
+                    }
+                } catch (_: Exception) { }"""
+    new1 = """                // 熔断计数：1 分钟内同一源连续 3 次 404，整个源冷 30 分钟（[39pool20fix] 用 merge 原子操作防竞态）
+                try {
+                    val now = System.currentTimeMillis()
+                    val lastTime = com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime[sourceId] ?: 0L
+                    val count = if (now - lastTime > 60000L) {
+                        com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount[sourceId] = 1
+                        1
+                    } else {
+                        com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount.merge(sourceId, 1, Int::plus) ?: 1
+                    }
+                    com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime[sourceId] = now
+                    if (count >= 3) {
+                        sourceCoolDownUntil[sourceId] = now + 30 * 60 * 1000L
+                        com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount.remove(sourceId)
+                        com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime.remove(sourceId)
+                        try { com.github.tvbox.osc.util.LxRuntimeLog.add("【熔断】源 " + sourceId + " 短时间内连续 3 次 404，全面冷却 30 分钟") } catch (_: Exception) { }
+                    }
+                } catch (_: Exception) { }"""
+    s = rep(s, old1, new1, "计数器竞态")
+    # 2. Add memory cleanup in markSourceCoolDownByError for songSourceCoolDownUntil
+    old2 = """            404, 410 -> {
+                // 单首歌冷却 30 分钟
+                if (songId != null) {
+                    val key = sourceId + "|" + songId
+                    songSourceCoolDownUntil[key] = System.currentTimeMillis() + 30 * 60 * 1000L
+                }"""
+    new2 = """            404, 410 -> {
+                // 单首歌冷却 30 分钟（[39pool20fix] 写时清理过期项，超 500 条清全表防内存泄漏）
+                if (songId != null) {
+                    val key = sourceId + "|" + songId
+                    songSourceCoolDownUntil[key] = System.currentTimeMillis() + 30 * 60 * 1000L
+                    if (songSourceCoolDownUntil.size > 500) {
+                        try {
+                            val now2 = System.currentTimeMillis()
+                            val iter = songSourceCoolDownUntil.entries.iterator()
+                            while (iter.hasNext()) { if (iter.next().value < now2) iter.remove() }
+                            if (songSourceCoolDownUntil.size > 500) songSourceCoolDownUntil.clear()
+                        } catch (_: Exception) { }
+                    }
+                }"""
+    s = rep(s, old2, new2, "内存清理")
+    # 3. Add per-song cooldown check in targets filtering (pool18 parallel probe)
+    # Find the partition line and add song check
+    old3 = "        val (goodTargets, coolTargets) = targets.partition { !isSourceCoolDown(it.first) }"
+    new3 = "        val songIdForFilter = (musicInfo[\"songId\"] ?: musicInfo[\"id\"] ?: \"\").toString()\n        val (goodTargets, coolTargets) = targets.partition { !isSourceCoolDown(it.first) && !isSongSourceCoolDown(it.first, songIdForFilter) } // [39pool20fix] 单歌冷却过滤：源冷或单歌冷都跳过"
+    if s.count(old3) == 1:
+        s = rep(s, old3, new3, "单歌过滤")
+    else:
+        print("WARN: partition line count=" + str(s.count(old3)) + ", skip")
+    assert "[39pool20fix]" in s, "pool20fix 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 39pool20fix 完成")
+PYEOF20FIX
+echo "=== 39pool20fix 完成 ==="
