@@ -12820,3 +12820,68 @@ else:
     print("OK 32 v167 验活完全模拟 ExoPlayer 完成")
 PYEOF167
 echo "=== 32 v167 完成 ==="
+
+# === 32 v168: 验活用 ExoPlayer 自己的数据源探（用户确认）===
+# 痛点：探活（OkHttp）说 mcp 地址活、ExoPlayer 一播就 2004。两个客户端对同一地址判断不一致，探活再调参数也模拟不准。
+# 修法：isStreamUrlAlive 改用 ExoPlayer 的 DefaultHttpDataSource 直接 open() 读 1KB，能打开能读才算活；打不开/抛异常直接判死。探活和播放用同一个客户端，探活过了播放一定过。
+python3 << 'PYEOF168'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v168]" in s:
+    print("跳过（32 v168 已应用）")
+else:
+    start_marker = "    // [32v121] 取地址时验活"
+    start = s.find(start_marker)
+    assert start != -1, "v168 锚点：函数头未找到"
+    brace_start = s.find("{", s.find("fun isStreamUrlAlive", start))
+    assert brace_start != -1, "v168 锚点：函数左括号未找到"
+    depth = 0
+    i = brace_start
+    while i < len(s):
+        if s[i] == '{':
+            depth += 1
+        elif s[i] == '}':
+            depth -= 1
+            if depth == 0:
+                break
+        i += 1
+    assert depth == 0, "v168 锚点：括号不平衡"
+    func_end = i + 1
+    new_func = """    // [32v121] 取地址时验活；[32v122] 改播放器式拿流；[32v164] 改走 OkHttp + 8 秒超时；[32v166] 先带 Range 试一次；[32v167] Range 改 64KB 去掉普通 GET 回退；[32v168] 改用 ExoPlayer 自己的 DefaultHttpDataSource 探活（用户确认：探活和播放用同一个客户端，探活过了播放一定过）
+    fun isStreamUrlAlive(url: String): Boolean {
+        if (url.contains("level=undefined")) return false
+        val ua = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36"
+        return try {
+            val factory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+                .setUserAgent(ua)
+                .setConnectTimeoutMs(8000)
+                .setReadTimeoutMs(8000)
+            val ds = factory.createDataSource()
+            try {
+                val uri = android.net.Uri.parse(url)
+                ds.open(androidx.media3.datasource.DataSpec(uri))
+                val buf = ByteArray(1024)
+                val n = ds.read(buf, 0, 1024)
+                n >= 0
+            } finally {
+                try { ds.close() } catch (_: Exception) { }
+            }
+        } catch (e: Exception) {
+            try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活异常(ExoPlayer): " + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
+            false
+        }
+    }"""
+    s = s[:start] + new_func + s[func_end:]
+    assert "[32v168]" in s, "v168 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v168 验活用 ExoPlayer 数据源完成")
+PYEOF168
+echo "=== 32 v168 完成 ==="
