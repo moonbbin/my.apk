@@ -12784,3 +12784,39 @@ else:
     print("OK 32 v166 验活先带 Range 完成")
 PYEOF32V166
 echo "=== 32 v166 完成 ==="
+
+# === 32 v167: 验活完全模拟 ExoPlayer（用户确认选 1）===
+# 痛点：探活（OkHttp 带 Range: bytes=0-1023）说 mcp 地址是活的，ExoPlayer 一播就 2004。
+# 修法：Range 改 bytes=0-65535（64KB，跟 ExoPlayer 初始缓冲块一致），去掉普通 GET 回退——Range 不通直接判死。
+python3 << 'PYEOF167'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v167 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v167]" in s:
+    print("跳过（32 v167 已应用）")
+else:
+    old = 'builder.header("Range", "bytes=0-1023")'
+    new = 'builder.header("Range", "bytes=0-65535") // [32v167] 完全模拟 ExoPlayer：64KB 初始缓冲块'
+    s = rep(s, old, new, "Range 改 64KB")
+    old2 = """        // 先带 Range 试（跟播放器一样），通了直接算活
+        if (probe(true)) return true
+        // Range 不通，回退普通 GET（兼容 v164 的裤佬中转站场景）
+        return probe(false)"""
+    new2 = """        return probe(true) // [32v167] 只认 Range，Range 不通直接判死，不回退普通 GET"""
+    s = rep(s, old2, new2, "去掉普通 GET 回退")
+    assert "[32v167]" in s, "v167 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v167 验活完全模拟 ExoPlayer 完成")
+PYEOF167
+echo "=== 32 v167 完成 ==="
