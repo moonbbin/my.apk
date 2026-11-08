@@ -12945,10 +12945,7 @@ if "[32v170]" in s:
 else:
     # 1. Add fail count maps (for circuit breaker in 39 script)
     old = "    private var player: ExoPlayer? = null"
-    new = "    private var player: ExoPlayer? = null
-    // [32v170] 源级熔断计数：源 ID -> 连续 404 次数；源 ID -> 上次 404 时间戳（1 分钟无新 404 则重置）
-    val sourceFailCount = java.util.concurrent.ConcurrentHashMap<String, Int>()
-    val sourceFailTime = java.util.concurrent.ConcurrentHashMap<String, Long>()"
+    new = "    private var player: ExoPlayer? = null" + chr(10) + "    // [32v170] 源级熔断计数：源 ID -> 连续 404 次数；源 ID -> 上次 404 时间戳（1 分钟无新 404 则重置）" + chr(10) + "    val sourceFailCount = java.util.concurrent.ConcurrentHashMap<String, Int>()" + chr(10) + "    val sourceFailTime = java.util.concurrent.ConcurrentHashMap<String, Long>()"
     s = rep(s, old, new, "熔断计数")
     # 2. Add probeUrlWithCode function before isStreamUrlAlive
     old2 = "    fun isStreamUrlAlive(url: String): Boolean {"
