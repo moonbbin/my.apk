@@ -4025,3 +4025,98 @@ else:
 
 PYEOF65
 echo "=== 21 v65 完成 ==="
+
+# === 21 v68: 播放中途断流兜底（用户确认执行，战役一）===
+# 核心逻辑：onPlayerError 拦截 PlaybackException（重点 ERROR_CODE_IO_BAD_HTTP_STATUS 或 2004），不立刻走 tryAutoNextOnFailure()，先静默换源重播同一首歌。
+# 规范：1）autoRetryCount 防死循环，最多 2 次，成功出声清零；2）LxEngineHolder.lastGoodSourceId 作死源，加入 excludedIds；3）CoroutineScope(Dispatchers.IO).launch 异步重试，withContext(Dispatchers.Main) 切回主线程 play()；4）requestIdCounter 竞态防护；5）进度继承：记 player.currentPosition，新链接时长相近则 seekTo。
+python3 << 'PYEOF68'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v68 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(M, encoding="utf-8").read()
+if "[21v68]" in s:
+    print("跳过（21 v68 已应用）")
+else:
+    # 1. Add fields
+    old = "    private var player: ExoPlayer? = null"
+    new = "    private var player: ExoPlayer? = null
+    @Volatile private var autoRetryCount = 0 // [21v68] 播放中途断流重试计数，最多 2 次
+    private val requestIdCounter = java.util.concurrent.atomic.AtomicInteger(0) // [21v68] 竞态防护"
+    s = rep(s, old, new, "字段")
+    # 2. Modify onPlayerError
+    old2 = """                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        Log.e(TAG,"播错",error)
+                        _isLoading.value = false
+                        val code = error.errorCode"""
+    new2 = """                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        Log.e(TAG,"播错",error)
+                        _isLoading.value = false
+                        val code = error.errorCode
+                        // [21v68] 播放中途断流兜底：2004/IO_BAD_HTTP_STATUS 先静默换源重播同一首歌，不直接报错或切下一首
+                        val isSourceError = code == 2004 || code == androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS || code == androidx.media3.common.PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE
+                        if (isSourceError && autoRetryCount < 2) {
+                            autoRetryCount++
+                            val myReqId = requestIdCounter.incrementAndGet()
+                            val savedPos = try { player?.currentPosition ?: 0L } catch (_: Exception) { 0L }
+                            try { com.github.tvbox.osc.util.LxRuntimeLog.add("播放中途断流，静默换源重试 " + autoRetryCount + "/2: " + _currentTitle.value) } catch (_: Exception) { }
+                            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                try {
+                                    val song = try { playQueue.getOrNull(queueIndex) } catch (_: Exception) { null } ?: return@launch
+                                    val songId = song["songId"] ?: return@launch
+                                    val platform = song["platform"] ?: "wy"
+                                    val title = song["title"] ?: ""
+                                    val artist = song["artist"] ?: ""
+                                    val pic = song["picUrl"] ?: ""
+                                    val musicInfo = mapOf("id" to songId, "songId" to songId, "songmid" to songId, "name" to title, "title" to title, "artist" to artist)
+                                    val failedSid = com.github.tvbox.osc.ui.activity.LxEngineHolder.lastGoodSourceId
+                                    val excluded = if (failedSid != null) setOf(failedSid) else emptySet()
+                                    val result = com.github.tvbox.osc.ui.activity.LxEngineHolder.resolveUrlWithFallback(platform, musicInfo, "lossless", excluded)
+                                    val newUrl = result.second
+                                    if (newUrl.isBlank()) return@launch
+                                    if (requestIdCounter.get() != myReqId) return@launch
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                        if (requestIdCounter.get() != myReqId) return@withContext
+                                        play(newUrl, title, artist, pic)
+                                        if (savedPos > 5000) {
+                                            try {
+                                                val dur = player?.duration ?: 0L
+                                                if (dur > 0 && kotlin.math.abs(dur - savedPos) < dur * 0.2) {
+                                                    player?.seekTo(savedPos)
+                                                } else if (dur <= 0) {
+                                                    player?.seekTo(savedPos)
+                                                }
+                                            } catch (_: Exception) { }
+                                        }
+                                        try { com.github.tvbox.osc.util.LxRuntimeLog.add("换源成功，继续播: " + title) } catch (_: Exception) { }
+                                    }
+                                } catch (e: Exception) {
+                                    try { com.github.tvbox.osc.util.LxRuntimeLog.add("换源失败: " + (e.message ?: "").take(80)) } catch (_: Exception) { }
+                                }
+                            }
+                            return
+                        }
+                        autoRetryCount = 0"""
+    s = rep(s, old2, new2, "onPlayerError 换源")
+    # 3. Reset autoRetryCount on STATE_READY
+    old3 = "                        _isLoading.value = false
+                        _error.value = null"
+    if s.count(old3) == 1:
+        new3 = "                        _isLoading.value = false
+                        autoRetryCount = 0 // [21v68] 出声了复位重试计数
+                        _error.value = null"
+        s = rep(s, old3, new3, "复位计数")
+    assert "[21v68]" in s, "v68 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 21 v68 播放中途断流兜底完成")
+PYEOF68
+echo "=== 21 v68 完成 ==="
