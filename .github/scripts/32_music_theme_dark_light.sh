@@ -12921,3 +12921,135 @@ else:
     print("OK 32 v169 探活只开连接完成")
 PYEOF169
 echo "=== 32 v169 完成 ==="
+
+# === 32 v170: 探活带错误码 + 安全重定向跟随（用户确认，战役三）===
+# 痛点：isStreamUrlAlive 只回 true/false，池子不知道是 404 还是超时，没法分级冷却；mcp 的 301 是 http→https 跳转，直接判死太浪费。
+# 修法：新增 probeUrlWithCode(url, followRedirect) 返回 Pair<是否存活, 错误码>；301/302 时读 Location 头跟随一次（最多 1 次防循环）；isStreamUrlAlive 改成 wrapper 调它。另加 sourceFailCount/sourceFailTime 供 39 脚本熔断用。
+python3 << 'PYEOF170'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v170 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v170]" in s:
+    print("跳过（32 v170 已应用）")
+else:
+    # 1. Add fail count maps (for circuit breaker in 39 script)
+    old = "    private var player: ExoPlayer? = null"
+    new = "    private var player: ExoPlayer? = null
+    // [32v170] 源级熔断计数：源 ID -> 连续 404 次数；源 ID -> 上次 404 时间戳（1 分钟无新 404 则重置）
+    val sourceFailCount = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    val sourceFailTime = java.util.concurrent.ConcurrentHashMap<String, Long>()"
+    s = rep(s, old, new, "熔断计数")
+    # 2. Add probeUrlWithCode function before isStreamUrlAlive
+    old2 = "    fun isStreamUrlAlive(url: String): Boolean {"
+    new2 = """    // [32v170] 探活带错误码：返回 Pair(是否存活, 错误码)，301/302 跟随 Location 一次
+    fun probeUrlWithCode(url: String, followRedirect: Boolean = true): Pair<Boolean, Int?> {
+        if (url.contains("level=undefined")) return Pair(false, null)
+        val ua = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36"
+        return try {
+            val factory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+                .setUserAgent(ua)
+                .setConnectTimeoutMs(8000)
+                .setReadTimeoutMs(8000)
+            val ds = factory.createDataSource()
+            try {
+                val uri = android.net.Uri.parse(url)
+                ds.open(androidx.media3.datasource.DataSpec(uri))
+                Pair(true, null)
+            } finally {
+                try { ds.close() } catch (_: Exception) { }
+            }
+        } catch (e: androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) {
+            val code = e.responseCode
+            // [32v170] 301/302 安全跟随：读 Location 头，跟一次
+            if ((code == 301 || code == 302) && followRedirect) {
+                try {
+                    val loc = e.responseHeaders?.get("Location")?.firstOrNull()
+                    if (loc != null && loc != url && loc.isNotBlank()) {
+                        try { com.github.tvbox.osc.util.LxRuntimeLog.add("探活跟随重定向: " + url.take(60) + " -> " + loc.take(60)) } catch (_: Exception) { }
+                        val followed = probeUrlWithCode(loc, false)
+                        if (followed.first) return Pair(true, null)
+                    }
+                } catch (_: Exception) { }
+            }
+            try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活异常(ExoPlayer): InvalidResponseCode " + code + " " + url.take(80)) } catch (_: Exception) { }
+            Pair(false, code)
+        } catch (e: java.net.SocketTimeoutException) {
+            try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活异常(ExoPlayer): SocketTimeout " + url.take(80)) } catch (_: Exception) { }
+            Pair(false, -1)
+        } catch (e: Exception) {
+            try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活异常(ExoPlayer): " + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
+            Pair(false, null)
+        }
+    }
+    fun isStreamUrlAlive(url: String): Boolean {"""
+    s = rep(s, old2, new2, "probeUrlWithCode")
+    # 3. Modify isStreamUrlAlive to call probeUrlWithCode (keep backward compat)
+    old3 = """    fun isStreamUrlAlive(url: String): Boolean {
+        if (url.contains("level=undefined")) return false
+        val ua = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36"
+        return try {
+            val factory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+                .setUserAgent(ua)
+                .setConnectTimeoutMs(8000)
+                .setReadTimeoutMs(8000)
+            val ds = factory.createDataSource()
+            try {
+                val uri = android.net.Uri.parse(url)
+                ds.open(androidx.media3.datasource.DataSpec(uri))
+                val buf = ByteArray(1024)
+                val n = ds.read(buf, 0, 1024)
+                n >= 0
+            } finally {
+                try { ds.close() } catch (_: Exception) { }
+            }
+        } catch (e: Exception) {
+            try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活异常(ExoPlayer): " + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
+            false
+        }
+    }"""
+    new3 = """    fun isStreamUrlAlive(url: String): Boolean {
+        return probeUrlWithCode(url).first
+    }"""
+    # This old3 might have v169 modification (only open, no read). Let's try a more flexible match
+    if s.count(old3) == 1:
+        s = rep(s, old3, new3, "isStreamUrlAlive wrapper")
+    else:
+        # Try to find the function and replace it by brace matching
+        import re
+        m = re.search(r'    fun isStreamUrlAlive\(url: String\): Boolean \{', s)
+        if m:
+            start = m.start()
+            # Find matching brace
+            brace_start = s.find('{', start)
+            depth = 0
+            i = brace_start
+            while i < len(s):
+                if s[i] == '{':
+                    depth += 1
+                elif s[i] == '}':
+                    depth -= 1
+                    if depth == 0:
+                        break
+                i += 1
+            func_end = i + 1
+            s = s[:start] + new3 + s[func_end:]
+            print("OK: isStreamUrlAlive replaced by brace matching")
+        else:
+            print("FAIL: isStreamUrlAlive not found")
+            exit(1)
+    assert "[32v170]" in s, "v170 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v170 探活带错误码完成")
+PYEOF170
+echo "=== 32 v170 完成 ==="

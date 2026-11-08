@@ -2968,3 +2968,141 @@ else:
     print("OK 39pool19 ID 映射缓存完成")
 PYEOF19
 echo "=== 39pool19 完成 ==="
+
+# === 39pool20: 分级冷却 + 源级熔断（用户确认，战役三）===
+# 痛点：所有失败都冷 5 分钟，404 死链反复试浪费时间；mcp 301 是 http→https 跳转，直接判死太浪费。
+# 修法：1）probeUrlWithCode 带错误码回来；2）404/410 只冷单首歌（源+歌 Key），301 冷整个源 30 分钟，超时冷 5 分钟；3）源级熔断：1 分钟内同一源连续 3 次 404，整个源冷 30 分钟并清计数器；4）301/302 读 Location 头跟随一次。
+python3 << 'PYEOF20'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool20 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[39pool20]" in s:
+    print("跳过（39pool20 已应用）")
+else:
+    # 1. Add per-song cooldown map and markSourceCoolDownByError
+    old = "    fun markSourceCoolDown(sourceId: String, coolDownMs: Long = 300000) { // [39pool6] 默认冷却 5 分钟\n        sourceCoolDownUntil[sourceId] = System.currentTimeMillis() + coolDownMs\n    }"
+    new = """    fun markSourceCoolDown(sourceId: String, coolDownMs: Long = 300000) { // [39pool6] 默认冷却 5 分钟
+        sourceCoolDownUntil[sourceId] = System.currentTimeMillis() + coolDownMs
+    }
+    // [39pool20] 单首歌冷却：Key=源ID|歌ID，404/410 只冷这首歌不冷整个源
+    private val songSourceCoolDownUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    fun isSongSourceCoolDown(sourceId: String, songId: String): Boolean {
+        val key = sourceId + "|" + songId
+        val until = songSourceCoolDownUntil[key] ?: return false
+        if (System.currentTimeMillis() >= until) { songSourceCoolDownUntil.remove(key); return false }
+        return true
+    }
+    // [39pool20] 分级冷却 + 源级熔断：404/410 冷单首歌 30 分钟并计数，1 分钟内同一源 3 次 404 则整个源冷 30 分钟；301 冷整个源 30 分钟；超时冷 5 分钟
+    fun markSourceCoolDownByError(sourceId: String, songId: String?, errorCode: Int?) {
+        when (errorCode) {
+            404, 410 -> {
+                // 单首歌冷却 30 分钟
+                if (songId != null) {
+                    val key = sourceId + "|" + songId
+                    songSourceCoolDownUntil[key] = System.currentTimeMillis() + 30 * 60 * 1000L
+                }
+                // 熔断计数：1 分钟内同一源连续 3 次 404，整个源冷 30 分钟
+                try {
+                    val now = System.currentTimeMillis()
+                    val lastTime = com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime[sourceId] ?: 0L
+                    val count = if (now - lastTime > 60000L) 1 else (com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount[sourceId] ?: 0) + 1
+                    com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount[sourceId] = count
+                    com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime[sourceId] = now
+                    if (count >= 3) {
+                        sourceCoolDownUntil[sourceId] = now + 30 * 60 * 1000L
+                        com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailCount.remove(sourceId)
+                        com.github.tvbox.osc.ui.activity.LxPlayerManager.sourceFailTime.remove(sourceId)
+                        try { com.github.tvbox.osc.util.LxRuntimeLog.add("【熔断】源 " + sourceId + " 短时间内连续 3 次 404，全面冷却 30 分钟") } catch (_: Exception) { }
+                    }
+                } catch (_: Exception) { }
+            }
+            301, 302 -> {
+                sourceCoolDownUntil[sourceId] = System.currentTimeMillis() + 30 * 60 * 1000L
+            }
+            else -> {
+                sourceCoolDownUntil[sourceId] = System.currentTimeMillis() + 300000L
+            }
+        }
+    }"""
+    s = rep(s, old, new, "分级冷却")
+    assert "[39pool20]" in s, "pool20 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 39pool20 分级冷却完成")
+PYEOF20
+echo "=== 39pool20 完成 ==="
+
+# === 39pool20b: 池子探活改调 probeUrlWithCode + 分级冷却（战役三接线）===
+python3 << 'PYEOF20B'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool20b 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[39pool20b]" in s:
+    print("跳过（39pool20b 已应用）")
+else:
+    # Modify the pool18 parallel probe to use probeUrlWithCode and markSourceCoolDownByError
+    old = """                        if (!url.isNullOrBlank()) {
+                            LxRuntimeLog.add("【降级排查】源 $sid 拿到地址，开始探活...")
+                            val isAlive = try {
+                                LxPlayerManager.isStreamUrlAlive(url)
+                            } catch (e: Exception) {
+                                false
+                            }
+                            if (isAlive) {
+                                LxRuntimeLog.add("【降级排查】源 $sid 探活成功，确定使用！")
+                                sid to url
+                            } else {
+                                LxRuntimeLog.add("【降级排查】源 $sid 探活失败（死链/防盗链），尝试下一个")
+                                markSourceCoolDown(sid)
+                                null
+                            }
+                        } else {
+                            null
+                        }"""
+    new = """                        if (!url.isNullOrBlank()) {
+                            LxRuntimeLog.add("【降级排查】源 $sid 拿到地址，开始探活...")
+                            val (isAlive, errCode) = try {
+                                LxPlayerManager.probeUrlWithCode(url)
+                            } catch (e: Exception) {
+                                Pair(false, null)
+                            }
+                            if (isAlive) {
+                                LxRuntimeLog.add("【降级排查】源 $sid 探活成功，确定使用！")
+                                sid to url
+                            } else {
+                                LxRuntimeLog.add("【降级排查】源 $sid 探活失败（死链/防盗链），尝试下一个")
+                                // [39pool20b] 分级冷却：404 只冷单首歌+熔断计数，301 冷整个源 30 分钟，超时冷 5 分钟
+                                val songIdForCool = (musicInfo["songId"] ?: musicInfo["id"] ?: "").toString().takeIf { it.isNotBlank() }
+                                markSourceCoolDownByError(sid, songIdForCool, errCode)
+                                null
+                            }
+                        } else {
+                            null
+                        }"""
+    s = rep(s, old, new, "并行探活接线")
+    assert "[39pool20b]" in s or "probeUrlWithCode" in s, "pool20b 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 39pool20b 池子探活接线完成")
+PYEOF20B
+echo "=== 39pool20b 完成 ==="
