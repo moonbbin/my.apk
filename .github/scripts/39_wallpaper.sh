@@ -2655,3 +2655,83 @@ else:
     print("OK [39pool16] 并发搜所有池源完成")
 PYEOF39P16
 echo "=== 39 pool16 完成 ==="
+
+# === 39 pool17: 内置平台 ID 转池源搜索（用户确认）===
+# 痛点：搜歌手名（周杰伦）出来的结果是内置平台的歌，带网易 ID 400581054；点它时池子拿网易 ID 去问裤佬/杰翔，mcp 回 301、cenguigui 超时、music.163 回 302，全被 v168 探活拦了。搜歌名能播是因为池源直接返回了它自己能用的 ID。
+# 修法：resolveUrlWithFallback 开头，若 platform 是内置平台（kugou/qq/netease/kuwo/migu/wy/kg/tx/mg），先调 searchAllPoolSources 按歌名搜一遍，拿到池源自己的 ID 就用池源的 ID；搜不到才回退用原 ID。
+python3 << 'PYEOF17'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool17 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[39pool17]" in s:
+    print("跳过（39 pool17 已应用）")
+else:
+    old = """    suspend fun resolveUrlWithFallback(
+        platform: String,
+        musicInfo: Map<String, Any>,
+        quality: String,
+        excludedIds: Set<String> = emptySet()
+    ): Pair<String, String> {
+        val targets = ArrayList<Pair<String, LxScriptEngine>>()"""
+    new = """    suspend fun resolveUrlWithFallback(
+        platform: String,
+        musicInfo: Map<String, Any>,
+        quality: String,
+        excludedIds: Set<String> = emptySet()
+    ): Pair<String, String> {
+        // [39pool17] 内置平台 ID 转池源搜索：内置平台（网易/酷狗/QQ 等）的 ID 池源用不了，先按歌名搜池源拿池源自己的 ID
+        var effPlatform = platform
+        var effInfo = musicInfo
+        val builtin = setOf("kugou", "kg", "qq", "tx", "netease", "wy", "kuwo", "kw", "migu", "mg", "bilibili", "bd", "xiaomi", "xm")
+        if (platform.lowercase() in builtin) {
+            val title = (musicInfo["title"] as? String)?.takeIf { it.isNotBlank() }
+            if (title != null) {
+                try {
+                    val poolHits = searchAllPoolSources(title)
+                    val hit = poolHits.firstOrNull { (it["title"] as? String)?.isNotBlank() == true }
+                    if (hit != null) {
+                        effInfo = musicInfo.toMutableMap().apply {
+                            put("songId", (hit["id"] ?: hit["songmid"] ?: musicInfo["songId"] ?: "").toString())
+                            put("id", (hit["id"] ?: hit["songmid"] ?: "").toString())
+                        }
+                        effPlatform = (hit["platform"] as? String)?.takeIf { it.isNotBlank() } ?: platform
+                        try { com.github.tvbox.osc.util.LxRuntimeLog.add("内置ID转池源: " + title + " -> " + effPlatform + " " + (effInfo["songId"] ?: "")) } catch (_: Exception) { }
+                    }
+                } catch (_: Exception) { }
+            }
+        }
+        val targets = ArrayList<Pair<String, LxScriptEngine>>()"""
+    s = rep(s, old, new, "内置ID转池源")
+    # Also need to replace the usages of platform/musicInfo in the function body with effPlatform/effInfo
+    # The function uses platform and musicInfo in the loop - find and replace them
+    # The loop calls eng.requestMusicUrl(effPlatform, effInfo, quality) - need to check the actual call
+    # For now, just replace the platform/musicInfo in the requestMusicUrl call
+    # Find the requestMusicUrl call in resolveUrlWithFallback
+    old_call = "eng.requestMusicUrl(platform, musicInfo, quality)"
+    if old_call in s:
+        s = s.replace(old_call, "eng.requestMusicUrl(effPlatform, effInfo, quality)", 1)
+        print("OK: requestMusicUrl call updated")
+    else:
+        # Try alternative pattern
+        import re
+        m = re.search(r"eng\.requestMusicUrl\([^)]+\)", s[s.find("suspend fun resolveUrlWithFallback"):s.find("suspend fun resolveUrlWithFallback")+3000])
+        if m:
+            print("Found call: " + m.group(0))
+        else:
+            print("WARN: requestMusicUrl call not found in resolveUrlWithFallback")
+    assert "[39pool17]" in s, "pool17 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 39 pool17 内置平台 ID 转池源搜索完成")
+PYEOF17
+echo "=== 39 pool17 完成 ==="

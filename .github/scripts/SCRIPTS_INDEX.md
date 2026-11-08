@@ -54,7 +54,7 @@
 | # | 脚本 | 干嘛的 |
 |---|------|--------|
 | 20 | `20_music_theme.sh` | 全局主题定稿（Color.kt/Type.kt/Theme.kt）<br>定义所有 Token：颜色、圆角、字号。页面 UI 只准用 Token，不准写死 Hex。<br>2026-10-22 C 结案：已删除 LxPlayerActivity 的 PATCHES 条目，不再触碰播放页（仍处理搜索/歌手/主页/历史 4 文件）。 |
-| 23 | `23_music_theme_unify.sh` | 主题统一：补 TextOnAccent/SliderTrack 常量；DarkMusicColors 全改引 Token |
+| 23 | `23_music_theme_unify.sh` | 主题统一：补 TextOnAccent/SliderTrack 常量；pool17 内置平台 ID 转池源搜索（用户确认：搜歌手名出的内置平台歌带网易 ID 400581054，池源拿网易 ID 查 mcp 301、cenguigui 超时、music.163 302 全被 v168 拦了；修法：resolveUrlWithFallback 开头，若 platform 是内置平台，先按歌名搜池源拿池源自己的 ID）；DarkMusicColors 全改引 Token |
 
 ## 音质验货与显示（21/22）⚠️ 核心
 
