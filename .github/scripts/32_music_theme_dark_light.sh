@@ -12712,7 +12712,7 @@ def rep(src, old, new, name):
     return src.replace(old, new, 1)
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v166]" in s:
     print("跳过（32 v166 已应用）")
@@ -12732,9 +12732,14 @@ else:
                 .get()
                 .build()
             client.newCall(req).execute().use { resp ->
-                resp.code == 200 || resp.code == 206
+                val ok = resp.code == 200 || resp.code == 206
+                if (!ok) { // [32v165] 验活失败记实因（诊断用）：状态码＋地址 host，进运行日志抽屉
+                    try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活失败: HTTP " + resp.code + " " + url.take(100)) } catch (_: Exception) { }
+                }
+                ok
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) { // [32v165] 验活异常记实因（诊断用）：异常类名＋消息，进运行日志抽屉
+            try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活异常: " + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
             false
         }
     }"""
@@ -12757,9 +12762,14 @@ else:
                 }
                 val req = builder.get().build()
                 client.newCall(req).execute().use { resp ->
-                    resp.code == 200 || resp.code == 206
+                    val ok = resp.code == 200 || resp.code == 206
+                    if (!ok) { // [32v165] 验活失败记实因（诊断用）：状态码＋地址 host，进运行日志抽屉
+                        try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活失败: HTTP " + resp.code + " " + url.take(100)) } catch (_: Exception) { }
+                    }
+                    ok
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) { // [32v165] 验活异常记实因（诊断用）：异常类名＋消息，进运行日志抽屉
+                try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活异常: " + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
                 false
             }
         }
