@@ -4049,9 +4049,7 @@ if "[21v68]" in s:
 else:
     # 1. Add fields
     old = "    private var player: ExoPlayer? = null"
-    new = "    private var player: ExoPlayer? = null
-    @Volatile private var autoRetryCount = 0 // [21v68] 播放中途断流重试计数，最多 2 次
-    private val requestIdCounter = java.util.concurrent.atomic.AtomicInteger(0) // [21v68] 竞态防护"
+    new = "    private var player: ExoPlayer? = null" + chr(10) + "    @Volatile private var autoRetryCount = 0 // [21v68] 播放中途断流重试计数，最多 2 次" + chr(10) + "    private val requestIdCounter = java.util.concurrent.atomic.AtomicInteger(0) // [21v68] 竞态防护"
     s = rep(s, old, new, "字段")
     # 2. Modify onPlayerError
     old2 = """                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
