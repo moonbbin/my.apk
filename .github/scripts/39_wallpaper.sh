@@ -2505,7 +2505,7 @@ else:
             }
         }
         // 【降级排查】看看池子里到底有几个活着的
-        LxRuntimeLog.d("LxPlayer", "【降级排查】可用源池数量: ${targets.size}，列表: ${targets.map { it.first }}")
+        LxRuntimeLog.add("【降级排查】可用源池数量: ${targets.size}，列表: ${targets.map { it.first }}")
         if (targets.isEmpty()) {
             throw IllegalStateException("没有可用音源")
         }
@@ -2513,7 +2513,7 @@ else:
         // 3. 纯净遍历
         for ((sid, eng) in targets) {
             try {
-                LxRuntimeLog.d("LxPlayer", "【降级排查】开始尝试源: $sid")
+                LxRuntimeLog.add("【降级排查】开始尝试源: $sid")
                 val url = kotlinx.coroutines.withTimeout(8000L) {
                     kotlin.coroutines.suspendCoroutine<String?> { cont ->
                         try {
@@ -2530,7 +2530,7 @@ else:
                 }
                 if (!url.isNullOrBlank()) {
                     // 【降级排查】拿到链接后，立刻用探针测一下是不是活的
-                    LxRuntimeLog.d("LxPlayer", "【降级排查】源 $sid 拿到地址，开始探活...")
+                    LxRuntimeLog.add("【降级排查】源 $sid 拿到地址，开始探活...")
                     val isAlive = try {
                         LxPlayerManager.isStreamUrlAlive(url)
                     } catch (e: Exception) {
@@ -2538,23 +2538,23 @@ else:
                     }
                     if (isAlive) {
                         lastGoodSourceId = sid
-                        LxRuntimeLog.d("LxPlayer", "【降级排查】源 $sid 探活成功，确定使用！")
+                        LxRuntimeLog.add("【降级排查】源 $sid 探活成功，确定使用！")
                         return sid to url
                     } else {
-                        LxRuntimeLog.w("LxPlayer", "【降级排查】源 $sid 探活失败（死链/防盗链），尝试下一个")
+                        LxRuntimeLog.add("【降级排查】源 $sid 探活失败（死链/防盗链），尝试下一个")
                         markSourceCoolDown(sid)
                     }
                 } else {
-                    LxRuntimeLog.w("LxPlayer", "【降级排查】源 $sid 返回空地址，尝试下一个")
+                    LxRuntimeLog.add("【降级排查】源 $sid 返回空地址，尝试下一个")
                 }
             } catch (e: Exception) {
-                LxRuntimeLog.e("LxPlayer", "【降级排查】源 $sid 异常: ${e.message}", e)
+                LxRuntimeLog.add("【降级排查】源 $sid 异常: ${e.message}")
                 lastError = e
                 markSourceCoolDown(sid)
                 continue
             }
         }
-        LxRuntimeLog.e("LxPlayer", "【降级排查】所有源遍历完毕，彻底失败")
+        LxRuntimeLog.add("【降级排查】所有源遍历完毕，彻底失败")
         throw IllegalStateException("所有音源均失效", lastError)
     }
 
