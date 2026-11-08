@@ -2683,13 +2683,16 @@ else:
         quality: String,
         excludedIds: Set<String> = emptySet()
     ): Pair<String, String> {
-        val targets = ArrayList<Pair<String, LxScriptEngine>>()"""
+        // 1. 获取所有引擎并平级化
+        val allEngines = getAllEngines()"""
     new = """    suspend fun resolveUrlWithFallback(
         platform: String,
         musicInfo: Map<String, Any>,
         quality: String,
         excludedIds: Set<String> = emptySet()
     ): Pair<String, String> {
+        // 1. 获取所有引擎并平级化
+        val allEngines = getAllEngines()
         // [39pool17] 内置平台 ID 转池源搜索：内置平台（网易/酷狗/QQ 等）的 ID 池源用不了，先按歌名搜池源拿池源自己的 ID
         var effPlatform = platform
         var effInfo = musicInfo
@@ -2710,26 +2713,19 @@ else:
                     }
                 } catch (_: Exception) { }
             }
-        }
-        val targets = ArrayList<Pair<String, LxScriptEngine>>()"""
+        }"""
     s = rep(s, old, new, "内置ID转池源")
-    # Also need to replace the usages of platform/musicInfo in the function body with effPlatform/effInfo
-    # The function uses platform and musicInfo in the loop - find and replace them
-    # The loop calls eng.requestMusicUrl(effPlatform, effInfo, quality) - need to check the actual call
-    # For now, just replace the platform/musicInfo in the requestMusicUrl call
-    # Find the requestMusicUrl call in resolveUrlWithFallback
-    old_call = "eng.requestMusicUrl(platform, musicInfo, quality)"
-    if old_call in s:
-        s = s.replace(old_call, "eng.requestMusicUrl(effPlatform, effInfo, quality)", 1)
-        print("OK: requestMusicUrl call updated")
-    else:
-        # Try alternative pattern
-        import re
-        m = re.search(r"eng\.requestMusicUrl\([^)]+\)", s[s.find("suspend fun resolveUrlWithFallback"):s.find("suspend fun resolveUrlWithFallback")+3000])
-        if m:
-            print("Found call: " + m.group(0))
-        else:
-            print("WARN: requestMusicUrl call not found in resolveUrlWithFallback")
+    # Replace platform/musicInfo with effPlatform/effInfo in the requestMusicUrl calls within this function
+    # Find the function and replace the calls
+    func_start = s.find("    suspend fun resolveUrlWithFallback(")
+    func_end = s.find("
+    fun ", func_start + 100)
+    if func_end == -1:
+        func_end = len(s)
+    func_text = s[func_start:func_end]
+    # Replace the requestMusicUrl calls
+    func_text = func_text.replace("eng.requestMusicUrl(platform, musicInfo, quality)", "eng.requestMusicUrl(effPlatform, effInfo, quality)")
+    s = s[:func_start] + func_text + s[func_end:]
     assert "[39pool17]" in s, "pool17 标记未落"
     open(M, "w", encoding="utf-8").write(s)
     print("OK 39 pool17 内置平台 ID 转池源搜索完成")
@@ -2789,7 +2785,7 @@ else:
                         val url = kotlinx.coroutines.withTimeout(8000L) {
                             kotlin.coroutines.suspendCoroutine<String?> { cont ->
                                 try {
-                                    eng.requestMusicUrl(platform, musicInfo, quality) { r ->
+                                    eng.requestMusicUrl(effPlatform, effInfo, quality) { r ->
                                         r.fold(
                                             onSuccess = { u -> cont.resumeWith(Result.success(u)) },
                                             onFailure = { e -> cont.resumeWith(Result.failure(e)) }
