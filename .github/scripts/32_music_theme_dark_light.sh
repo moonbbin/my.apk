@@ -8498,7 +8498,7 @@ else:
     rep("    // ============ 音质验货（防糊）v6 ============",
         """    // [32v121] 取地址时验活：Range 拉 1KB，200/206 才算给流；level=undefined 免网络直接判死
     fun isStreamUrlAlive(url: String): Boolean {
-        if (url.contains(\"level=undefined\")) return false
+        if (url.contains("level=undefined")) return false
         return try {
             val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
             conn.requestMethod = "GET"
@@ -12604,7 +12604,7 @@ if "[32v164]" in s:
 else:
     old = """    // [32v121] 取地址时验活；[32v122] 改播放器式拿流：普通 GET（不带 Range）+ 浏览器 UA，200/206 算给流；level=undefined 免网络直接判死
     fun isStreamUrlAlive(url: String): Boolean {
-        if (url.contains(\"level=undefined\")) return false
+        if (url.contains("level=undefined")) return false
         return try {
             val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
             conn.requestMethod = "GET"
@@ -12624,7 +12624,7 @@ else:
     }"""
     new = """    // [32v121] 取地址时验活；[32v122] 改播放器式拿流；[32v164] 改走 OkHttp + 8 秒超时（HttpURLConnection 在裤佬/v7 中转站上探不通、播放器能播，同机对照）
     fun isStreamUrlAlive(url: String): Boolean {
-        if (url.contains(\"level=undefined\")) return false
+        if (url.contains("level=undefined")) return false
         return try {
             val client = okhttp3.OkHttpClient.Builder()
                 .connectTimeout(8000, java.util.concurrent.TimeUnit.MILLISECONDS)
@@ -12719,7 +12719,7 @@ if "[32v166]" in s:
 else:
     old = """    // [32v121] 取地址时验活；[32v122] 改播放器式拿流；[32v164] 改走 OkHttp + 8 秒超时（HttpURLConnection 在裤佬/v7 中转站上探不通、播放器能播，同机对照）
     fun isStreamUrlAlive(url: String): Boolean {
-        if (url.contains(\"level=undefined\")) return false
+        if (url.contains("level=undefined")) return false
         return try {
             val client = okhttp3.OkHttpClient.Builder()
                 .connectTimeout(8000, java.util.concurrent.TimeUnit.MILLISECONDS)
@@ -12745,7 +12745,7 @@ else:
     }"""
     new = """    // [32v121] 取地址时验活；[32v122] 改播放器式拿流；[32v164] 改走 OkHttp + 8 秒超时；[32v166] 先带 Range 试一次（跟播放器一样），Range 通了才算活，Range 不通再回退普通 GET
     fun isStreamUrlAlive(url: String): Boolean {
-        if (url.contains(\"level=undefined\")) return false
+        if (url.contains("level=undefined")) return false
         val ua = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36"
         fun probe(withRange: Boolean): Boolean {
             return try {
@@ -12857,7 +12857,7 @@ else:
     func_end = i + 1
     new_func = """    // [32v121] 取地址时验活；[32v122] 改播放器式拿流；[32v164] 改走 OkHttp + 8 秒超时；[32v166] 先带 Range 试一次；[32v167] Range 改 64KB 去掉普通 GET 回退；[32v168] 改用 ExoPlayer 自己的 DefaultHttpDataSource 探活（用户确认：探活和播放用同一个客户端，探活过了播放一定过）
     fun isStreamUrlAlive(url: String): Boolean {
-        if (url.contains(\"level=undefined\")) return false
+        if (url.contains("level=undefined")) return false
         val ua = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36"
         return try {
             val factory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
@@ -12875,7 +12875,7 @@ else:
                 try { ds.close() } catch (_: Exception) { }
             }
         } catch (e: Exception) {
-            try { com.github.tvbox.osc.util.LxRuntimeLog.add(\"验活异常(ExoPlayer): \" + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
+            try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活异常(ExoPlayer): " + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
             false
         }
     }"""
@@ -12921,41 +12921,3 @@ else:
     print("OK 32 v169 探活只开连接完成")
 PYEOF169
 echo "=== 32 v169 完成 ==="
-
-# === 32 v170: 探活带错误码 + 源级熔断计数（用户确认，战役三）===
-# 痛点：探活只返回布尔值，池子不知道死因，无法分级冷却。
-# 修法：新增 probeUrlWithCode 返回 Pair<是否活, 错误码>；isStreamUrlAlive 改 wrapper 保兼容；加 sourceFailCount/sourceFailTime 两个 ConcurrentHashMap 供 39 熔断读。
-# 注意：301 不跟随，直接返回错误码，池子冷 30 分钟（responseHeaders 在此版本不可用）。
-python3 << 'PYEOF170'
-import os
-
-def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
-        os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
-
-def rep(src, old, new, name):
-    assert src.count(old) == 1, "v170 锚点 %s: %d" % (name, src.count(old))
-    return src.replace(old, new, 1)
-
-find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
-s = open(M, encoding="utf-8").read()
-if "[32v170]" in s:
-    print("跳过（32 v170 已应用）")
-else:
-    # 1. 加熔断计数字段（在 player 字段后）
-    old = "    private var player: ExoPlayer? = null"
-    new = "    private var player: ExoPlayer? = null" + chr(10) + "    // [32v170] 源级熔断计数：源 ID -> 连续 404 次数；源 ID -> 上次 404 时间戳" + chr(10) + "    val sourceFailCount = java.util.concurrent.ConcurrentHashMap<String, Int>()" + chr(10) + "    val sourceFailTime = java.util.concurrent.ConcurrentHashMap<String, Long>()"
-    s = rep(s, old, new, "熔断计数")
-    # 2. 在 isStreamUrlAlive 前插入 probeUrlWithCode，并把 isStreamUrlAlive 改成 wrapper
-    old2 = "    fun isStreamUrlAlive(url: String): Boolean {"
-    new2 = "    // [32v170] 探活带错误码：成功回 Pair(true, null)；InvalidResponseCode 回 Pair(false, responseCode)；SocketTimeout 回 Pair(false, -1)；其他异常回 Pair(false, null)" + chr(10) + "    fun probeUrlWithCode(url: String): Pair<Boolean, Int?> {" + chr(10) + "        if (url.contains(\"level=undefined\")) return Pair(false, null)" + chr(10) + "        return try {" + chr(10) + "            val factory = androidx.media3.datasource.DefaultHttpDataSource.Factory()" + chr(10) + "                .setConnectTimeoutMs(8000)" + chr(10) + "                .setReadTimeoutMs(8000)" + chr(10) + "            val ds = factory.createDataSource()" + chr(10) + "            try {" + chr(10) + "                val uri = android.net.Uri.parse(url)" + chr(10) + "                ds.open(androidx.media3.datasource.DataSpec(uri))" + chr(10) + "                Pair(true, null)" + chr(10) + "            } finally {" + chr(10) + "                try { ds.close() } catch (_: Exception) { }" + chr(10) + "            }" + chr(10) + "        } catch (e: androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) {" + chr(10) + "            val code = e.responseCode" + chr(10) + "            try { com.github.tvbox.osc.util.LxRuntimeLog.add(\"验活异常(ExoPlayer): InvalidResponseCode \" + code + \" \" + url.take(80)) } catch (_: Exception) { }" + chr(10) + "            Pair(false, code)" + chr(10) + "        } catch (e: java.net.SocketTimeoutException) {" + chr(10) + "            try { com.github.tvbox.osc.util.LxRuntimeLog.add(\"验活异常(ExoPlayer): SocketTimeout \" + url.take(80)) } catch (_: Exception) { }" + chr(10) + "            Pair(false, -1)" + chr(10) + "        } catch (e: Exception) {" + chr(10) + "            try { com.github.tvbox.osc.util.LxRuntimeLog.add(\"验活异常(ExoPlayer): \" + e.javaClass.simpleName + \" \" + url.take(80)) } catch (_: Exception) { }" + chr(10) + "            Pair(false, null)" + chr(10) + "        }" + chr(10) + "    }" + chr(10) + "    fun isStreamUrlAlive(url: String): Boolean {"
-    s = rep(s, old2, new2, "probeUrlWithCode")
-    # The old2/new2 above already adds probeUrlWithCode before isStreamUrlAlive, so isStreamUrlAlive remains as is
-    # Remove the old3/new3 attempt
-    assert "[32v170]" in s, "v170 标记未落"
-    open(M, "w", encoding="utf-8").write(s)
-    print("OK 32 v170 探活带错误码完成")
-PYEOF170
-echo "=== 32 v170 完成 ==="
