@@ -2863,40 +2863,36 @@ else:
     # 1. Add cache helper functions in LxEngineHolder
     old = "    var lastGoodSourceId: String? = null"
     new = """    var lastGoodSourceId: String? = null
-    // [39pool19] ID 映射缓存：Key=源平台_目标平台_原ID，Value=目标ID|时间戳，7 天过期，上限 500 条
-    private const val ID_MAP_PREFS = "id_map_cache"
+    // [39pool19] ID 映射缓存：内存版，Key=源平台_目标平台_原ID，Value=目标ID|时间戳，7 天过期，上限 500 条（不用 SharedPreferences，不用 Context）
     private const val ID_MAP_EXPIRE_MS = 7 * 24 * 60 * 60 * 1000L
     private const val ID_MAP_MAX = 500
-    private fun idMapPrefs() = try { appContext?.getSharedPreferences(ID_MAP_PREFS, 0) } catch (_: Exception) { null }
+    private val idMapCache = java.util.concurrent.ConcurrentHashMap<String, String>()
     fun lookupIdMap(srcPlatform: String, dstPlatform: String, srcId: String): String? {
         return try {
-            val prefs = idMapPrefs() ?: return null
             val key = srcPlatform.lowercase() + "_" + dstPlatform.lowercase() + "_" + srcId
-            val v = prefs.getString(key, null) ?: return null
+            val v = idMapCache[key] ?: return null
             val parts = v.split("|")
-            if (parts.size != 2) { prefs.edit().remove(key).apply(); return null }
+            if (parts.size != 2) { idMapCache.remove(key); return null }
             val ts = parts[1].toLongOrNull() ?: 0L
-            if (System.currentTimeMillis() - ts > ID_MAP_EXPIRE_MS) { prefs.edit().remove(key).apply(); return null }
+            if (System.currentTimeMillis() - ts > ID_MAP_EXPIRE_MS) { idMapCache.remove(key); return null }
             parts[0].takeIf { it.isNotBlank() }
         } catch (_: Exception) { null }
     }
     fun saveIdMap(srcPlatform: String, dstPlatform: String, srcId: String, dstId: String) {
         try {
-            val prefs = idMapPrefs() ?: return
             val key = srcPlatform.lowercase() + "_" + dstPlatform.lowercase() + "_" + srcId
             val v = dstId + "|" + System.currentTimeMillis().toString()
-            val all = prefs.all
-            if (all.size >= ID_MAP_MAX && !all.containsKey(key)) {
-                val oldest = all.entries.minByOrNull { (it.value as? String)?.split("|")?.getOrNull(1)?.toLongOrNull() ?: 0L }?.key
-                if (oldest != null) prefs.edit().remove(oldest).apply()
+            if (idMapCache.size >= ID_MAP_MAX && !idMapCache.containsKey(key)) {
+                val oldest = idMapCache.entries.minByOrNull { it.value.split("|").getOrNull(1)?.toLongOrNull() ?: 0L }?.key
+                if (oldest != null) idMapCache.remove(oldest)
             }
-            prefs.edit().putString(key, v).apply()
+            idMapCache[key] = v
         } catch (_: Exception) { }
     }
     fun deleteIdMap(srcPlatform: String, dstPlatform: String, srcId: String) {
         try {
             val key = srcPlatform.lowercase() + "_" + dstPlatform.lowercase() + "_" + srcId
-            idMapPrefs()?.edit()?.remove(key)?.apply()
+            idMapCache.remove(key)
         } catch (_: Exception) { }
     }"""
     s = rep(s, old, new, "缓存函数")
