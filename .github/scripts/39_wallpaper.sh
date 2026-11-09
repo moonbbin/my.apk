@@ -2838,3 +2838,85 @@ else:
 PYEOF18
 echo "=== 39 pool18 完成 ==="
 
+# === 39pool19: ID 映射缓存（重写版，用户确认执行）===
+# 修法：内存版 ConcurrentHashMap，不用 SharedPreferences，不用 Context
+# 转义：Kotlin 字符串引号一律用 chr(34) 替代，杜绝 " 猜转义
+# 锚点：用 .replace(old, new, 1) 只替换第一次
+python3 << 'PYEOF19'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool19 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[39pool19]" in s:
+    print("跳过（39pool19 已应用）")
+else:
+    Q = chr(34)
+    # 1. 在 lastGoodSourceId 后加 ID 映射缓存函数（内存版）
+    old = "    var lastGoodSourceId: String? = null"
+    # 用 chr(34) 拼 Kotlin 字符串，杜绝转义猜测
+    new = old + chr(10)
+    new += "    // [39pool19] ID 映射缓存：内存版，Key=源平台_目标平台_原ID，Value=目标ID|时间戳，7 天过期，上限 500 条" + chr(10)
+    new += "    private const val ID_MAP_EXPIRE_MS = 7 * 24 * 60 * 60 * 1000L" + chr(10)
+    new += "    private const val ID_MAP_MAX = 500" + chr(10)
+    new += "    private val idMapCache = java.util.concurrent.ConcurrentHashMap<String, String>()" + chr(10)
+    new += "    fun lookupIdMap(srcPlatform: String, dstPlatform: String, srcId: String): String? {" + chr(10)
+    new += "        return try {" + chr(10)
+    new += "            val key = srcPlatform.lowercase() + " + Q + "_" + Q + " + dstPlatform.lowercase() + " + Q + "_" + Q + " + srcId" + chr(10)
+    new += "            val v = idMapCache[key] ?: return null" + chr(10)
+    new += "            val parts = v.split(" + Q + "|" + Q + ")" + chr(10)
+    new += "            if (parts.size != 2) { idMapCache.remove(key); return null }" + chr(10)
+    new += "            val ts = parts[1].toLongOrNull() ?: 0L" + chr(10)
+    new += "            if (System.currentTimeMillis() - ts > ID_MAP_EXPIRE_MS) { idMapCache.remove(key); return null }" + chr(10)
+    new += "            parts[0].takeIf { it.isNotBlank() }" + chr(10)
+    new += "        } catch (_: Exception) { null }" + chr(10)
+    new += "    }" + chr(10)
+    new += "    fun saveIdMap(srcPlatform: String, dstPlatform: String, srcId: String, dstId: String) {" + chr(10)
+    new += "        try {" + chr(10)
+    new += "            val key = srcPlatform.lowercase() + " + Q + "_" + Q + " + dstPlatform.lowercase() + " + Q + "_" + Q + " + srcId" + chr(10)
+    new += "            val v = dstId + " + Q + "|" + Q + " + System.currentTimeMillis().toString()" + chr(10)
+    new += "            if (idMapCache.size >= ID_MAP_MAX && !idMapCache.containsKey(key)) {" + chr(10)
+    new += "                val oldestKey: String? = try {" + chr(10)
+    new += "                    var oldest: String? = null" + chr(10)
+    new += "                    var oldestTs = Long.MAX_VALUE" + chr(10)
+    new += "                    for ((k, vv) in idMapCache) {" + chr(10)
+    new += "                        val t = vv.split(" + Q + "|" + Q + ").getOrNull(1)?.toLongOrNull() ?: 0L" + chr(10)
+    new += "                        if (t < oldestTs) { oldestTs = t; oldest = k }" + chr(10)
+    new += "                    }" + chr(10)
+    new += "                    oldest" + chr(10)
+    new += "                } catch (_: Exception) { null }" + chr(10)
+    new += "                if (oldestKey != null) idMapCache.remove(oldestKey)" + chr(10)
+    new += "            }" + chr(10)
+    new += "            idMapCache[key] = v" + chr(10)
+    new += "        } catch (_: Exception) { }" + chr(10)
+    new += "    }" + chr(10)
+    new += "    fun deleteIdMap(srcPlatform: String, dstPlatform: String, srcId: String) {" + chr(10)
+    new += "        try {" + chr(10)
+    new += "            val key = srcPlatform.lowercase() + " + Q + "_" + Q + " + dstPlatform.lowercase() + " + Q + "_" + Q + " + srcId" + chr(10)
+    new += "            idMapCache.remove(key)" + chr(10)
+    new += "        } catch (_: Exception) { }" + chr(10)
+    new += "    }"
+    s = rep(s, old, new, "缓存函数")
+    assert "[39pool19]" in s, "pool19 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 39pool19 ID 映射缓存完成")
+    # 自检：打印插入后的 Kotlin 片段（15 行）
+    print("=== 自检：插入后的 Kotlin 片段 ===")
+    idx = s.find("[39pool19]")
+    print(s[idx-200:idx+800])
+    # 自检：大括号平衡
+    open_b = s.count("{")
+    close_b = s.count("}")
+    print(f"=== 自检：大括号平衡 Open={open_b} Close={close_b} Diff={open_b-close_b} ===")
+    assert open_b == close_b, "大括号不平衡！"
+PYEOF19
+echo "=== 39pool19 完成 ==="
