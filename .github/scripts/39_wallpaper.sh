@@ -3550,3 +3550,217 @@ else:
     print("OK 39 pool22 推荐预取入口已公开")
 PYEOF39P22
 echo "=== 39 pool22 完成 ==="
+# === 39pool23: ID 映射缓存落盘（抄洛雪做法 1：无 TTL，失败才刷新）===
+# 修法：内存 ConcurrentHashMap 保留作一层缓存，save 时写透 SharedPreferences（lx_id_map），
+# 首次查不到时从盘里全量懒加载一次；删 7 天过期（改无 TTL），失效靠 pool20 第 3 步“播放失败重搜删旧”刷新。
+# Context 由 warmUp 存应用上下文（不持有 Activity）；warmUp 未跑过时只走内存（与现行一致）。
+python3 << 'PYEOF23'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool23 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[39pool23]" in s:
+    print("跳过（39pool23 已应用）")
+else:
+    # 1) warmUp 存应用上下文（两路都跑：已就绪早退分支也在第一行之后）
+    old_warm = "    fun warmUp(context: android.content.Context) {" + chr(10) + "        if (isReady) {"
+    assert s.count(old_warm) == 1, "pool23 锚点 warmUp 数量异常"
+    new_warm = "    fun warmUp(context: android.content.Context) {" + chr(10) + "        try { idMapCtx = context.applicationContext } catch (_: Exception) { } // [39pool23] 落盘缓存用应用上下文" + chr(10) + "        if (isReady) {"
+    s = s.replace(old_warm, new_warm, 1)
+    # 2) 整块替换 pool19 缓存函数（起：pool19 注释，止：pool6 注释），与 pool20 同款定位
+    start19 = s.find("    // [39pool19]")
+    assert start19 != -1, "pool23 锚点 pool19 起始未找到"
+    end19 = s.find("    // [39pool6] 坏源冷却", start19)
+    assert end19 != -1, "pool23 锚点 pool19 结束未找到"
+    old19 = s[start19:end19]
+    assert old19.count("fun lookupIdMap") == 1, "pool23 pool19 lookup 数量异常"
+    assert old19.count("fun saveIdMap") == 1, "pool23 pool19 save 数量异常"
+    assert old19.count("fun deleteIdMap") == 1, "pool23 pool19 delete 数量异常"
+    assert old19.count("{") == old19.count("}"), "pool23 pool19 括号不平衡"
+    new19 = """    // [39pool19][39pool20][39pool23] ID 映射缓存：落盘版（抄洛雪做法 1），Key=源平台_原ID，Value=目标平台|目标ID|时间戳；无 TTL、播放失败才刷新（pool20 第 3 步重试分支）；上限 500 条
+    private const val ID_MAP_MAX = 500
+    private const val ID_MAP_PREFS = "lx_id_map"
+    private val idMapCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private var idMapCtx: android.content.Context? = null
+    private var idMapLoaded = false
+    private fun idMapPrefs(): android.content.SharedPreferences? {
+        return try { idMapCtx?.getSharedPreferences(ID_MAP_PREFS, android.content.Context.MODE_PRIVATE) } catch (_: Exception) { null }
+    }
+    private fun loadIdMapFromDisk() {
+        if (idMapLoaded) return
+        idMapLoaded = true
+        try {
+            val prefs = idMapPrefs() ?: return
+            for ((k, v) in prefs.all) {
+                val vs = v as? String ?: continue
+                if (vs.split("|").size != 3) continue
+                if (!idMapCache.containsKey(k)) idMapCache[k] = vs
+            }
+        } catch (_: Exception) { }
+    }
+    fun lookupIdMap(srcPlatform: String, srcId: String): Pair<String, String>? {
+        return try {
+            val key = srcPlatform.lowercase() + "_" + srcId
+            var v = idMapCache[key]
+            if (v == null) {
+                loadIdMapFromDisk()
+                v = idMapCache[key] ?: return null
+            }
+            val parts = v.split("|")
+            if (parts.size != 3) { idMapCache.remove(key); return null }
+            val dp = parts[0].takeIf { it.isNotBlank() } ?: return null
+            val di = parts[1].takeIf { it.isNotBlank() } ?: return null
+            dp to di
+        } catch (_: Exception) { null }
+    }
+    fun saveIdMap(srcPlatform: String, dstPlatform: String, srcId: String, dstId: String) {
+        try {
+            val key = srcPlatform.lowercase() + "_" + srcId
+            val v = dstPlatform.lowercase() + "|" + dstId + "|" + System.currentTimeMillis().toString()
+            if (idMapCache.size >= ID_MAP_MAX && !idMapCache.containsKey(key)) {
+                val oldestKey: String? = try {
+                    var oldest: String? = null
+                    var oldestTs = Long.MAX_VALUE
+                    for ((k, vv) in idMapCache) {
+                        val t = vv.split("|").getOrNull(2)?.toLongOrNull() ?: 0L
+                        if (t < oldestTs) { oldestTs = t; oldest = k }
+                    }
+                    oldest
+                } catch (_: Exception) { null }
+                if (oldestKey != null) {
+                    idMapCache.remove(oldestKey)
+                    try { idMapPrefs()?.edit()?.remove(oldestKey)?.apply() } catch (_: Exception) { }
+                }
+            }
+            idMapCache[key] = v
+            try { idMapPrefs()?.edit()?.putString(key, v)?.apply() } catch (_: Exception) { }
+        } catch (_: Exception) { }
+    }
+    fun deleteIdMap(srcPlatform: String, srcId: String) {
+        try {
+            val key = srcPlatform.lowercase() + "_" + srcId
+            idMapCache.remove(key)
+            try { idMapPrefs()?.edit()?.remove(key)?.apply() } catch (_: Exception) { }
+        } catch (_: Exception) { }
+    }
+"""
+    assert new19.count("{") == new19.count("}"), "pool23 新块括号不平衡"
+    assert new19.count("(") == new19.count(")"), "pool23 新块圆括号不平衡"
+    assert new19.count("[") == new19.count("]"), "pool23 新块方括号不平衡"
+    s = s[:start19] + new19 + s[end19:]
+    # 自检
+    assert "[39pool23]" in s, "pool23 标记未落"
+    assert s.count("fun lookupIdMap") == 1 and s.count("fun saveIdMap") == 1 and s.count("fun deleteIdMap") == 1, "pool23 缓存函数数量异常"
+    assert "ID_MAP_EXPIRE_MS" not in s, "pool23 旧 7 天过期残留"
+    assert s.count("fun idMapPrefs") == 1 and s.count("fun loadIdMapFromDisk") == 1, "pool23 落盘 helper 数量异常"
+    assert s.count("idMapCtx = context.applicationContext") == 1, "pool23 warmUp 存上下文未落"
+    assert s.count("(") == s.count(")"), "pool23 全文件圆括号不平衡"
+    assert s.count("{") == s.count("}"), "pool23 全文件花括号不平衡"
+    assert s.count("[") == s.count("]"), "pool23 全文件方括号不平衡"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 39pool23 ID 映射缓存落盘完成")
+PYEOF23
+echo "=== 39pool23 完成 ==="
+# === 39pool24: pool17 前景转换加守卫（抄 Listen1）＋原生竞速超时缩短 ===
+# 修法 1（F1/F3/F6）：新增 pickPoolHit helper——前景取命中时必须歌名归一化＋歌手双重匹配（复用后台
+# 已有的 titleMatches/singerMatches），且命中平台+ID 不得等于原平台+原ID，否则当作没命中、走原 ID 回落。
+# 前景（pool17）与重试分支（pool20 第 3 步）两处 firstOrNull 均改调它。
+# 修法 2（冷歌 9 秒等待）：原生竞速 raceNativeUrl 单源 8000L→3000L、外层 9000L→4000L；
+# pool18 的 8000L/9000L 不动（那是出声路径）。定位用函数签名＋花括号配对，禁子串 find 误伤 pool18。
+python3 << 'PYEOF24'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool24 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[39pool24]" in s:
+    print("跳过（39pool24 已应用）")
+else:
+    # 1) 新增 pickPoolHit helper，挂在 singerMatches 之后
+    old_singer = """    private fun singerMatches(songArtist: String, hitArtist: String): Boolean {
+        val a = songArtist.trim().lowercase()
+        val b = hitArtist.trim().lowercase()
+        if (a.isEmpty()) return true
+        if (b.isEmpty()) return false
+        return a.contains(b) || b.contains(a)
+    }"""
+    assert s.count(old_singer) == 1, "pool24 锚点 singerMatches 数量异常"
+    new_singer = old_singer + chr(10) + """    // [39pool24] 前景取命中守卫（抄 Listen1）：歌名归一化＋歌手双重匹配，且命中平台+ID 不得等于原平台+原ID，否则当作没命中（防 F1/F3/F6 毒映射）
+    private fun pickPoolHit(hits: List<Map<String, Any>>, songTitle: String, songArtist: String, platform: String, songId: String): Map<String, Any>? {
+        return hits.firstOrNull { h ->
+            titleMatches(songTitle, hitTitleOf(h)) && singerMatches(songArtist, hitArtistOf(h)) && !(hitPlatformOf(h)?.lowercase() == platform.lowercase() && hitIdOf(h) == songId)
+        }
+    }"""
+    s = s.replace(old_singer, new_singer, 1)
+    # 2) 前景（pool17）改调 pickPoolHit
+    old_fg = "                val hit = poolHits.firstOrNull { hitTitleOf(it).isNotBlank() }"
+    assert s.count(old_fg) == 1, "pool24 锚点前景数量异常"
+    new_fg = "                val hit = pickPoolHit(poolHits, songTitle, songArtist, platform, songId) // [39pool24] 前景守卫：双重匹配＋不得等于原值"
+    s = s.replace(old_fg, new_fg, 1)
+    # 3) 重试分支（pool20 第 3 步）改调 pickPoolHit
+    old_rt = "                val freshHit = fresh.firstOrNull { hitTitleOf(it).isNotBlank() }"
+    assert s.count(old_rt) == 1, "pool24 锚点重试数量异常"
+    new_rt = "                val freshHit = pickPoolHit(fresh, songTitle, songArtist, platform, songId) // [39pool24] 重试也守卫，防再存毒映射"
+    s = s.replace(old_rt, new_rt, 1)
+    # 4) 原生竞速超时缩短：只动 raceNativeUrl 函数体内（函数签名＋花括号配对定位）
+    sig = "    private suspend fun raceNativeUrl("
+    assert s.count(sig) == 1, "pool24 raceNativeUrl 签名数量异常"
+    fstart = s.find(sig)
+    bstart = s.find("{", fstart)
+    assert bstart != -1, "pool24 raceNativeUrl 左花括号未找到"
+    depth = 0
+    i = bstart
+    while i < len(s):
+        c = s[i]
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                break
+        i += 1
+    assert depth == 0, "pool24 raceNativeUrl 花括号配对失败"
+    fend = i + 1
+    region = s[fstart:fend]
+    assert region.count("withTimeout(8000L)") == 1, "pool24 race 内 8000 数量异常"
+    assert region.count("withTimeout(9000L)") == 1, "pool24 race 内 9000 数量异常"
+    assert region.count("不傻等 9 秒") == 1, "pool24 race 内看门狗注释数量异常"
+    region = region.replace("withTimeout(8000L)", "withTimeout(3000L)", 1)
+    region = region.replace("withTimeout(9000L)", "withTimeout(4000L)", 1)
+    region = region.replace("不傻等 9 秒", "不傻等 4 秒", 1)
+    s = s[:fstart] + region + s[fend:]
+    # 自检
+    assert "[39pool24]" in s, "pool24 标记未落"
+    assert s.count("fun pickPoolHit") == 1, "pool24 pickPoolHit 数量异常"
+    assert s.count("pickPoolHit(poolHits, songTitle, songArtist, platform, songId)") == 1, "pool24 前景调用数量异常"
+    assert s.count("pickPoolHit(fresh, songTitle, songArtist, platform, songId)") == 1, "pool24 重试调用数量异常"
+    assert s.count("firstOrNull { hitTitleOf(it).isNotBlank() }") == 0, "pool24 旧 firstOrNull 残留"
+    assert s.count("withTimeout(3000L)") == 1 and s.count("withTimeout(4000L)") == 1, "pool24 超时数量异常"
+    assert s.count("withTimeout(8000L)") == 2, "pool24 pool18 的 8000 被误改（应剩 2 处）"
+    assert s.count("withTimeout(9000L)") == 1, "pool24 pool18 的 9000 被误改（应剩 1 处）"
+    assert s.count("(") == s.count(")"), "pool24 全文件圆括号不平衡"
+    assert s.count("{") == s.count("}"), "pool24 全文件花括号不平衡"
+    assert s.count("[") == s.count("]"), "pool24 全文件方括号不平衡"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 39pool24 前景守卫＋原生竞速超时缩短完成")
+PYEOF24
+echo "=== 39pool24 完成 ==="

@@ -849,3 +849,50 @@ print("OK 14v11")
 PYEOF
 
 echo "=== 14 v11 done ==="
+echo "=== 14 v12 ==="
+
+python3 << 'PYEOF'
+import sys
+
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxArtistDetailActivity.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [14v12]"
+if MARK in src:
+    print("skip: 14v12 already present")
+    sys.exit(0)
+
+
+def rep(old, new, cnt=1):
+    global src
+    assert src.count(old) == cnt, f"anchor count {src.count(old)}: {old[:70]!r}"
+    src = src.replace(old, new, cnt)
+
+
+# 1) 新增 prefetchArtistTop5 helper，挂在 loadSongs 之前（声明在调用之前，省去前向引用疑虑；同包 LxEngineHolder，不用 import）
+helper = """    // [14v12] 歌手页前 5 首搜 ID 预取（抄 41 v11）：列表加载后对该页前 5 首静默搜 ID 填 pool19 缓存，只搜 ID、不取址、不探活
+    fun prefetchArtistTop5(list: List<LxMusicSearchApi.SongInfo>) {
+        try {
+            for (s in list.take(5)) {
+                LxEngineHolder.launchBackgroundIdSearch(s.platform, s.id, s.title, s.artist)
+            }
+        } catch (_: Exception) { }
+    }
+"""
+rep("    fun loadSongs(page: Int) {", helper + "    fun loadSongs(page: Int) {")
+# 2) loadSongs 成功后预取该页前 5 首（翻页自动续取）
+rep("                songPage = page",
+    "                songPage = page" + chr(10) + "                prefetchArtistTop5(newSongs) // [14v12] 新页加载后预取该页前 5 首 ID")
+assert src.count("fun prefetchArtistTop5") == 1
+assert src.count("prefetchArtistTop5(newSongs)") == 1
+assert src.count("(") == src.count(")")
+assert src.count("{") == src.count("}")
+assert src.count("[") == src.count("]")
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("OK 14v12")
+
+PYEOF
+
+echo "=== 14 v12 done ==="
