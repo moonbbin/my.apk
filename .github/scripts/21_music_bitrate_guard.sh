@@ -4453,6 +4453,12 @@ rep1("""        player?.release()
         player = null
         Log.i(TAG, "ExoPlayer 已释放")""", "停歌词轮询")
 
+# 圆括号假失衡修复（pool20 同款教训）：FLAC 注释里的 1)/2) 编号各带一个无配对的 )，朴素计数会误报 -2；改成 1./2.，逻辑不变。放断言之前，否则断言先死。
+rep1("""    // FLAC 码率估算（不需要文件总大小）：1) STREAMINFO 的 min/max 帧长直接算；
+    // 2) 扫描帧同步点取中位帧长；都失败返回 0。用于服务器不返回 Content-Range 时兜底。""",
+"""    // FLAC 码率估算（不需要文件总大小）：1. STREAMINFO 的 min/max 帧长直接算；
+    // 2. 扫描帧同步点取中位帧长；都失败返回 0。用于服务器不返回 Content-Range 时兜底。""", "FLAC 注释编号")
+
 assert s.count("[21v72]") == 6, "21v72 标记数异常"
 assert s.count("fun setCarLyrics(") == 1, "setCarLyrics 定义异常"
 assert s.count("carLyricLines") == 7, "carLyricLines 出现次数异常"
