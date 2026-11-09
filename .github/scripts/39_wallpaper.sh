@@ -3523,3 +3523,30 @@ else:
     print("OK 39pool21 探活循环先到先得完成")
 PYEOF21
 echo "=== 39pool21 完成 ==="
+
+# === 39pool22: 推荐预取公开后台搜 ID 入口（点歌提速重构改造四）===
+# launchBackgroundIdSearch 原为 private，仅 LxEngineHolder 内部可用；
+# 推荐页（RecommendScreen.kt，另一文件）复用它做后台预取，须公开。只改可见性，不动逻辑。
+# 39 在 40/41 之前跑，编译在全部脚本跑完后，故 41 v11 可引用。
+python3 << 'PYEOF39P22'
+import os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+if not os.path.exists(P):
+    print("❌ 未找到 LxPlayerActivity.kt"); raise SystemExit(1)
+s = open(P, encoding="utf-8").read()
+if "[39pool22]" in s:
+    print("跳过（39 pool22 已应用）")
+else:
+    old = "    private fun launchBackgroundIdSearch(platform: String, songId: String, title: String, artist: String) {"
+    assert s.count(old) == 1, "pool22 锚点数量异常"
+    new = "    fun launchBackgroundIdSearch(platform: String, songId: String, title: String, artist: String) { // [39pool22] 推荐预取公开：供推荐页调用"
+    s = s.replace(old, new, 1)
+    assert s.count("fun launchBackgroundIdSearch") == 1, "pool22 函数数量异常"
+    assert s.count("private fun launchBackgroundIdSearch") == 0, "pool22 private 残留"
+    assert "[39pool22]" in s, "pool22 标记未落"
+    open(P, "w", encoding="utf-8").write(s)
+    print("OK 39 pool22 推荐预取入口已公开")
+PYEOF39P22
+echo "=== 39 pool22 完成 ==="

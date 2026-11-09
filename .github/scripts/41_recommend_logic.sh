@@ -1289,3 +1289,59 @@ assert "size(width = 20.dp, height = 3.dp)" not in s2, "旧绿线残留"
 print("OK 41 v10 段标题白点已加")
 PYEOF41V10
 echo "=== 41 v10 完成 ==="
+
+# === 41 v11: 推荐预取（点歌提速重构改造四）：建池完成后对前 5 首静默搜 ID 填 pool19 缓存 ===
+# 只搜 ID、不取址、不探活；并发由 launchBackgroundIdSearch 内的 bgSearchInFlight 去重（上限 8）控制。
+# 前置：39pool22 已把 launchBackgroundIdSearch 由 private 改为公开（39 在 40/41 之前跑，编译在全部脚本跑完后）。
+python3 << 'PYEOF41V11'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+if not os.path.exists(P):
+    print("❌ 未找到 RecommendScreen.kt"); sys.exit(1)
+s = open(P, encoding="utf-8").read()
+if "[41v11]" in s:
+    print("跳过（41 v11 已应用）"); sys.exit(0)
+
+def rep(old, new, tag):
+    global s
+    assert s.count(old) == 1, "锚点异常: " + tag
+    s = s.replace(old, new, 1)
+
+# 1) import LxEngineHolder（推荐页调后台搜 ID 入口）
+rep("import com.github.tvbox.osc.ui.activity.LxMusicSearchApi\n",
+    "import com.github.tvbox.osc.ui.activity.LxMusicSearchApi\nimport com.github.tvbox.osc.ui.activity.LxEngineHolder // [41v11] 推荐预取调后台搜 ID\n", "LxEngineHolder import")
+
+# 2) 预取 helper：放在 buildRecommendPool 之后
+helper = """// [41v11] 推荐预取：建池完成后对前 5 首静默搜 ID 填 pool19 缓存，只搜 ID、不取址、不探活
+private fun prefetchTop5(pool: List<RecommendItem>) {
+    for (item in pool.take(5)) {
+        val s = item.song
+        LxEngineHolder.launchBackgroundIdSearch(s.platform, s.id, s.title, s.artist)
+    }
+}"""
+assert "requestMusicUrl" not in helper, "helper 含取址调用"
+assert "isStreamUrlAlive" not in helper, "helper 含探活调用"
+assert "probeAudio" not in helper, "helper 含探针调用"
+rep("    savePool(prefs, today, capped)\n    return capped\n}",
+    "    savePool(prefs, today, capped)\n    return capped\n}\n\n" + helper, "prefetchTop5 helper")
+
+# 3) 三处调用点：建池完成后预取前 5 首 ID
+rep("        val pool = buildRecommendPool(context, force = false)\n        fullPool = pool\n        visible = pool.take(20)",
+    "        val pool = buildRecommendPool(context, force = false)\n        fullPool = pool\n        visible = pool.take(20)\n        prefetchTop5(pool) // [41v11] 首进建池完成，预取前 5 首 ID", "首进调用点")
+rep("                val pool = buildRecommendPool(context, force = true) // force 绕过节流与版本门\n                fullPool = pool\n                visible = pool.take(20)",
+    "                val pool = buildRecommendPool(context, force = true) // force 绕过节流与版本门\n                fullPool = pool\n                visible = pool.take(20)\n                prefetchTop5(pool) // [41v11] 下拉刷新重建，预取前 5 首 ID", "刷新调用点")
+rep("                                val pool = buildRecommendPool(context, force = true)\n                                fullPool = pool\n                                visible = pool.take(20)",
+    "                                val pool = buildRecommendPool(context, force = true)\n                                fullPool = pool\n                                visible = pool.take(20)\n                                prefetchTop5(pool) // [41v11] 重试重建，预取前 5 首 ID", "重试调用点")
+
+open(P, "w", encoding="utf-8").write(s)
+s2 = open(P, encoding="utf-8").read()
+assert "[41v11]" in s2, "写盘复核失败"
+assert s2.count("prefetchTop5(pool)") == 3, "调用点数量异常"
+assert s2.count("fun prefetchTop5(pool: List<RecommendItem>)") == 1, "helper 数量异常"
+assert s2.count("import com.github.tvbox.osc.ui.activity.LxEngineHolder") == 1, "import 数量异常"
+assert s2.count("val pool = buildRecommendPool(context, force = false)") == 1, "首进锚点残留异常"
+print("OK 41 v11 推荐预取已加")
+PYEOF41V11
+echo "=== 41 v11 完成 ==="
