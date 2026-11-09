@@ -4117,3 +4117,192 @@ else:
     print("OK 21 v68 播放中途断流兜底完成")
 PYEOF68
 echo "=== 21 v68 完成 ==="
+
+# === 21 v69: MediaSession 补封面（车载蓝牙海报，LyricDock 口径） ===
+python3 << 'PYEOF21V69'
+import sys
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(path, encoding="utf-8").read()
+if "[21v69]" in s:
+    print("跳过（21 v69 MediaSession 补封面已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+# 1) 字段：当前歌封面地址 + 封面缓存 + 在途下载地址（锚在 carLyricLine 字段）
+rep1("""    private var carLyricLine: String? = null""",
+"""    private var carLyricLine: String? = null
+    // [21v69] MediaSession 补封面（车载蓝牙海报，LyricDock 口径）：当前歌封面地址；封面缓存（URL+bitmap，URL 不变直接复用）；在途下载地址（防重复下载）
+    private var currentPicUrl: String? = null
+    private var lastArtUrl: String? = null
+    private var lastArtBitmap: android.graphics.Bitmap? = null
+    private var artLoadingUrl: String? = null""",
+"v69 字段")
+
+# 2) setCurrentInfo 记封面地址并触发载封面
+rep1("""    fun setCurrentInfo(title: String, artist: String, picUrl: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist
+        carLyricLine = null // [21v53] 切歌清车载歌词行
+        try { updateMediaSessionMetadata() } catch (_: Exception) { } // [21v51]""",
+"""    fun setCurrentInfo(title: String, artist: String, picUrl: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist
+        carLyricLine = null // [21v53] 切歌清车载歌词行
+        currentPicUrl = picUrl // [21v69] 记当前歌封面地址
+        try { loadArtworkIfNeeded() } catch (_: Exception) { } // [21v69] 封面变化时后台载
+        try { updateMediaSessionMetadata() } catch (_: Exception) { } // [21v51]""",
+"setCurrentInfo 记封面")
+
+# 3) play() 记封面地址并触发载封面（锚在 v53 play 清行处，updateMediaSessionAll 区别于 setCurrentInfo 的 updateMediaSessionMetadata）
+rep1("""            carLyricLine = null // [21v53] 切歌清车载歌词行
+            try { updateMediaSessionAll() } catch (_: Exception) { } // [21v51]""",
+"""            carLyricLine = null // [21v53] 切歌清车载歌词行
+            currentPicUrl = picUrl // [21v69] 记当前歌封面地址
+            try { loadArtworkIfNeeded() } catch (_: Exception) { } // [21v69] 封面变化时后台载
+            try { updateMediaSessionAll() } catch (_: Exception) { } // [21v51]""",
+"play 记封面")
+
+# 4) 元数据补封面（锚在 v53 ARTIST 行后；仅缓存命中才写，否则不写不阻塞）
+rep1(""".putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, if (isCarLyricOn() && !carLyricLine.isNullOrBlank()) carLyricLine!! else _currentArtist.value.ifEmpty { "未知歌手" }) // [21v53]""",
+""".putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, if (isCarLyricOn() && !carLyricLine.isNullOrBlank()) carLyricLine!! else _currentArtist.value.ifEmpty { "未知歌手" }) // [21v53]
+                .putBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART, if (lastArtBitmap != null && lastArtUrl == currentPicUrl) lastArtBitmap else null) // [21v69] 车载海报：缓存命中才写，否则不写不阻塞""",
+"元数据补封面")
+
+# 5) 后台载封面函数（插在 updateMediaSessionState 之前）
+rep1("""    private fun updateMediaSessionState() {""",
+"""    // [21v69] 后台载封面（LyricDock 口径）：IO 线程下载，connect 6s/read 10s；宽超 512 等比缩到 512；缓存后主线程再刷一次元数据；全程 try-catch；下载中途切歌则丢弃结果。旧缓存靠 lastArtUrl 比对自然失效，不必额外清；失败也记 URL，换歌前不再重试。
+    private fun loadArtworkIfNeeded() {
+        try {
+            val url = currentPicUrl
+            if (url.isNullOrBlank()) return
+            if (url == lastArtUrl) return
+            if (url == artLoadingUrl) return
+            artLoadingUrl = url
+            Thread {
+                var conn: java.net.HttpURLConnection? = null
+                try {
+                    conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 6000
+                    conn.readTimeout = 10000
+                    conn.instanceFollowRedirects = true
+                    conn.connect()
+                    if (conn.responseCode != 200) {
+                        if (currentPicUrl == url) { lastArtUrl = url; lastArtBitmap = null }
+                        return@Thread
+                    }
+                    val bytes = conn.inputStream.use { it.readBytes() }
+                    if (currentPicUrl != url) return@Thread
+                    var bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    if (bmp == null) {
+                        if (currentPicUrl == url) { lastArtUrl = url; lastArtBitmap = null }
+                        return@Thread
+                    }
+                    if (bmp.width > 512) {
+                        val h = (512 * bmp.height / bmp.width).coerceAtLeast(1)
+                        val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, 512, h, true)
+                        if (scaled != bmp) { try { bmp.recycle() } catch (_: Exception) { } }
+                        bmp = scaled
+                    }
+                    if (currentPicUrl != url) { try { bmp.recycle() } catch (_: Exception) { } ; return@Thread }
+                    val old = lastArtBitmap
+                    lastArtUrl = url
+                    lastArtBitmap = bmp
+                    if (old != null && old != bmp) { try { old.recycle() } catch (_: Exception) { } }
+                    try { mainHandler.post { try { updateMediaSessionMetadata() } catch (_: Exception) { } } } catch (_: Exception) { }
+                } catch (_: Exception) {
+                    if (currentPicUrl == url) { lastArtUrl = url; lastArtBitmap = null }
+                } finally {
+                    if (artLoadingUrl == url) artLoadingUrl = null
+                    try { conn?.disconnect() } catch (_: Exception) { }
+                }
+            }.start()
+        } catch (_: Exception) { }
+    }
+
+    private fun updateMediaSessionState() {""",
+"后台载封面函数")
+
+assert s.count("[21v69]") >= 6, "21v69 标记数异常"
+assert s.count("METADATA_KEY_ALBUM_ART") == 1, "ALBUM_ART 未落位或重复"
+assert s.count("currentPicUrl") >= 8, "currentPicUrl 出现次数异常"
+assert s.count("loadArtworkIfNeeded") >= 3, "loadArtworkIfNeeded 出现次数异常"
+assert s.count("lastArtBitmap") >= 4, "lastArtBitmap 出现次数异常"
+open(path, "w", encoding="utf-8").write(s)
+print("OK 21 v69 MediaSession 补封面已写")
+PYEOF21V69
+echo "=== 21 v69 完成 ==="
+grep -q '21v69' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v69 写入失败"; exit 1; }
+echo "OK 21 v69 MediaSession 补封面已写入"
+
+# === 21 v70: 歌名位置换歌词＋歌词行切了重发通知（车载蓝牙歌词上车） ===
+python3 << 'PYEOF21V70'
+import sys
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(path, encoding="utf-8").read()
+if "[21v70]" in s:
+    print("跳过（21 v70 歌名位置换歌词已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+# 1) 显示值换算 helper（插在 updateMediaSessionMetadata 之前；只读缓存状态，不触发封面下载、不等异步结果）
+rep1("""    private fun updateMediaSessionMetadata() {""",
+"""    // [21v70] 显示值换算（歌名位置换歌词）：有海报（v69 缓存命中）且有歌词行时 TITLE 写歌词行、ARTIST 写歌名；否则 TITLE 写歌名、ARTIST 写歌词行或歌手名。只读缓存状态，不触发封面下载、不等异步结果。
+    private fun currentDisplayTitleAndArtist(): Pair<String, String> {
+        val title = _currentTitle.value.ifEmpty { "未知歌曲" }
+        val artist = _currentArtist.value.ifEmpty { "未知歌手" }
+        val line = if (isCarLyricOn() && !carLyricLine.isNullOrBlank()) carLyricLine!! else null
+        val hasArt = lastArtBitmap != null && lastArtUrl == currentPicUrl
+        return if (hasArt && line != null) Pair(line, title) else Pair(title, line ?: artist)
+    }
+
+    private fun updateMediaSessionMetadata() {""",
+"显示值换算 helper")
+
+# 2) 元数据 TITLE/ARTIST 走换算（锚在 setMetadata 块；ARTIST 行保留 [21v53] 旧标记）
+rep1("""            s.setMetadata(android.media.MediaMetadata.Builder()
+                .putString(android.media.MediaMetadata.METADATA_KEY_TITLE, _currentTitle.value.ifEmpty { "未知歌曲" })
+                .putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, if (isCarLyricOn() && !carLyricLine.isNullOrBlank()) carLyricLine!! else _currentArtist.value.ifEmpty { "未知歌手" }) // [21v53]""",
+"""            val disp = currentDisplayTitleAndArtist() // [21v70] 歌名位置换歌词
+            s.setMetadata(android.media.MediaMetadata.Builder()
+                .putString(android.media.MediaMetadata.METADATA_KEY_TITLE, disp.first) // [21v70]
+                .putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, disp.second) // [21v53][21v70]""",
+"元数据走换算")
+
+# 3) 歌词行切了重发通知（LyricDock 同款 1 notify per line；同步快速调用，不等封面下载）
+rep1("""    fun updateCarLyricLine(line: String?) {
+        try {
+            if (line == carLyricLine) return
+            carLyricLine = line
+            updateMediaSessionMetadata()
+        } catch (_: Exception) { }
+    }""",
+"""    fun updateCarLyricLine(line: String?) {
+        try {
+            if (line == carLyricLine) return
+            carLyricLine = line
+            updateMediaSessionMetadata()
+            // [21v70] 歌词行切了重发通知：元数据已更新，通知重发逼车机刷新；标题与歌手取自同一换算，与元数据显示值一致；同步快速调用，不等封面下载
+            try {
+                val disp = currentDisplayTitleAndArtist()
+                appContext?.let { LxMediaNotification.show(it, disp.first, disp.second, player?.isPlaying == true) }
+            } catch (_: Exception) { }
+        } catch (_: Exception) { }
+    }""",
+"歌词行切了重发通知")
+
+assert s.count("[21v70]") == 5, "21v70 标记数异常"
+assert s.count("currentDisplayTitleAndArtist") == 3, "换算 helper 未落位或调用缺失"
+assert s.count("LxMediaNotification.show(it, disp.first, disp.second") == 1, "通知重发未落位或重复"
+assert s.count("21v53") == 6, "21v53 标记数异常"
+assert s.count("carLyricLine") == 9, "carLyricLine 出现次数异常"
+assert s.count("METADATA_KEY_ALBUM_ART") == 1, "ALBUM_ART 异常"
+open(path, "w", encoding="utf-8").write(s)
+print("OK 21 v70 歌名位置换歌词已写")
+PYEOF21V70
+echo "=== 21 v70 完成 ==="
+grep -q '21v70' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v70 写入失败"; exit 1; }
+echo "OK 21 v70 歌名位置换歌词已写入"
