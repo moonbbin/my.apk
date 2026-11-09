@@ -3230,7 +3230,7 @@ else:
     helpers += "            }" + chr(10)
     helpers += "            // 看门狗：全部源都跑完仍没地址时，用 null 唤醒等待，不傻等 9 秒" + chr(10)
     helpers += "            val watchdog = scope.async {" + chr(10)
-    helpers += "                jobs.joinAll()" + chr(10)
+    helpers += "                jobs.forEach { it.join() } // [39pool20] joinAll 须 import，本文件没引；forEach+Job.join() 等价且零 import" + chr(10)
     helpers += "                first.complete(null)" + chr(10)
     helpers += "            }" + chr(10)
     helpers += "            val result = try {" + chr(10)
