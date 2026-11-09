@@ -143,3 +143,68 @@ PYEOF43V2
 echo "=== 43 v2 完成 ==="
 grep -q '43v2' "$PA" || { echo "X 43 v2 写入失败"; exit 1; }
 echo "OK 43 v2 开关移除已写入"
+# === 43 v3: 歌词交接给 Manager（行计算与推送改由 Manager 按位置做，页销毁不再清行） ===
+python3 << 'PYEOF43V3'
+import sys
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+s = open(path, encoding="utf-8").read()
+if "[43v3]" in s:
+    print("跳过（43 v3 歌词交接已应用）"); sys.exit(0)
+assert "[43v2]" in s, "43 v2 未应用，v3 无从改起"
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+# 删推行：Manager 现在自己按位置算行，页不再逐行推
+rep1("""    // [43v1] 车载蓝牙歌词：行切换时把当前歌词行推给管理器，管理器写进 MediaSession ARTIST（歌手位置），歌名不动；无行时推 null 回落歌手
+    LaunchedEffect(currentLyricIndex) {
+        try { LxPlayerManager.updateCarLyricLine(lyricLines.getOrNull(currentLyricIndex)?.text) } catch (_: Exception) { }
+    }
+""", "", "删推行")
+
+# 删清行：不删则 Manager 算出的行在页销毁瞬间又被清掉
+rep1("""    // [43v1] 页面销毁时清掉车载歌词行，车机回落到歌手名
+    DisposableEffect(Unit) {
+        onDispose {
+            try { LxPlayerManager.updateCarLyricLine(null) } catch (_: Exception) { }
+        }
+    }
+""", "", "删清行")
+
+# 加交接：放在加载块后，lyricKey 在此已定义；managerPicUrl 行之前
+rep1("""    val managerPicUrl by LxPlayerManager.picUrl.collectAsState()
+    val currentQuality by LxPlayerManager.currentQuality.collectAsState()""",
+"""    // [43v3] 歌词交接：歌词加载好或清空时把全量行交给 Manager，行计算与推送改由 Manager 按位置做；页销毁不再清行
+    LaunchedEffect(lyricLines) {
+        try { LxPlayerManager.setCarLyrics(lyricLines.map { it.timeMs to it.text }, lyricKey) } catch (_: Exception) { }
+    }
+    val managerPicUrl by LxPlayerManager.picUrl.collectAsState()
+    val currentQuality by LxPlayerManager.currentQuality.collectAsState()""", "加交接")
+
+# 删闲置 Switch import：v2 删开关 UI 后已无人用
+rep1("import androidx.compose.material3.Switch // [43v1]\n", "", "删 Switch import")
+
+# 删死状态 carLyricOn：v2 删开关 UI 后无任何读取
+rep1("\n    var carLyricOn by remember { mutableStateOf(lyricPrefs.getBoolean(\"car_lyric\", true)) } // [43v1] 车载蓝牙歌词开关（默认开）", "", "删 carLyricOn")
+
+# 删闲置 DisposableEffect import：v3 删清行后页内已无 DisposableEffect 使用
+rep1("import androidx.compose.runtime.DisposableEffect // [43v1]\n", "", "删 DisposableEffect import")
+
+# 后验
+assert s.count("LxPlayerManager.updateCarLyricLine") == 0, "页内 updateCarLyricLine 调用未清零"
+assert s.count("LxPlayerManager.setCarLyrics") == 1, "setCarLyrics 调用缺失"
+assert s.count("[43v3]") == 1, "43v3 标记数异常"
+assert s.count("carLyricOn") == 0, "carLyricOn 残留"
+assert s.count("DisposableEffect") == 0, "DisposableEffect 残留"
+assert s.count("[43v1]") == 0, "43v1 残留（v1 接线应已全部被 v3 取代）"
+assert s.count("[43v2]") == 1, "43v2 标记被动过"
+assert s.count("{") == s.count("}"), "花括号失衡"
+assert s.count("(") == s.count(")"), "圆括号失衡"
+assert s.count("[") == s.count("]"), "方括号失衡"
+open(path, "w", encoding="utf-8").write(s)
+print("OK 43 v3 歌词交接已写")
+PYEOF43V3
+echo "=== 43 v3 完成 ==="
+grep -q '43v3' "$PA" || { echo "X 43 v3 写入失败"; exit 1; }
+echo "OK 43 v3 歌词交接已写入"

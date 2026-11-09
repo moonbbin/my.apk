@@ -4306,3 +4306,171 @@ PYEOF21V70
 echo "=== 21 v70 完成 ==="
 grep -q '21v70' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v70 写入失败"; exit 1; }
 echo "OK 21 v70 歌名位置换歌词已写入"
+# === 21 v71: MediaSession 状态同步（控制中心/锁屏/车机进度与播放态定格修复） ===
+python3 << 'PYEOF21V71'
+import sys
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(path, encoding="utf-8").read()
+if "[21v71]" in s:
+    print("跳过（21 v71 MediaSession 状态同步已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+# onIsPlayingChanged 内刷状态（锚：监听器体内三行，13 生成原文，21 从未动过监听器；签名行只作定位参考，不进锚；_isPlaying.value = isPlaying 与 if (isPlaying) _error.value = null 在底子全文件各恰好 1 次；updateMediaSessionState() 由 v51 定义，v71 只调用不定义）
+rep1("""                        _isPlaying.value = isPlaying
+                        _isLoading.value = false
+                        if (isPlaying) _error.value = null""",
+"""                        _isPlaying.value = isPlaying
+                        try { updateMediaSessionState() } catch (_: Exception) { } // [21v71]
+                        _isLoading.value = false
+                        if (isPlaying) _error.value = null""",
+"onIsPlayingChanged 刷状态")
+
+assert s.count("[21v71]") == 1, "21v71 标记数异常"
+assert s.count("try { updateMediaSessionState() } catch (_: Exception) { } // [21v71]") == 1, "v71 刷状态行未落位或重复"
+open(path, "w", encoding="utf-8").write(s)
+print("OK 21 v71 MediaSession 状态同步已写")
+PYEOF21V71
+echo "=== 21 v71 完成 ==="
+grep -q '21v71' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v71 写入失败"; exit 1; }
+echo "OK 21 v71 MediaSession 状态同步已写入"
+# === 21 v72: 车载歌词搬进 Manager（行计算与推送改由 Manager 按位置做，页销毁后照样推） ===
+python3 << 'PYEOF21V72'
+import sys
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(path, encoding="utf-8").read()
+if "[21v72]" in s:
+    print("跳过（21 v72 车载歌词搬进 Manager 已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+# 字段 + 交接方法 + 轮询循环 + 行计算（锚在 v69 字段块末尾；Runnable 用 mainHandler 自调度，不引 GlobalScope）
+rep1("""    private var lastArtBitmap: android.graphics.Bitmap? = null
+    private var artLoadingUrl: String? = null""",
+"""    private var lastArtBitmap: android.graphics.Bitmap? = null
+    private var artLoadingUrl: String? = null
+    // [21v72] 车载歌词搬进 Manager：页把歌词行交给 Manager，Manager 按位置自己算行；页销毁后照样推，锁屏和车机不断歌词
+    private var carLyricLines: List<Pair<Long, String>> = emptyList()
+    private var carLyricSongKey: String? = null
+    private var carLyricIndex: Int = -1
+    private var carLyricPollingStarted: Boolean = false
+    private val carLyricPollRunnable = object : Runnable {
+        override fun run() {
+            try {
+                if (_isPlaying.value) {
+                    updatePosition()
+                    updateCarLyricFromPosition()
+                }
+            } catch (_: Exception) { }
+            try { mainHandler.postDelayed(this, 100) } catch (_: Exception) { }
+        }
+    }
+    private fun startCarLyricPolling() {
+        if (carLyricPollingStarted) return
+        carLyricPollingStarted = true
+        try { mainHandler.post(carLyricPollRunnable) } catch (_: Exception) { }
+    }
+    fun setCarLyrics(lines: List<Pair<Long, String>>, songKey: String) {
+        try {
+            if (carLyricSongKey != null && songKey != carLyricSongKey && carLyricLines.isNotEmpty() && lines.isNotEmpty()) return
+            carLyricLines = lines
+            carLyricSongKey = songKey
+            carLyricIndex = -1
+            updateCarLyricFromPosition()
+        } catch (_: Exception) { }
+    }
+    private fun updateCarLyricFromPosition() {
+        try {
+            val lines = carLyricLines
+            val pos = _position.value
+            var idx = 0
+            for (i in lines.indices) {
+                if (pos >= lines[i].first) idx = i else break
+            }
+            if (idx != carLyricIndex) {
+                carLyricIndex = idx
+                updateCarLyricLine(lines.getOrNull(idx)?.second)
+            }
+        } catch (_: Exception) { }
+    }""", "歌词字段与轮询")
+
+# play() 切歌清歌词行（锚在 v69 play 记封面块，updateMediaSessionAll 区别于 setCurrentInfo）
+rep1("""            carLyricLine = null // [21v53] 切歌清车载歌词行
+            currentPicUrl = picUrl // [21v69] 记当前歌封面地址
+            try { loadArtworkIfNeeded() } catch (_: Exception) { } // [21v69] 封面变化时后台载
+            try { updateMediaSessionAll() } catch (_: Exception) { } // [21v51]""",
+"""            carLyricLine = null // [21v53] 切歌清车载歌词行
+            carLyricLines = emptyList(); carLyricIndex = -1; carLyricSongKey = null // [21v72] 切歌清歌词行
+            currentPicUrl = picUrl // [21v69] 记当前歌封面地址
+            try { loadArtworkIfNeeded() } catch (_: Exception) { } // [21v69] 封面变化时后台载
+            try { updateMediaSessionAll() } catch (_: Exception) { } // [21v51]""", "play 清歌词行")
+
+# setCurrentSong 切歌清歌词行（整块锚点，函数头区别于 setCurrentInfo）
+rep1("""    fun setCurrentSong(title: String, artist: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist
+        carLyricLine = null // [21v53] 切歌清车载歌词行
+        try { updateMediaSessionMetadata() } catch (_: Exception) { } // [21v51]""",
+"""    fun setCurrentSong(title: String, artist: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist
+        carLyricLine = null // [21v53] 切歌清车载歌词行
+        carLyricLines = emptyList(); carLyricIndex = -1; carLyricSongKey = null // [21v72] 切歌清歌词行
+        try { updateMediaSessionMetadata() } catch (_: Exception) { } // [21v51]""", "setCurrentSong 清歌词行")
+
+# setCurrentInfo 切歌清歌词行（锚在 v69 记封面块）
+rep1("""    fun setCurrentInfo(title: String, artist: String, picUrl: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist
+        carLyricLine = null // [21v53] 切歌清车载歌词行
+        currentPicUrl = picUrl // [21v69] 记当前歌封面地址
+        try { loadArtworkIfNeeded() } catch (_: Exception) { } // [21v69] 封面变化时后台载
+        try { updateMediaSessionMetadata() } catch (_: Exception) { } // [21v51]""",
+"""    fun setCurrentInfo(title: String, artist: String, picUrl: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist
+        carLyricLine = null // [21v53] 切歌清车载歌词行
+        carLyricLines = emptyList(); carLyricIndex = -1; carLyricSongKey = null // [21v72] 切歌清歌词行
+        currentPicUrl = picUrl // [21v69] 记当前歌封面地址
+        try { loadArtworkIfNeeded() } catch (_: Exception) { } // [21v69] 封面变化时后台载
+        try { updateMediaSessionMetadata() } catch (_: Exception) { } // [21v51]""", "setCurrentInfo 清歌词行")
+
+# init() 建播后启动歌词轮询（锚在 ExoOK 行；建播成功才启动，flag 防重复启动）
+rep1("""            Log.i(TAG,"ExoOK")""",
+"""            Log.i(TAG,"ExoOK")
+            try { startCarLyricPolling() } catch (_: Exception) { } // [21v72] 建播后启动歌词轮询""", "启动歌词轮询")
+
+# release() 停歌词轮询（锚在 player 释放三行；先停循环再放播放器）
+rep1("""        player?.release()
+        player = null
+        Log.i(TAG, "ExoPlayer 已释放")""",
+"""        try { mainHandler.removeCallbacks(carLyricPollRunnable); carLyricPollingStarted = false } catch (_: Exception) { } // [21v72] 停歌词轮询
+        player?.release()
+        player = null
+        Log.i(TAG, "ExoPlayer 已释放")""", "停歌词轮询")
+
+assert s.count("[21v72]") == 6, "21v72 标记数异常"
+assert s.count("fun setCarLyrics(") == 1, "setCarLyrics 定义异常"
+assert s.count("carLyricLines") == 7, "carLyricLines 出现次数异常"
+assert s.count("carLyricPollRunnable") == 3, "轮询 Runnable 出现次数异常"
+assert s.count("updateCarLyricFromPosition") == 3, "行计算函数出现次数异常"
+assert s.count("startCarLyricPolling") == 2, "轮询启动出现次数异常"
+assert s.count("carLyricSongKey") == 7, "carLyricSongKey 出现次数异常"
+assert s.count("carLyricIndex") == 7, "carLyricIndex 出现次数异常"
+assert s.count("[21v53]") == 6, "21v53 标记被动过"
+assert s.count("[21v69]") == 7, "21v69 标记被动过"
+assert s.count("[21v70]") == 5, "21v70 标记被动过"
+assert s.count("[21v71]") == 1, "21v71 标记被动过"
+assert s.count("{") == s.count("}"), "花括号失衡"
+assert s.count("(") == s.count(")"), "圆括号失衡"
+assert s.count("[") == s.count("]"), "方括号失衡"
+open(path, "w", encoding="utf-8").write(s)
+print("OK 21 v72 车载歌词搬进 Manager 已写")
+PYEOF21V72
+echo "=== 21 v72 完成 ==="
+grep -q '21v72' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v72 写入失败"; exit 1; }
+echo "OK 21 v72 车载歌词搬进 Manager 已写入"
