@@ -2862,7 +2862,7 @@ if "[39pool19]" in s:
 else:
     Q = chr(34)
     # 1. 在 lastGoodSourceId 后加 ID 映射缓存函数（内存版）
-    old = "    var lastGoodSourceId: String? = null"
+    old = "    var lastGoodSourceId: String? = null" + chr(10) + "        private set"
     # 用 chr(34) 拼 Kotlin 字符串，杜绝转义猜测
     new = old + chr(10)
     new += "    // [39pool19] ID 映射缓存：内存版，Key=源平台_目标平台_原ID，Value=目标ID|时间戳，7 天过期，上限 500 条" + chr(10)
