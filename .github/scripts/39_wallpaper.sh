@@ -3407,3 +3407,119 @@ else:
     print("OK 39pool20 全场景秒播完成")
 PYEOF20
 echo "=== 39pool20 完成 ==="
+# === 39pool21: pool18 探活循环改先到先得 + 看门狗防死锁（用户确认执行）===
+python3 << 'PYEOF21'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[39pool21]" in s:
+    print("跳过（39 pool21 已应用）")
+else:
+    # 锚点：pool18 收尾段，以 CI 态 pool20 生成文本为准
+    # 起始 var lastError 声明全文件唯一；结束 pool20 第 3 步注释全文件唯一
+    # 只换这一段：缓存查、原生直出、pool17 搜 ID、重试块一字不动
+    assert s.count("        var lastError: Throwable? = null") == 1, "pool21 锚点 lastError 数量异常"
+    assert s.count("        // [39pool20] 3. 缓存 ID 全军覆没") == 1, "pool21 锚点 pool20 第 3 步数量异常"
+    loop_start = s.find("        var lastError: Throwable? = null")
+    loop_end = s.find("        // [39pool20] 3. 缓存 ID 全军覆没", loop_start)
+    assert loop_start != -1 and loop_end != -1 and loop_start < loop_end, "pool21 锚点定位失败"
+    new_loop = """        var lastError: Throwable? = null
+        // [39pool18][39pool21] 先到先得：谁先拿到活地址谁赢，其余 cancel；看门狗防死锁
+        val firstAlive = kotlinx.coroutines.CompletableDeferred<Pair<String, String>?>()
+        val raceJobs = targets.map { (sid, eng) ->
+            poolScope.launch {
+                try {
+                    val url = kotlinx.coroutines.withTimeout(8000L) {
+                        kotlin.coroutines.suspendCoroutine<String?> { cont ->
+                            try {
+                                eng.requestMusicUrl(effPlatform, effInfo, quality) { r ->
+                                    r.fold(
+                                        onSuccess = { u -> cont.resumeWith(Result.success(u)) },
+                                        onFailure = { e -> cont.resumeWith(Result.failure(e)) }
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                cont.resumeWith(Result.failure(e))
+                            }
+                        }
+                    }
+                    if (!url.isNullOrBlank() && LxPlayerManager.isStreamUrlAlive(url)) {
+                        LxRuntimeLog.add("源 $sid 探活成功，确定使用！")
+                        firstAlive.complete(sid to url)
+                    } else if (!url.isNullOrBlank()) {
+                        markSourceCoolDown(sid)
+                    }
+                } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                    markSourceCoolDown(sid) // 超时：记冷却
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e // 真取消：必须透传
+                } catch (e: Exception) {
+                    lastError = e
+                    markSourceCoolDown(sid)
+                }
+            }
+        }
+
+        // 看门狗：全部源跑完仍未成功则强制唤醒
+        poolScope.launch {
+            raceJobs.forEach { it.join() }
+            if (!firstAlive.isCompleted) {
+                firstAlive.complete(null)
+            }
+        }
+
+        val results = try {
+            kotlinx.coroutines.withTimeout(9000L) { firstAlive.await() }
+        } catch (e: Exception) {
+            null
+        } finally {
+            raceJobs.forEach { it.cancel() } // 绝对清理
+        }
+
+        if (results != null) {
+            lastGoodSourceId = results.first
+            return results
+        }
+"""
+    # 新块自检：三括号平衡、无反斜杠、禁 joinAll、协程全限定名、超时先于取消
+    assert new_loop.count("(") == new_loop.count(")"), "pool21 新块圆括号不平衡"
+    assert new_loop.count("{") == new_loop.count("}"), "pool21 新块花括号不平衡"
+    assert new_loop.count("[") == new_loop.count("]"), "pool21 新块方括号不平衡"
+    assert chr(92) not in new_loop, "pool21 新块含反斜杠"
+    assert "joinAll()" not in new_loop, "pool21 新块含禁用 joinAll"
+    assert "kotlinx.coroutines.CompletableDeferred" in new_loop, "pool21 CompletableDeferred 未全限定"
+    assert "kotlinx.coroutines.withTimeout" in new_loop, "pool21 withTimeout 未全限定"
+    assert new_loop.find("kotlinx.coroutines.TimeoutCancellationException") < new_loop.find("kotlinx.coroutines.CancellationException"), "pool21 超时与取消顺序错误"
+    assert ".mapNotNull { it.await() }.firstOrNull()" not in new_loop, "pool21 新块含废弃 await-all"
+    s = s[:loop_start] + new_loop + s[loop_end:]
+    # 函数头注释追加 pool21（旧标记保留）
+    old_head = "；[39pool20] 全场景秒播：缓存先查、原生直出先到先得、后台建映射"
+    assert s.count(old_head) == 1, "pool21 锚点函数头数量异常"
+    s = s.replace(old_head, old_head + "；[39pool21] 探活循环先到先得", 1)
+    # 自检
+    assert "[39pool21]" in s, "pool21 标记未落"
+    assert "[39pool18]" in s and "[39pool20]" in s and "[39pool19]" in s and "[39pool17]" in s, "旧池标记丢失"
+    assert s.count(".mapNotNull { it.await() }.firstOrNull()") == 1, "pool21 await-all 残留异常（应只剩重试块 1 处）"
+    assert s.count("val results = kotlinx.coroutines.coroutineScope") == 0, "pool21 旧 pool18 收尾残留"
+    assert s.count("val firstAlive = kotlinx.coroutines.CompletableDeferred") == 1, "pool21 firstAlive 数量异常"
+    assert s.count("raceJobs.forEach { it.join() }") == 1, "pool21 看门狗数量异常"
+    assert s.count("firstAlive.complete(null)") == 1, "pool21 看门狗唤醒数量异常"
+    assert s.count("fun resolveUrlWithFallback") == 1, "pool21 函数数量异常"
+    assert s.count("fun raceNativeUrl") == 1 and s.count("fun lookupIdMap") == 1, "pool20 助手函数丢失"
+    assert s.count("(") == s.count(")"), "pool21 全文件圆括号不平衡"
+    assert s.count("{") == s.count("}"), "pool21 全文件花括号不平衡"
+    assert s.count("[") == s.count("]"), "pool21 全文件方括号不平衡"
+    print("=== 自检：pool21 新收尾 ===")
+    idx = s.find("[39pool21]")
+    print(s[idx-200:idx+900])
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 39pool21 探活循环先到先得完成")
+PYEOF21
+echo "=== 39pool21 完成 ==="
