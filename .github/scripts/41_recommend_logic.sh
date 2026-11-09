@@ -1345,3 +1345,37 @@ assert s2.count("val pool = buildRecommendPool(context, force = false)") == 1, "
 print("OK 41 v11 推荐预取已加")
 PYEOF41V11
 echo "=== 41 v11 完成 ==="
+
+# === 41 v12: 推荐页点歌瞬时刷新（卡片公式加 loading 中间态）===
+# 根因：卡片可见态 = playing && playerIsPlaying，playerIsPlaying 要等整条取址链跑完才翻真，卡片缺“已点歌、正在取址”中间态。
+# 修法：签名加参 playerIsLoading（MH 状态段由 32 v170 订阅、40 [40refresh] 传参），主卡与货架公式改为 playing && (playerIsPlaying || playerIsLoading)；起播后 isPlaying 接力、失败时 loading 复位自动回落，不撒谎。
+python3 << 'PYEOF41V12'
+import sys, os
+P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+while not os.path.exists(P) and os.getcwd() != "/":
+    os.chdir("..")
+if not os.path.exists(P):
+    print("❌ 未找到 RecommendScreen.kt"); sys.exit(1)
+s = open(P, encoding="utf-8").read()
+if "[41v12]" in s:
+    print("跳过（41 v12 已应用）")
+else:
+    def rep(old, new, name):
+        global s
+        assert s.count(old) == 1, "v12 锚点 %s: %d" % (name, s.count(old))
+        s = s.replace(old, new, 1)
+    rep("    playerIsPlaying: Boolean,",
+        "    playerIsPlaying: Boolean,\n    playerIsLoading: Boolean, // [41v12] 点歌瞬时刷新：loading 窗口即已点歌未出声", "签名加参")
+    rep("                    isPlaying = playing && playerIsPlaying,",
+        "                    isPlaying = playing && (playerIsPlaying || playerIsLoading), // [41v12]", "主卡公式")
+    rep("                            isPlaying = sPlaying && playerIsPlaying,",
+        "                            isPlaying = sPlaying && (playerIsPlaying || playerIsLoading), // [41v12]", "货架公式")
+    open(P, "w", encoding="utf-8").write(s)
+    s2 = open(P, encoding="utf-8").read()
+    assert "[41v12]" in s2, "写盘复核失败"
+    assert s2.count("playerIsLoading: Boolean") == 1, "签名加参数量异常"
+    assert s2.count("playerIsPlaying || playerIsLoading") == 2, "公式数量异常"
+    assert s2.count("    playerIsPlaying: Boolean,") == 1, "签名锚点残留异常"
+    print("OK 41 v12 推荐页点歌瞬时刷新已加")
+PYEOF41V12
+echo "=== 41 v12 完成 ==="

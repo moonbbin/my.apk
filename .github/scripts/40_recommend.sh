@@ -787,5 +787,12 @@ fun playSongsOnly(
     print('OK [40fin] 按钮播歌不进页')
 else:
     print('SKIP [40fin] 已应用')
+if '[40refresh]' not in c:
+    c = rep(c, '                        playerIsPlaying = playerIsPlaying,',
+        '                        playerIsPlaying = playerIsPlaying,\n                        playerIsLoading = playerIsLoading, // [40refresh] 点歌瞬时刷新：传 loading 态给推荐页', '40refresh 传参')
+    save(MH, c)
+    print('OK [40refresh] 推荐页点歌瞬时刷新传参')
+else:
+    print('SKIP [40refresh] 已应用')
 PYEOF40
 echo "=== 40 rec 完成 ==="

@@ -12921,3 +12921,27 @@ else:
     print("OK 32 v169 探活只开连接完成")
 PYEOF169
 echo "=== 32 v169 完成 ==="
+
+# === 32 v170: 推荐页点歌瞬时刷新（用户确认）===
+# 痛点：推荐页点歌后卡片不立刻翻播放态，要等整条取址链跑完 ExoPlayer 出声才翻；进播放页再回来只是等够了时间。
+# 修法：MH 状态段复用 Manager 公开流 isLoading（点歌同步置 true、成功起播/失败终局自动复位），在 playerIsPlaying 订阅行后加一行订阅；卡片公式改法在 41 v12，传参在 40 [40refresh]。21 不动（_isPlaying 仍只反映真实出声）。
+python3 << 'PYEOF170'
+import os
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v170]" in s:
+    print("跳过（32 v170 已应用）")
+else:
+    old = "            val playerIsPlaying by LxPlayerManager.isPlaying.collectAsState()"
+    assert s.count(old) == 1, "v170 锚点数=" + str(s.count(old))
+    s = s.replace(old, old + "\n            val playerIsLoading by LxPlayerManager.isLoading.collectAsState() // [32v170] 推荐页点歌瞬时刷新：loading 窗口即已点歌未出声", 1)
+    assert "[32v170]" in s, "v170 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v170 推荐页点歌瞬时刷新状态订阅完成")
+PYEOF170
+echo "=== 32 v170 完成 ==="
