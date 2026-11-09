@@ -7463,3 +7463,42 @@ python3 /tmp/patch_bridge46v35.py
 grep -q "46v35" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v35 bridge"; exit 1; }
 echo "OK 46v35 bridge"
 echo "=== 46 v35 done ==="
+# === 46 v36: 修构建红——推荐页点歌瞬时刷新漏传参（用户截图 22:36，MH:627:21 No value passed for parameter 'playerIsLoading'） ===
+# 根因：41 v12 给 RecommendScreen 加了必填参数 playerIsLoading（无默认值），40 [40refresh] 只给 40 的调用点补了传参；
+# 但 46 v9 删了 40 的 RECOMMEND 分支，46 v11 重建时用的是一份不带该参数的旧调用点（v11 new_when），最终 MH 里只剩这一个调用点且漏传参。
+# 修法：只给 v11 的调用点补一行 playerIsLoading = playerIsLoading,；32 v170 的订阅在同一 Box 作用域内（v97 状态段），无需另订阅、无需给参数加默认值。
+# 锚点取“playerIsPlaying 行紧跟 onPlay 行”两行——40 的调用点（若在）中间夹着 playerIsLoading 行，不会误中。
+
+cat > /tmp/patch_mh46v36.py << 'PYEOF46V36'
+import sys
+
+# 46 v36：修构建红 MH:627——46 v11 重建的 RecommendScreen 调用点漏传 playerIsLoading
+path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+src = open(path, encoding="utf-8").read()
+if "// [46v36]" in src:
+    print("MH already 46v36, skip")
+    sys.exit(0)
+
+# 锚点：未修复的调用点（playerIsPlaying 行后紧跟 onPlay 行，中间无 playerIsLoading 行）
+old = """                        playerIsPlaying = playerIsPlaying,
+                        onPlay = { songs, i -> playSongs(context, songs, i) },"""
+assert src.count(old) == 1, "v36 anchor count %d" % src.count(old)
+new = """                        playerIsPlaying = playerIsPlaying,
+                        playerIsLoading = playerIsLoading, // [46v36] 推荐页点歌瞬时刷新：v11 重建的调用点漏传参，构建红 MH:627
+                        onPlay = { songs, i -> playSongs(context, songs, i) },"""
+src = src.replace(old, new, 1)
+
+# 后验：MH 里每一个 RecommendScreen 调用点都传了 playerIsLoading（防再漏）；括号平衡
+assert src.count("RecommendScreen(") == src.count("playerIsLoading = playerIsLoading,"), \
+    "calls=%d params=%d" % (src.count("RecommendScreen("), src.count("playerIsLoading = playerIsLoading,"))
+assert src.count("(") == src.count(")")
+assert src.count("{") == src.count("}")
+assert src.count("[") == src.count("]")
+open(path, "w", encoding="utf-8").write(src)
+print("OK 46v36 MH")
+
+PYEOF46V36
+python3 /tmp/patch_mh46v36.py
+grep -q "46v36" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt || { echo "X 46v36 MH"; exit 1; }
+echo "OK 46v36 MH"
+echo "=== 46 v36 done ==="
