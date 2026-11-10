@@ -4492,7 +4492,7 @@ def rep1(old, new, name):
     assert s.count(old) == 1, name
     s = s.replace(old, new, 1)
 
-_old53 = s.count("[21v53]"); _old69 = s.count("[21v69]"); _old70 = s.count("[21v70]"); _old71 = s.count("[21v71]"); _old72 = s.count("[21v72]")
+_old53 = s.count("[21v53]"); _old69 = s.count("[21v69]"); _old70 = s.count("[21v70]"); _old71 = s.count("[21v71]"); _old72 = s.count("[21v72]"); _oldGS = s.count("GlobalScope")
 
 # A) STATE_READY：时长已定后重推元数据（锁屏右边 00:00 修复；锚在 v43/v63 落位文本）
 rep1("""                            Player.STATE_READY -> {
@@ -4775,7 +4775,7 @@ assert s.count("maybeFetchCarLyricsFromQueue") == 3, "maybeFetchCarLyricsFromQue
 assert s.count("lastPushedSecond") == 3, "lastPushedSecond 出现次数异常"
 assert s.count("lyricFetchKey") == 4, "lyricFetchKey 出现次数异常"
 assert s.count("lyricFetchInFlight") == 7, "lyricFetchInFlight 出现次数异常"
-assert s.count("GlobalScope") == 0, "引入 GlobalScope"
+assert s.count("GlobalScope") == _oldGS, "v74 引入 GlobalScope"
 assert s.count("[21v53]") == _old53, "21v53 标记被动过"
 assert s.count("[21v69]") == _old69, "21v69 标记被动过"
 assert s.count("[21v70]") == _old70, "21v70 标记被动过"
