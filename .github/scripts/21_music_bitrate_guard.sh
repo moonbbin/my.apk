@@ -4480,3 +4480,313 @@ PYEOF21V72
 echo "=== 21 v72 完成 ==="
 grep -q '21v72' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v72 写入失败"; exit 1; }
 echo "OK 21 v72 车载歌词搬进 Manager 已写入"
+# === 21 v74: 锁屏切歌刷新（A 时长＋B 位置）＋歌词搬进 Manager（C 根治） ===
+python3 << 'PYEOF21V74'
+import sys
+path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+s = open(path, encoding="utf-8").read()
+if "[21v74]" in s:
+    print("跳过（21 v74 锁屏切歌刷新＋歌词搬进 Manager 已应用）"); sys.exit(0)
+def rep1(old, new, name):
+    global s
+    assert s.count(old) == 1, name
+    s = s.replace(old, new, 1)
+
+_old53 = s.count("[21v53]"); _old69 = s.count("[21v69]"); _old70 = s.count("[21v70]"); _old71 = s.count("[21v71]"); _old72 = s.count("[21v72]")
+
+# A) STATE_READY：时长已定后重推元数据（锁屏右边 00:00 修复；锚在 v43/v63 落位文本）
+rep1("""                            Player.STATE_READY -> {
+                                _isLoading.value = false
+                                consecutiveAutoFailCount = 0 // [21v63] 出声即复位连败计数
+                                setChangingTrack(false) // [21v43] 真正出声才算切歌成功
+                                _duration.value = duration.coerceAtLeast(0L)
+                            }""",
+"""                            Player.STATE_READY -> {
+                                _isLoading.value = false
+                                consecutiveAutoFailCount = 0 // [21v63] 出声即复位连败计数
+                                setChangingTrack(false) // [21v43] 真正出声才算切歌成功
+                                _duration.value = duration.coerceAtLeast(0L)
+                                try { updateMediaSessionMetadata() } catch (_: Exception) { } // [21v74] 就绪时长已定，重推元数据（锁屏时长 0 修复）
+                            }""", "STATE_READY 重推元数据")
+
+# B1) 字段：上次推过的整秒（锚在 v72 轮询 flag 行）
+rep1("""    private var carLyricPollingStarted: Boolean = false""",
+"""    private var carLyricPollingStarted: Boolean = false
+    private var lastPushedSecond: Long = -1L // [21v74] 锁屏位置定时推：上次推过的整秒""", "位置推送秒门字段")
+
+# B1) 轮询里加秒门：整秒变了才推一次播放状态（锚在 v72 轮询体）
+rep1("""            try {
+                if (_isPlaying.value) {
+                    updatePosition()
+                    updateCarLyricFromPosition()
+                }
+            } catch (_: Exception) { }""",
+"""            try {
+                if (_isPlaying.value) {
+                    updatePosition()
+                    updateCarLyricFromPosition()
+                    // [21v74] 锁屏位置定时推：整秒变了才推一次状态，每秒最多一次
+                    val sec = _position.value / 1000
+                    if (sec != lastPushedSecond) {
+                        lastPushedSecond = sec
+                        try { updateMediaSessionState() } catch (_: Exception) { }
+                    }
+                }
+            } catch (_: Exception) { }""", "轮询秒门")
+
+# C) setCurrentSong 切歌时 Manager 自己拉歌词（锚在 v72 落位文本；触发点是切歌入口，页开/关都走这里）
+rep1("""    fun setCurrentSong(title: String, artist: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist
+        carLyricLine = null // [21v53] 切歌清车载歌词行
+        carLyricLines = emptyList(); carLyricIndex = -1; carLyricSongKey = null // [21v72] 切歌清歌词行
+        try { updateMediaSessionMetadata() } catch (_: Exception) { } // [21v51]""",
+"""    fun setCurrentSong(title: String, artist: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist
+        carLyricLine = null // [21v53] 切歌清车载歌词行
+        carLyricLines = emptyList(); carLyricIndex = -1; carLyricSongKey = null // [21v72] 切歌清歌词行
+        try { maybeFetchCarLyricsFromQueue(title, artist) } catch (_: Exception) { } // [21v74] 切歌时 Manager 自己拉歌词（不依赖播放页）
+        try { updateMediaSessionMetadata() } catch (_: Exception) { } // [21v51]""", "setCurrentSong 拉歌词触发")
+
+# C) setCurrentInfo 同样触发（46 订阅路走这里；去重门防与 setCurrentSong 重复拉）
+rep1("""    fun setCurrentInfo(title: String, artist: String, picUrl: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist
+        carLyricLine = null // [21v53] 切歌清车载歌词行
+        carLyricLines = emptyList(); carLyricIndex = -1; carLyricSongKey = null // [21v72] 切歌清歌词行
+        currentPicUrl = picUrl // [21v69] 记当前歌封面地址""",
+"""    fun setCurrentInfo(title: String, artist: String, picUrl: String) {
+        _currentTitle.value = title
+        _currentArtist.value = artist
+        carLyricLine = null // [21v53] 切歌清车载歌词行
+        carLyricLines = emptyList(); carLyricIndex = -1; carLyricSongKey = null // [21v72] 切歌清歌词行
+        try { maybeFetchCarLyricsFromQueue(title, artist) } catch (_: Exception) { } // [21v74] 切歌时 Manager 自己拉歌词（不依赖播放页）
+        currentPicUrl = picUrl // [21v69] 记当前歌封面地址""", "setCurrentInfo 拉歌词触发")
+
+# C) 歌词拉取函数：5 路 + parseLrc 从页里逐字搬进 Manager，返回行对（不依赖页的 LyricLine）；锚在 v72 行计算函数全文
+_old_lyricfn = """    private fun updateCarLyricFromPosition() {
+        try {
+            val lines = carLyricLines
+            val pos = _position.value
+            var idx = 0
+            for (i in lines.indices) {
+                if (pos >= lines[i].first) idx = i else break
+            }
+            if (idx != carLyricIndex) {
+                carLyricIndex = idx
+                updateCarLyricLine(lines.getOrNull(idx)?.second)
+            }
+        } catch (_: Exception) { }
+    }"""
+_new_lyricfn = _old_lyricfn + r"""
+    // [21v74] Manager 自己拉歌词（锁屏/车机切歌歌词根治）：歌词只在播放页里拉是 L1 局限，切歌时 Manager 按队列里的平台+歌名自己后台拉，页开没开都有；页自己的 LaunchedEffect 与 43 v3 交接保留（页内显示与双语歌词仍走页里），Manager 拉到的是无译文行对，只供车机/锁屏歌词行
+    @Volatile private var lyricFetchKey: String? = null
+    @Volatile private var lyricFetchInFlight: String? = null
+    private fun maybeFetchCarLyricsFromQueue(title: String, artist: String) {
+        try {
+            val q: Map<String, String>? = if (title.isBlank() || title == "未知歌曲") {
+                playQueue.getOrNull(queueIndex)
+            } else {
+                playQueue.getOrNull(queueIndex)?.takeIf { (it["title"] ?: "") == title && (it["artist"] ?: "") == artist }
+                    ?: playQueue.firstOrNull { (it["title"] ?: "") == title && (it["artist"] ?: "") == artist }
+            }
+            val plat = q?.get("platform") ?: return
+            val sid = q?.get("songId") ?: return
+            if (plat.isEmpty() || sid.isEmpty()) return
+            maybeFetchCarLyrics(plat, sid)
+        } catch (_: Exception) { }
+    }
+    private fun maybeFetchCarLyrics(platform: String, songId: String) {
+        try {
+            val key = platform + ":" + songId
+            if (platform.isEmpty() || songId.isEmpty()) return
+            if (key == lyricFetchInFlight) return
+            if (key == lyricFetchKey && carLyricLines.isNotEmpty()) return
+            lyricFetchKey = key
+            lyricFetchInFlight = key
+            Thread {
+                try {
+                    val lines = fetchLyricsFor(platform, songId)
+                    val k = key
+                    try { mainHandler.post { try { if (lyricFetchInFlight == k) lyricFetchInFlight = null; if (k == lyricFetchKey) setCarLyrics(lines, k) } catch (_: Exception) { } } } catch (_: Exception) { }
+                } catch (_: Exception) {
+                    try { if (lyricFetchInFlight == key) lyricFetchInFlight = null } catch (_: Exception) { }
+                }
+            }.start()
+        } catch (_: Exception) { }
+    }
+    private fun fetchLyricsFor(platform: String, songId: String): List<Pair<Long, String>> {
+        return try {
+            when (platform) {
+                "tx" -> fetchTxLyric(songId)
+                "kg" -> fetchKgLyric(songId)
+                "kw" -> fetchKwLyric(songId)
+                "mg" -> fetchMgLyric(songId)
+                else -> if (songId.all { it.isDigit() }) fetchWyLyric(songId) else emptyList()
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+    private fun fetchWyLyric(songId: String): List<Pair<Long, String>> {
+        try {
+            val apiUrl = "https://music.163.com/api/song/lyric?id=$songId&lv=1&tv=-1"
+            val conn = java.net.URL(apiUrl).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.setRequestProperty("Referer", "https://music.163.com/")
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
+            val text = conn.inputStream.bufferedReader().use { it.readText() }
+            val json = org.json.JSONObject(text)
+            val lrc = json.optJSONObject("lrc")?.optString("lyric") ?: ""
+            if (lrc.isNotEmpty()) {
+                val parsed = parseLrc(lrc)
+                if (parsed.isNotEmpty()) return parsed
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("LxPlayer", "网易云歌词失败", e)
+        }
+        return emptyList()
+    }
+    private fun fetchTxLyric(songmid: String): List<Pair<Long, String>> {
+        try {
+            val apiUrl = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=$songmid&format=json&nobase64=1&g_tk=5381"
+            val conn = java.net.URL(apiUrl).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.setRequestProperty("Referer", "https://y.qq.com/portal/player.html")
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
+            val text = conn.inputStream.bufferedReader().use { it.readText() }
+            val lrc = org.json.JSONObject(text).optString("lyric", "")
+            if (lrc.isNotEmpty()) {
+                val parsed = parseLrc(lrc)
+                if (parsed.isNotEmpty()) return parsed
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("LxPlayer", "QQ歌词失败", e)
+        }
+        return emptyList()
+    }
+    private fun fetchKgLyric(hash: String): List<Pair<Long, String>> {
+        try {
+            val apiUrl = "http://m.kugou.com/app/i/krc.php?cmd=100&hash=$hash&timelength=240000"
+            val conn = java.net.URL(apiUrl).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+            val text = conn.inputStream.bufferedReader().use { it.readText() }
+            val parsed = parseLrc(text)
+            if (parsed.isNotEmpty()) return parsed
+        } catch (e: Exception) {
+            android.util.Log.w("LxPlayer", "酷狗歌词失败", e)
+        }
+        return emptyList()
+    }
+    private fun fetchKwLyric(musicId: String): List<Pair<Long, String>> {
+        try {
+            val mid = musicId.removePrefix("MUSIC_")
+            val apiUrl = "http://m.kuwo.cn/newh5/singles/songinfoandlrc?musicId=$mid"
+            val conn = java.net.URL(apiUrl).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+            val text = conn.inputStream.bufferedReader().use { it.readText() }
+            val lrclist = org.json.JSONObject(text).optJSONObject("data")?.optJSONArray("lrclist")
+            if (lrclist != null && lrclist.length() > 0) {
+                val result = mutableListOf<Pair<Long, String>>()
+                for (i in 0 until lrclist.length()) {
+                    val item = lrclist.optJSONObject(i) ?: continue
+                    val lineLyric = item.optString("lineLyric", "")
+                    val timeSec = item.optString("time", "0").toDoubleOrNull() ?: 0.0
+                    if (lineLyric.isNotEmpty()) {
+                        result.add(Pair((timeSec * 1000).toLong(), lineLyric))
+                    }
+                }
+                if (result.isNotEmpty()) return result
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("LxPlayer", "酷我歌词失败", e)
+        }
+        return emptyList()
+    }
+    private fun fetchMgLyric(copyrightId: String): List<Pair<Long, String>> {
+        try {
+            val infoUrl = "https://pd.musicapp.migu.cn/MIGUM2.0/v1.0/content/resourceinfo.do?copyrightId=$copyrightId&resourceType=2"
+            val conn = java.net.URL(infoUrl).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+            val text = conn.inputStream.bufferedReader().use { it.readText() }
+            val lrcUrl = org.json.JSONObject(text).optJSONArray("resource")?.optJSONObject(0)?.optString("lrcUrl", "") ?: ""
+            if (lrcUrl.isNotEmpty()) {
+                val conn2 = java.net.URL(lrcUrl).openConnection() as java.net.HttpURLConnection
+                conn2.connectTimeout = 8000
+                conn2.readTimeout = 8000
+                conn2.setRequestProperty("User-Agent", "Mozilla/5.0")
+                val lrcText = conn2.inputStream.bufferedReader().use { it.readText() }
+                val parsed = parseLrc(lrcText)
+                if (parsed.isNotEmpty()) return parsed
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("LxPlayer", "咪咕歌词失败", e)
+        }
+        return emptyList()
+    }
+    private fun parseLrc(lrcText: String): List<Pair<Long, String>> {
+        val result = mutableListOf<Pair<Long, String>>()
+        var offsetMs = 0L
+        val regex = Regex("\\[(\\d+):(\\d+)(?:\\.(\\d+))?\\](.*)")
+        val offsetRegex = Regex("\\[offset:([+-]?\\d+)\\]", RegexOption.IGNORE_CASE)
+        for (rawLine in lrcText.lines()) {
+            val line = rawLine.trim()
+            val offMatch = offsetRegex.find(line)
+            if (offMatch != null) {
+                try { offsetMs = offMatch.groupValues[1].toLong() } catch (e: Exception) { }
+                continue
+            }
+            val match = regex.find(line)
+            if (match != null) {
+                try {
+                    val min = match.groupValues[1].toLong()
+                    val sec = match.groupValues[2].toLong()
+                    val msPart = match.groupValues[3]
+                    val ms = if (msPart.isEmpty()) 0L else msPart.padEnd(3, '0').take(3).toLong()
+                    val timeMs = (min * 60000 + sec * 1000 + ms + offsetMs).coerceAtLeast(0L)
+                    val text = match.groupValues[4].trim()
+                    if (text.isNotEmpty() && !text.startsWith("id:") && !text.startsWith("ar:") && !text.startsWith("ti:") && !text.startsWith("offset:")) {
+                        result.add(Pair(timeMs, text))
+                    }
+                } catch (e: Exception) { }
+            }
+        }
+        return result.sortedBy { it.first }
+    }"""
+rep1(_old_lyricfn, _new_lyricfn, "歌词拉取函数")
+
+assert s.count("[21v74]") == 6, "21v74 标记数异常"
+assert s.count("fun fetchLyricsFor(") == 1, "fetchLyricsFor 定义异常"
+assert s.count("fun fetchWyLyric(") == 1, "fetchWyLyric 定义异常"
+assert s.count("fun fetchTxLyric(") == 1, "fetchTxLyric 定义异常"
+assert s.count("fun fetchKgLyric(") == 1, "fetchKgLyric 定义异常"
+assert s.count("fun fetchKwLyric(") == 1, "fetchKwLyric 定义异常"
+assert s.count("fun fetchMgLyric(") == 1, "fetchMgLyric 定义异常"
+assert s.count("fun parseLrc(") == 1, "parseLrc 定义异常"
+assert s.count("fun maybeFetchCarLyrics(") == 1, "maybeFetchCarLyrics 定义异常"
+assert s.count("maybeFetchCarLyricsFromQueue") == 3, "maybeFetchCarLyricsFromQueue 出现次数异常"
+assert s.count("lastPushedSecond") == 3, "lastPushedSecond 出现次数异常"
+assert s.count("lyricFetchKey") == 4, "lyricFetchKey 出现次数异常"
+assert s.count("lyricFetchInFlight") == 7, "lyricFetchInFlight 出现次数异常"
+assert s.count("GlobalScope") == 0, "引入 GlobalScope"
+assert s.count("[21v53]") == _old53, "21v53 标记被动过"
+assert s.count("[21v69]") == _old69, "21v69 标记被动过"
+assert s.count("[21v70]") == _old70, "21v70 标记被动过"
+assert s.count("[21v71]") == _old71, "21v71 标记被动过"
+assert s.count("[21v72]") == _old72, "21v72 标记被动过"
+assert s.count("{") == s.count("}"), "花括号失衡"
+assert s.count("(") == s.count(")"), "圆括号失衡"
+assert s.count("[") == s.count("]"), "方括号失衡"
+open(path, "w", encoding="utf-8").write(s)
+print("OK 21 v74 锁屏切歌刷新＋歌词搬进 Manager 已写")
+PYEOF21V74
+echo "=== 21 v74 完成 ==="
+grep -q '21v74' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v74 写入失败"; exit 1; }
+echo "OK 21 v74 锁屏切歌刷新＋歌词搬进 Manager 已写入"
