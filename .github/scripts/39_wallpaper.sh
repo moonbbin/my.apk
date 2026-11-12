@@ -3967,3 +3967,77 @@ else:
     print("OK 39pool27 全冷却兜底加 60 秒 recency 门完成")
 PYEOF27
 echo "=== 39pool27 完成 ==="
+# === 39pool28: 全冷却兜底加回剩余冷却最短的一源（pool27 回归：全刚冷却时空池） ===
+# 根因（11-12 21:17 截图，已装 f2b3a76e）：pool27 的 60 秒门把刚冷却的源全滤掉；
+# 三源都在 60 秒内刚冷却时，兜底加回 0 个，targets 空，8 个档位每个都抛“没有可用音源”，
+# 歌播不了（“小星星”获取播放地址失败）。pool13 原来的防全瘫意图被收太紧了。
+# 修法：在 pool27 过滤之后加一道最终兜底——过滤后仍为空时，加回剩余冷却最短的一源
+# （coolUntil 最小、最接近恢复），保出声、不断流。只加回 1 个，不改回无条件全加
+# （那会把 pool27 废掉）；excludedIds 仍尊重；不改 tryQuality 的档位循环、pool25 冷却。
+python3 << 'PYEOF28'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool28 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[39pool28]" in s:
+    print("跳过（39 pool28 已应用）")
+else:
+    old = """        // [39pool13][39pool27] 全冷却时只重试冷却已久的源：刚冷却（60 秒内）是刚死的，不重试，免得每档白跑；冷却已久（60 秒以上）可能已恢复，才重试
+        if (targets.isEmpty()) {
+            val now27 = System.currentTimeMillis()
+            for ((id, eng) in allEngines) {
+                if (id in excludedIds) continue
+                val coolUntil = sourceCoolDownUntil[id] ?: 0L
+                if (coolUntil - now27 > 240000L) continue // [39pool27] 刚冷却不久（还剩 4 分钟以上），跳过不重试
+                targets.add(id to eng)
+            }
+        }"""
+    assert s.count(old) == 1, "pool28 锚点 fallback 数量异常"
+    new = """        // [39pool13][39pool27][39pool28] 全冷却时只重试冷却已久的源：刚冷却（60 秒内）是刚死的，不重试，免得每档白跑；冷却已久（60 秒以上）可能已恢复，才重试；若过滤后仍为空（全源刚冷却），加回剩余冷却最短的一源保出声
+        if (targets.isEmpty()) {
+            val now27 = System.currentTimeMillis()
+            for ((id, eng) in allEngines) {
+                if (id in excludedIds) continue
+                val coolUntil = sourceCoolDownUntil[id] ?: 0L
+                if (coolUntil - now27 > 240000L) continue // [39pool27] 刚冷却不久（还剩 4 分钟以上），跳过不重试
+                targets.add(id to eng)
+            }
+            // [39pool28] 最终兜底：过滤后仍为空（全源都是刚冷却），加回剩余冷却最短的一源保出声、不断流
+            if (targets.isEmpty()) {
+                var bestPair: Pair<String, LxScriptEngine>? = null
+                var bestUntil = Long.MAX_VALUE
+                for ((id, eng) in allEngines) {
+                    if (id in excludedIds) continue
+                    val coolUntil = sourceCoolDownUntil[id] ?: 0L
+                    if (coolUntil < bestUntil) {
+                        bestUntil = coolUntil
+                        bestPair = id to eng
+                    }
+                }
+                if (bestPair != null) {
+                    targets.add(bestPair)
+                }
+            }
+        }"""
+    s = s.replace(old, new, 1)
+    # 自检
+    assert "[39pool28]" in s, "pool28 标记未落"
+    assert s.count("fun resolveUrlWithFallback") == 1, "pool28 函数数量异常"
+    assert s.count("fun raceNativeUrl") == 1, "pool28 raceNativeUrl 数量异常"
+    assert s.count("(") == s.count(")"), "pool28 全文件圆括号不平衡"
+    assert s.count("{") == s.count("}"), "pool28 全文件花括号不平衡"
+    assert s.count("[") == s.count("]"), "pool28 全文件方括号不平衡"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 39pool28 全冷却兜底加回剩余冷却最短的一源完成")
+PYEOF28
+echo "=== 39pool28 完成 ==="
