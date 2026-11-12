@@ -3912,3 +3912,58 @@ else:
     print("OK 39pool26 点歌链去二次探活完成")
 PYEOF26
 echo "=== 39pool26 完成 ==="
+# === 39pool27: 全冷却兜底加 60 秒 recency 门（酷狗每档白跑） ===
+# 根因（11-12 20:35 截图，已装 53891034）：酷狗 backend 挂了，三源全挂 → 全冷却 5 分钟；
+# 下一档 resolveUrlWithFallback 建 targets 时全被 isSourceCoolDown 滤掉 → targets 空 → pool13
+# 兜底“全冷却时照常用”不过滤冷却、全加回来 → 三源又被重跑一遍、又挂、又冷却，8 档全是这样。
+# pool25 的冷却被 pool13 兜底架空了。修法：兜底只重试冷却已久（>60 秒，可能已恢复）的源；
+# 刚冷却（60 秒内，还剩 4 分钟以上）是刚死的，不重试，本档直接 fail-fast（tryQuality 进下一档也是空靶快过）。
+# 保留：pool13 的防全瘫意图（冷却久了仍可重试）；excludedIds 仍尊重；不改 tryQuality 的档位循环。
+python3 << 'PYEOF27'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool27 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[39pool27]" in s:
+    print("跳过（39 pool27 已应用）")
+else:
+    old = """        // [39pool13] 全冷却时照常用：若过滤后为空，则不过滤冷却、全部源都进列表
+        if (targets.isEmpty()) {
+            for ((id, eng) in allEngines) {
+                if (id in excludedIds) continue
+                targets.add(id to eng)
+            }
+        }"""
+    assert s.count(old) == 1, "pool27 锚点 fallback 数量异常"
+    new = """        // [39pool13][39pool27] 全冷却时只重试冷却已久的源：刚冷却（60 秒内）是刚死的，不重试，免得每档白跑；冷却已久（60 秒以上）可能已恢复，才重试
+        if (targets.isEmpty()) {
+            val now27 = System.currentTimeMillis()
+            for ((id, eng) in allEngines) {
+                if (id in excludedIds) continue
+                val coolUntil = sourceCoolDownUntil[id] ?: 0L
+                if (coolUntil - now27 > 240000L) continue // [39pool27] 刚冷却不久（还剩 4 分钟以上），跳过不重试
+                targets.add(id to eng)
+            }
+        }"""
+    s = s.replace(old, new, 1)
+    # 自检
+    assert "[39pool27]" in s, "pool27 标记未落"
+    assert s.count("fun resolveUrlWithFallback") == 1, "pool27 函数数量异常"
+    assert s.count("fun raceNativeUrl") == 1, "pool27 raceNativeUrl 数量异常"
+    assert s.count("(") == s.count(")"), "pool27 全文件圆括号不平衡"
+    assert s.count("{") == s.count("}"), "pool27 全文件花括号不平衡"
+    assert s.count("[") == s.count("]"), "pool27 全文件方括号不平衡"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 39pool27 全冷却兜底加 60 秒 recency 门完成")
+PYEOF27
+echo "=== 39pool27 完成 ==="
