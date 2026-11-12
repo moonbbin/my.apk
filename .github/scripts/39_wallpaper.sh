@@ -3764,3 +3764,151 @@ else:
     print("OK 39pool24 前景守卫＋原生竞速超时缩短完成")
 PYEOF24
 echo "=== 39pool24 完成 ==="
+# === 39pool25: 原生竞速失败即冷却＋错峰＋原生探活加 3 秒上限 ===
+# 根因（11-12 播歌慢 9 秒）：1) raceNativeUrl 吞失败不冷却，酷狗/网易一档失败后下一档又白跑一遍，还反复冲限速后端；
+# 2) 并行 burst 两源同发，溯音酷我触发并发保护；3) 原生探活是阻塞调用、无超时，挂死会卡住整条取址链。
+# 修法：1) raceNativeUrl 非取消异常即 markSourceCoolDown（与 pool21 探活循环口径一致；丢竞速的取消不冷却）；
+# 2) 各源起步错峰 200ms；3) 原生探活包 withTimeoutOrNull(3000L)+IO，超时按不活处理落到池源搜索。
+python3 << 'PYEOF25'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "pool25 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[39pool25]" in s:
+    print("跳过（39 pool25 已应用）")
+else:
+    # 1) 错峰：各源起步错开 200ms，降并发峰值
+    old_jobs = "            val jobs = targets.map { (sid, eng) ->"
+    assert s.count(old_jobs) == 1, "pool25 锚点 jobs 数量异常"
+    new_jobs = "            val jobs = targets.mapIndexed { idx, (sid, eng) -> // [39pool25] 错峰：各源起步错开 200ms，降并发峰值"
+    s = s.replace(old_jobs, new_jobs, 1)
+    # 2) 错峰生效：在 async 块开头按序号 delay
+    old_async = """                scope.async {
+                    try {
+                        val url = kotlinx.coroutines.withTimeout(3000L) {"""
+    assert s.count(old_async) == 1, "pool25 锚点 async 数量异常"
+    new_async = """                scope.async {
+                    if (idx > 0) kotlinx.coroutines.delay(idx * 200L) // [39pool25] 错峰：第 2 个起的源晚 200ms
+                    try {
+                        val url = kotlinx.coroutines.withTimeout(3000L) {"""
+    s = s.replace(old_async, new_async, 1)
+    # 3) 失败即冷却：非取消异常（超时/后端报错）记冷却；丢竞速的取消不冷却
+    old_catch = """                        // 死要求 1：空链接绝不 complete，绝不给 ExoPlayer
+                        if (!url.isNullOrBlank()) {
+                            first.complete(sid to url)
+                        }
+                    } catch (_: Exception) { }"""
+    assert s.count(old_catch) == 1, "pool25 锚点 catch 数量异常"
+    new_catch = """                        // 死要求 1：空链接绝不 complete，绝不给 ExoPlayer
+                        if (!url.isNullOrBlank()) {
+                            first.complete(sid to url)
+                        }
+                    } catch (e: Exception) { // [39pool25] 失败即冷却：超时/后端报错记冷却 5 分钟，下一档不再白跑；丢竞速的取消不冷却
+                        if (e is kotlinx.coroutines.TimeoutCancellationException || e !is kotlinx.coroutines.CancellationException) {
+                            try { markSourceCoolDown(sid) } catch (_: Exception) { }
+                        }
+                    }"""
+    s = s.replace(old_catch, new_catch, 1)
+    # 4) 原生探活加 3 秒上限：阻塞调用，超时按不活处理
+    old_probe = "                val nativeAlive = try { LxPlayerManager.isStreamUrlAlive(native.second) } catch (_: Exception) { false }"
+    assert s.count(old_probe) == 1, "pool25 锚点 probe 数量异常"
+    new_probe = "                val nativeAlive = try { kotlinx.coroutines.withTimeoutOrNull(3000L) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { LxPlayerManager.isStreamUrlAlive(native.second) } } ?: false } catch (_: Exception) { false } // [39pool25] 原生探活 3 秒上限，超时按不活处理"
+    s = s.replace(old_probe, new_probe, 1)
+    # 自检
+    assert "[39pool25]" in s, "pool25 标记未落"
+    assert s.count("fun raceNativeUrl") == 1, "pool25 raceNativeUrl 数量异常"
+    assert s.count("withTimeoutOrNull(3000L)") == 1, "pool25 探活超时数量异常"
+    assert s.count("mapIndexed") == 1, "pool25 错峰数量异常"
+    assert s.count("fun resolveUrlWithFallback") == 1, "pool25 函数数量异常"
+    assert s.count("(") == s.count(")"), "pool25 全文件圆括号不平衡"
+    assert s.count("{") == s.count("}"), "pool25 全文件花括号不平衡"
+    assert s.count("[") == s.count("]"), "pool25 全文件方括号不平衡"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 39pool25 原生竞速冷却+错峰+探活上限完成")
+PYEOF25
+echo "=== 39pool25 完成 ==="
+# === 39pool26: 点歌链去二次探活（池内已探过，直接播） ===
+# 根因（11-12 播歌慢 9 秒）：resolveUrlWithFallback 回的地址在池内已探过活（原生快路径/探活循环/重试块三路都先探活才回），
+# tryQuality 又在后台线程上再探一次（阻塞调用、无超时、无进度日志），慢后端上一次探活能拖 7 秒才放行或丢弃。
+# 修法：去掉二次探活，拿到地址直接做切歌丢弃守卫后播；死链兜底靠 21 v54 onPlayerError 静默换源重播（已验证在位）。
+# 保留：切歌丢弃守卫、空地址换源、档位失败降档、排除集逻辑一字不动。
+python3 << 'PYEOF26'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+
+find_root()
+M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+s = open(M, encoding="utf-8").read()
+if "[39pool26]" in s:
+    print("跳过（39 pool26 已应用）")
+else:
+    # 0) 修正入口日志：不再二次探活，"验活中"会误导抽屉读数
+    old_log = '                                android.util.Log.i("LxPlayer", "获取 URL 成功，音质档位: $q，验活中")'
+    assert s.count(old_log) == 1, "pool26 锚点 log 数量异常"
+    new_log = '                                android.util.Log.i("LxPlayer", "获取 URL 成功，音质档位: $q（池内已验活，直接播）")'
+    s = s.replace(old_log, new_log, 1)
+    old = """                                Thread { // [39resolve] 取地址时验活：死链不交给播放器，自动降档
+                                    val alive = LxPlayerManager.isStreamUrlAlive(url)
+                                    runOnUiThread {
+                                        if (!alive) {
+                                            try { LxRuntimeLog.add("地址验活失败: " + title + " / " + artist + " | 档位 " + q + " " + url.take(80)) } catch (_: Exception) { }
+                                            android.util.Log.w("LxPlayer", "音质 $q 地址验活失败，换池内下一源重试") // [39pool4]
+                                            excludedSources.add(urlSourceId) // [39pool4] 排除刚失败的源，同一档位换源再试
+                                            LxEngineHolder.markSourceCoolDown(urlSourceId) // [39pool6] 坏源搁置 5 分钟，下一首不优先试
+                                            tryQuality()
+                                        } else if (isFinishing || isDestroyed || (title.isNotEmpty() && (LxPlayerManager.currentTitle.value != title || LxPlayerManager.currentArtist.value != artist))) {
+                                            android.util.Log.w("LxPlayer", "验活期间已切歌，丢弃旧地址")
+                                        } else {
+                                            LxPlayerManager.setLoading(false)
+                                            LxPlayerManager.setError(null)
+                                            LxPlayerManager.recordHistory(mapOf(
+                                                "songId" to musicInfo["songId"].orEmpty(), "platform" to sourceId,
+                                                "title" to title, "artist" to artist, "url" to url))
+                                            LxPlayerManager.play(url, title, artist)
+                                            Thread { LxPlayerManager.probeAndSetQuality(url) }.start() // [34v57] 点歌链补探针
+                                            LxPlayerManager.fetchCommentsAsync(sourceId, musicInfo["songId"].orEmpty(), title, artist) // [35cmt1] 评论并行拉取（只读）
+                                        }
+                                    }
+                                }.start()"""
+    assert s.count(old) == 1, "pool26 锚点 onSuccess 数量异常"
+    new = """                                // [39pool26] 验活已在池内做过（原生快路径/探活循环/重试块三路都先探活才回地址），此处不再二次探活，直接播；死链兜底靠 21 v54 onPlayerError 静默换源重播
+                                if (isFinishing || isDestroyed || (title.isNotEmpty() && (LxPlayerManager.currentTitle.value != title || LxPlayerManager.currentArtist.value != artist))) {
+                                    android.util.Log.w("LxPlayer", "已切歌，丢弃旧地址")
+                                } else {
+                                    android.util.Log.i("LxPlayer", "获取 URL 成功，音质档位: $q")
+                                    LxPlayerManager.setLoading(false)
+                                    LxPlayerManager.setError(null)
+                                    LxPlayerManager.recordHistory(mapOf(
+                                        "songId" to musicInfo["songId"].orEmpty(), "platform" to sourceId,
+                                        "title" to title, "artist" to artist, "url" to url))
+                                    LxPlayerManager.play(url, title, artist)
+                                    Thread { LxPlayerManager.probeAndSetQuality(url) }.start() // [34v57] 点歌链补探针
+                                    LxPlayerManager.fetchCommentsAsync(sourceId, musicInfo["songId"].orEmpty(), title, artist) // [35cmt1] 评论并行拉取（只读）
+                                }"""
+    s = s.replace(old, new, 1)
+    # 自检
+    assert "[39pool26]" in s, "pool26 标记未落"
+    assert "val alive = LxPlayerManager.isStreamUrlAlive(url)" not in s, "pool26 二次探活残留"
+    assert s.count("fun tryQuality") == 1, "pool26 tryQuality 数量异常"
+    assert s.count("fun resolveUrlWithFallback") == 1, "pool26 函数数量异常"
+    assert s.count("(") == s.count(")"), "pool26 全文件圆括号不平衡"
+    assert s.count("{") == s.count("}"), "pool26 全文件花括号不平衡"
+    assert s.count("[") == s.count("]"), "pool26 全文件方括号不平衡"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 39pool26 点歌链去二次探活完成")
+PYEOF26
+echo "=== 39pool26 完成 ==="
