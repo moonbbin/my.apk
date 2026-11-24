@@ -1,4 +1,6 @@
 #!/bin/bash
+# [base-a6da734e] round1 tvbox->avbox
+# [base-a6da734e] round2 bridge: ApiConfig.get() 已在 round1（无 getInstance 残留）；重接 getSwitchSourceBeanList()->switchSourceBeanList() x4、getVipParseFlags()->vipParseFlags 属性 x5；载荷无 LOG/HawkConfig/RefreshEvent/OkGoHelper/PlayerHelper/MyVideoView 引用；v6 SettingsScreen 锚点缺失系 32 v26 红致 v56 未跑（32 级联，46 本体不动）
 set -e
 cd "$(dirname "$0")/../.." 2>/dev/null || true
 
@@ -6,13 +8,13 @@ cd "$(dirname "$0")/../.." 2>/dev/null || true
 
 echo "=== 46 v8 ==="
 
-cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt << 'KOTEOF'
-package com.github.tvbox.osc.ui.activity
+cat > avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt << 'KOTEOF'
+package com.github.avbox.osc.ui
 
 // [46v2] 订阅源内音乐桥接：只读主体 ApiConfig 订阅列表，不改主体代码。
 // 筛源规则：源名按 ┆ 切段含“音乐”段 + searchable=1；播链：searchContent -> detailContent -> playerContent。
 
-import com.github.tvbox.osc.api.ApiConfig
+import com.github.avbox.osc.api.ApiConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -59,9 +61,9 @@ object SubMusicBridge {
         }
     }
 
-    private fun musicBeans(): List<com.github.tvbox.osc.bean.SourceBean> {
+    private fun musicBeans(): List<com.github.avbox.osc.bean.SourceBean> {
         return try {
-            ApiConfig.get().getSwitchSourceBeanList()
+            ApiConfig.get().switchSourceBeanList()
                 .filter { it.isSearchable() && isMusicSource(it.name ?: "") }
         } catch (e: Exception) {
             emptyList()
@@ -127,7 +129,7 @@ object SubMusicBridge {
             val firstGroup = urls.split("$$$")[0]
             val firstEp = firstGroup.split("#")[0]
             val playId = firstEp.substringAfter("$", firstEp)
-            val pr = sp.playerContent(flag, playId, ApiConfig.get().getVipParseFlags())
+            val pr = sp.playerContent(flag, playId, ApiConfig.get().vipParseFlags)
                 ?: return@withContext PlayResult.Fail("取播放地址失败")
             val pj = JSONObject(pr)
             val parse = pj.optInt("parse", 0)
@@ -142,8 +144,8 @@ object SubMusicBridge {
 }
 KOTEOF
 
-cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt << 'KOTEOF'
-package com.github.tvbox.osc.ui.activity
+cat > avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt << 'KOTEOF'
+package com.github.avbox.osc.ui
 
 // [46v2] 源内音乐独立页：与落雪搜索/歌单/播放页完全分开；播走 LxPlayerManager.play 裸地址，不进落雪队列。
 
@@ -400,7 +402,7 @@ fun SubMusicScreen(onOpenSettings: () -> Unit) {
 KOTEOF
 
 python3 << 'PYEOF_S'
-spath = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+spath = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/settings/SettingsScreen.kt"
 with open(spath, encoding="utf-8") as f:
     s = f.read()
 if "// [46v6]" not in s:
@@ -465,7 +467,7 @@ python3 << 'PYEOF'
 import re
 import sys
 
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
@@ -604,7 +606,7 @@ PYEOF
 python3 << 'PYEOF7'
 import sys
 
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
@@ -658,14 +660,14 @@ with open(path, "w", encoding="utf-8") as f:
 print("OK 46v7")
 PYEOF7
 
-cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt << 'KOTEOF8'
-package com.github.tvbox.osc.ui.activity
+cat > avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt << 'KOTEOF8'
+package com.github.avbox.osc.ui
 
 // [46v8] 订阅源内音乐桥接：只读主体 ApiConfig 订阅列表，不改主体代码。
 // 筛源规则：源名按 ┆ 切段含“音乐”段 + searchable=1；播链：searchContent -> detailContent -> playerContent。
 // 浏览链（Peek 式）：homeContent -> class/list；categoryContent(tid, "1") -> list；榜单类优先含 榜/排行/热 的分类。
 
-import com.github.tvbox.osc.api.ApiConfig
+import com.github.avbox.osc.api.ApiConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -717,9 +719,9 @@ object SubMusicBridge {
         }
     }
 
-    private fun musicBeans(): List<com.github.tvbox.osc.bean.SourceBean> {
+    private fun musicBeans(): List<com.github.avbox.osc.bean.SourceBean> {
         return try {
-            ApiConfig.get().getSwitchSourceBeanList()
+            ApiConfig.get().switchSourceBeanList()
                 .filter { it.isSearchable() && isMusicSource(it.name ?: "") }
         } catch (e: Exception) {
             emptyList()
@@ -831,7 +833,7 @@ object SubMusicBridge {
             val firstGroup = urls.split("$$$")[0]
             val firstEp = firstGroup.split("#")[0]
             val playId = firstEp.substringAfter("$", firstEp)
-            val pr = sp.playerContent(flag, playId, ApiConfig.get().getVipParseFlags())
+            val pr = sp.playerContent(flag, playId, ApiConfig.get().vipParseFlags)
                 ?: return@withContext PlayResult.Fail("取播放地址失败")
             val pj = JSONObject(pr)
             val parse = pj.optInt("parse", 0)
@@ -846,8 +848,8 @@ object SubMusicBridge {
 }
 KOTEOF8
 
-cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt << 'KOTEOF8'
-package com.github.tvbox.osc.ui.activity
+cat > avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt << 'KOTEOF8'
+package com.github.avbox.osc.ui
 
 // [46v8] 源内音乐 Peek 式页：选源 Sheet + 歌单/榜单 Tab 浏览为先，搜索退为辅助；与落雪搜索/歌单/播放页完全分开；播走 LxPlayerManager.play 裸地址，不进落雪队列。
 
@@ -1320,14 +1322,14 @@ echo "=== 46 v8 done ==="
 
 echo "=== 46 v9 ==="
 
-cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt << 'KOTEOF9'
-package com.github.tvbox.osc.ui.activity
+cat > avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt << 'KOTEOF9'
+package com.github.avbox.osc.ui
 
 // [46v8] 订阅源内音乐桥接：只读主体 ApiConfig 订阅列表，不改主体代码。
 // 筛源规则：源名按 ┆ 切段含“音乐”段 + searchable=1；播链：searchContent -> detailContent -> playerContent。
 // 浏览链（Peek 式）：homeContent -> class/list；categoryContent(tid, "1") -> list；榜单类优先含 榜/排行/热 的分类。
 
-import com.github.tvbox.osc.api.ApiConfig
+import com.github.avbox.osc.api.ApiConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -1379,9 +1381,9 @@ object SubMusicBridge {
         }
     }
 
-    private fun musicBeans(): List<com.github.tvbox.osc.bean.SourceBean> {
+    private fun musicBeans(): List<com.github.avbox.osc.bean.SourceBean> {
         return try {
-            ApiConfig.get().getSwitchSourceBeanList()
+            ApiConfig.get().switchSourceBeanList()
                 .filter { it.isSearchable() && isMusicSource(it.name ?: "") }
         } catch (e: Exception) {
             emptyList()
@@ -1397,7 +1399,7 @@ object SubMusicBridge {
     fun diagnoseSources(): SourceDiag? { // [46v9] 空源诊断：四数定位筛源哪一步掉光
         return try {
             val all = ApiConfig.get().getSourceBeanList()
-            val vis = ApiConfig.get().getSwitchSourceBeanList()
+            val vis = ApiConfig.get().switchSourceBeanList()
             val named = vis.filter { isMusicSource(it.name ?: "") }
             val fin = named.filter { it.isSearchable() }
             SourceDiag(all.size, vis.size, named.size, fin.size)
@@ -1519,7 +1521,7 @@ object SubMusicBridge {
             val firstGroup = urls.split("$$$")[0]
             val firstEp = firstGroup.split("#")[0]
             val playId = firstEp.substringAfter("$", firstEp)
-            val pr = sp.playerContent(flag, playId, ApiConfig.get().getVipParseFlags())
+            val pr = sp.playerContent(flag, playId, ApiConfig.get().vipParseFlags)
                 ?: return@withContext PlayResult.Fail("取播放地址失败")
             val pj = JSONObject(pr)
             val parse = pj.optInt("parse", 0)
@@ -1534,8 +1536,8 @@ object SubMusicBridge {
 }
 KOTEOF9
 
-cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt << 'KOTEOF9'
-package com.github.tvbox.osc.ui.activity
+cat > avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt << 'KOTEOF9'
+package com.github.avbox.osc.ui
 
 // [46v9] 曲库页：Peek 式（顶栏源驱动 + 搜索框入口 + 歌单/榜单 Tab + 卡片网格）；播走 LxPlayerManager.play 裸地址，不进落雪队列；源选择由顶栏 Sheet 驱动，本页只读。
 
@@ -1862,8 +1864,8 @@ private fun SubGridCard(track: SubMusicBridge.SubTrack, onPlay: () -> Unit) {
 }
 KOTEOF9
 
-cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubSearchScreen.kt << 'KOTEOF9'
-package com.github.tvbox.osc.ui.activity
+cat > avbox/app/src/main/java/com/github/avbox/osc/ui/SubSearchScreen.kt << 'KOTEOF9'
+package com.github.avbox.osc.ui
 
 // [46v9] 搜索页：搜当前源内源（顶栏 Sheet 选源）；播走 LxPlayerManager.play 裸地址，不进落雪队列。
 
@@ -2089,8 +2091,8 @@ private fun SubTrackRow(track: SubMusicBridge.SubTrack, onPlay: () -> Unit) {
 }
 KOTEOF9
 
-cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMineScreen.kt << 'KOTEOF9'
-package com.github.tvbox.osc.ui.activity
+cat > avbox/app/src/main/java/com/github/avbox/osc/ui/SubMineScreen.kt << 'KOTEOF9'
+package com.github.avbox.osc.ui
 
 // [46v9] 我的页：先放我的喜欢 + 播放历史两块现成的（与设置页同一入口）。
 
@@ -2131,7 +2133,7 @@ fun SubMineScreen() {
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable {
-                    context.startActivity(Intent(context, com.github.tvbox.osc.ui.activity.LxFavoritesActivity::class.java))
+                    context.startActivity(Intent(context, com.github.avbox.osc.ui.LxFavoritesActivity::class.java))
                 }
                 .padding(vertical = 14.dp)
         ) {
@@ -2151,7 +2153,7 @@ fun SubMineScreen() {
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable {
-                    context.startActivity(Intent(context, com.github.tvbox.osc.ui.activity.LxHistoryActivity::class.java))
+                    context.startActivity(Intent(context, com.github.avbox.osc.ui.LxHistoryActivity::class.java))
                 }
                 .padding(vertical = 14.dp)
         ) {
@@ -2174,7 +2176,7 @@ KOTEOF9
 python3 - << 'PYEOF46V9'
 import sys
 
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v9]" in src:
     print("MH already 46v9, skip")
@@ -2472,7 +2474,7 @@ echo "=== 46 v10 ==="
 python3 - << 'PYEOF46V10'
 import sys
 
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v10]" in src:
     print("MH already 46v10, skip")
@@ -2509,7 +2511,7 @@ echo "=== 46 v11 ==="
 python3 - << 'PYEOF46V11'
 import sys
 
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v11]" in src:
     print("MH already 46v11, skip")
@@ -2804,7 +2806,7 @@ echo "=== 46 v12 ==="
 python3 - << 'PYEOF46V12A'
 import sys
 
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v12]" in src:
     print("bridge already 46v12, skip")
@@ -2902,7 +2904,7 @@ PYEOF46V12A
 python3 - << 'PYEOF46V12B'
 import sys
 
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v12]" in src:
     print("screen already 46v12, skip")
@@ -3199,7 +3201,7 @@ python3 - << 'PYEOF46V12C'
 import sys
 
 # 搜索屏：点行建队列（与曲库网格同一机制）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubSearchScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubSearchScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v12]" in src:
     print("search already 46v12, skip")
@@ -3246,7 +3248,7 @@ open(path, "w", encoding="utf-8").write(src)
 print("OK 46v12 search")
 
 # 播放器页：队列点播/切歌时，订阅条目走桥接解析（35 后定向补丁）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerActivity.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v12]" in src:
     print("player page already 46v12, skip")
@@ -3278,10 +3280,10 @@ open(path, "w", encoding="utf-8").write(src)
 print("OK 46v12 player page")
 PYEOF46V12C
 
-grep -q "46v12" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v12 bridge"; exit 1; }
-grep -q "46v12" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v12 screen"; exit 1; }
-grep -q "46v12" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubSearchScreen.kt || { echo "X 46v12 search"; exit 1; }
-grep -q "46v12" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt || { echo "X 46v12 player"; exit 1; }
+grep -q "46v12" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt || { echo "X 46v12 bridge"; exit 1; }
+grep -q "46v12" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt || { echo "X 46v12 screen"; exit 1; }
+grep -q "46v12" avbox/app/src/main/java/com/github/avbox/osc/ui/SubSearchScreen.kt || { echo "X 46v12 search"; exit 1; }
+grep -q "46v12" avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerActivity.kt || { echo "X 46v12 player"; exit 1; }
 echo "OK 46v12"
 echo "=== 46 v12 done ==="
 
@@ -3293,7 +3295,7 @@ python3 - << 'PYEOF46V13'
 import sys
 
 # 46 v13：榜单 tab 改分段视图（参考图：按源分类分段，段标题＋“全部”＋横滑竖版卡片＋右上角名次）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v13]" in src:
     print("screen already 46v13, skip")
@@ -3573,7 +3575,7 @@ assert src.count("Alignment.BottomStart") == 0
 open(path, "w", encoding="utf-8").write(src)
 print("OK 46v13 screen")
 PYEOF46V13
-grep -q "46v13" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v13 screen"; exit 1; }
+grep -q "46v13" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt || { echo "X 46v13 screen"; exit 1; }
 echo "OK 46v13"
 echo "=== 46 v13 done ==="
 
@@ -3591,7 +3593,7 @@ ROOT_OLD = "            .background(musicColors().background)"
 ROOT_NEW = "            .background(if (WallpaperManager.isActive()) androidx.compose.ui.graphics.Color.Transparent else musicColors().background) // [46v14] 有壁纸时透明（同设置页）"
 
 # ---- 曲库页 SubMusicScreen.kt ----
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v14]" not in src:
     old_head = "源选择由顶栏 Sheet 驱动，本页只读。"
@@ -3625,7 +3627,7 @@ else:
     print("screen already 46v14, skip")
 
 # ---- 搜索页 SubSearchScreen.kt ----
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubSearchScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubSearchScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v14]" not in src:
     old_head = "切歌/列表点播走订阅解析。"
@@ -3654,7 +3656,7 @@ else:
     print("search already 46v14, skip")
 
 # ---- 我的页 SubMineScreen.kt ----
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMineScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMineScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v14]" not in src:
     old_head = "// [46v9] 我的页：先放我的喜欢 + 播放历史两块现成的（与设置页同一入口）。"
@@ -3667,9 +3669,9 @@ if "// [46v14]" not in src:
 else:
     print("mine already 46v14, skip")
 PYEOF46V14
-grep -q "46v14" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v14 screen"; exit 1; }
-grep -q "46v14" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubSearchScreen.kt || { echo "X 46v14 search"; exit 1; }
-grep -q "46v14" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMineScreen.kt || { echo "X 46v14 mine"; exit 1; }
+grep -q "46v14" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt || { echo "X 46v14 screen"; exit 1; }
+grep -q "46v14" avbox/app/src/main/java/com/github/avbox/osc/ui/SubSearchScreen.kt || { echo "X 46v14 search"; exit 1; }
+grep -q "46v14" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMineScreen.kt || { echo "X 46v14 mine"; exit 1; }
 echo "OK 46v14"
 echo "=== 46 v14 done ==="
 
@@ -3681,7 +3683,7 @@ python3 - << 'PYEOF46V15A'
 import sys
 
 # 46 v15 桥接：杂项名过滤＋合作歌手拆分（歌手页去乱 + 榜单只拉有用分类共用）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v15]" in src:
     print("bridge already 46v15, skip")
@@ -3724,7 +3726,7 @@ python3 - << 'PYEOF46V15B'
 import sys
 
 # 46 v15 曲库页：歌手过滤（拆合作歌手、去杂项、合集图优先）＋榜单只拉有用分类（杂项分类不拉、段内杂项条目过滤）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v15]" in src:
     print("screen already 46v15, skip")
@@ -3777,8 +3779,8 @@ open(path, "w", encoding="utf-8").write(src)
 print("OK 46v15 screen")
 PYEOF46V15B
 
-grep -q "46v15" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v15 bridge"; exit 1; }
-grep -q "46v15" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v15 screen"; exit 1; }
+grep -q "46v15" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt || { echo "X 46v15 bridge"; exit 1; }
+grep -q "46v15" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt || { echo "X 46v15 screen"; exit 1; }
 echo "OK 46v15"
 echo "=== 46 v15 done ==="
 
@@ -3790,7 +3792,7 @@ python3 - << 'PYEOF46V16A'
 import sys
 
 # 46 v16 桥接：分桶信号（人名、歌单型）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v16]" in src:
     print("bridge already 46v16, skip")
@@ -3828,7 +3830,7 @@ python3 - << 'PYEOF46V16B'
 import sys
 
 # 46 v16 曲库页：分桶整理——歌手/歌单/榜单三分（歌手=推导歌手，歌单=合集型条目，榜单=按分类分段）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v16]" in src:
     print("screen already 46v16, skip")
@@ -3939,8 +3941,8 @@ open(path, "w", encoding="utf-8").write(src)
 print("OK 46v16 screen")
 PYEOF46V16B
 
-grep -q "46v16" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v16 bridge"; exit 1; }
-grep -q "46v16" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v16 screen"; exit 1; }
+grep -q "46v16" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt || { echo "X 46v16 bridge"; exit 1; }
+grep -q "46v16" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt || { echo "X 46v16 screen"; exit 1; }
 echo "OK 46v16"
 echo "=== 46 v16 done ==="
 
@@ -3954,7 +3956,7 @@ import sys
 # 46 v17：修 v15/v16 构建红——SubMusicBridge.kt:228:19，raw.split 的 raw 仍是 String?
 # 根因：val raw: String? = when {...} ?: return emptyList() ——初始化器里的 ?: return 没让编译器把 raw 收窄为非空；
 # 另 track.title.ifBlank { null } 的类型靠推断（泛型 ifBlank 的 C 随上下文变），一并换成 takeIf
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v17]" in src:
     print("bridge already 46v17, skip")
@@ -3987,7 +3989,7 @@ assert src.count("isNullOrBlank()) return emptyList()") == 1
 open(path, "w", encoding="utf-8").write(src)
 print("OK 46v17 bridge")
 PYEOF46V17
-grep -q "46v17" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v17 bridge"; exit 1; }
+grep -q "46v17" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt || { echo "X 46v17 bridge"; exit 1; }
 echo "OK 46v17"
 echo "=== 46 v17 done ==="
 
@@ -4008,7 +4010,7 @@ import sys
 # 修法：artistsOf 三规则全部加门——规则一要求标题本身是人名且非榜单/导航类；规则二 vod_actor 不动（唯一真歌手字段）；
 #   规则三（备注当歌手）只认“像人名的备注”且条目本身得是单曲样的、备注不能是说明文字；isPersonName 排除表扩到单字榜及榜单/导航/说明类词；
 #   isCollection 加榜单/导航类标题排除；新增 isChartLike/isNavTitle 供屏幕层过滤
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v18]" in src:
     print("bridge already 46v18, skip")
@@ -4083,7 +4085,7 @@ python3 - << 'PYEOF46V18S'
 import sys
 
 # 46 v18（屏幕侧）：歌手原料先排掉榜单/导航类条目；okName 拦词扩到单字榜及榜单/导航/说明类词；榜单分段跳过导航类分类
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v18]" in src:
     print("screen already 46v18, skip")
@@ -4107,8 +4109,8 @@ src = src.replace(old_cls, new_cls, 1)
 open(path, "w", encoding="utf-8").write(src)
 print("OK 46v18 screen")
 PYEOF46V18S
-grep -q "46v18" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v18 bridge"; exit 1; }
-grep -q "46v18" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v18 screen"; exit 1; }
+grep -q "46v18" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt || { echo "X 46v18 bridge"; exit 1; }
+grep -q "46v18" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt || { echo "X 46v18 screen"; exit 1; }
 echo "OK 46v18"
 echo "=== 46 v18 done ==="
 
@@ -4122,7 +4124,7 @@ import sys
 # 46 v19（桥接侧）：歌手 tab 按 Peek 拿掉——歌手推导整段删除（artistsOf/artistOf/isPersonName/DESC_WORDS）；
 # 歌单判定改 Peek 口径：有首数就是歌单（Peek 歌单卡都有首数，含热歌榜这类榜单名），或备注合集/专辑/歌单且标题非榜单类；
 # 人名合集不再单列（无歌手 tab 可归，合集就是歌单）；导航项排除；新增 countOf（备注里取“355首”，没有不显示）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v19]" in src:
     print("bridge already 46v19, skip")
@@ -4189,7 +4191,7 @@ import sys
 # 46 v19（屏幕侧）：曲库按 Peek 改成紧致简洁——两 pill tab（歌单/榜单，选中绿底＋手绘对勾）、圆角搜索框、
 # 榜单改平铺榜单卡网格（一段一卡，点卡钻入、点播播本榜）、歌单与钻入网格共用 Peek 卡（方形封面＋左上徽标＋右下圆播＋单行标题，间距 8/12dp）、
 # 歌手 tab 拿掉（Peek 没有；歌手推导代码随桥接侧一并删）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v19]" in src:
     print("screen already 46v19, skip")
@@ -4873,7 +4875,7 @@ python3 - << 'PYEOF46V19M'
 import sys
 
 # 46 v19（MH 顶栏，订阅模式）：Peek 式——标题改音符＋“音乐”，源选择改 pill（卡片底＋源名＋下箭头）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v19]" in src:
     print("MH already 46v19, skip")
@@ -4956,9 +4958,9 @@ src = src.replace(old_src, new_src, 1)
 open(path, "w", encoding="utf-8").write(src)
 print("OK 46v19 MH")
 PYEOF46V19M
-grep -q "46v19" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v19 bridge"; exit 1; }
-grep -q "46v19" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v19 screen"; exit 1; }
-grep -q "46v19" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt || { echo "X 46v19 MH"; exit 1; }
+grep -q "46v19" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt || { echo "X 46v19 bridge"; exit 1; }
+grep -q "46v19" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt || { echo "X 46v19 screen"; exit 1; }
+grep -q "46v19" avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt || { echo "X 46v19 MH"; exit 1; }
 echo "OK 46v19"
 echo "=== 46 v19 done ==="
 
@@ -4970,7 +4972,7 @@ import sys
 # 46 v21（屏幕侧）：订阅搜索页并进曲库——曲库顶搜索框由假框改真输入框（BasicTextField，圆角外观同 v19，键盘搜索触发），
 # 出结果时结果卡片网格替代表格区（点卡播本页队列，复用 SubPeekCard/playTrack），pill tab 搜时隐藏，×/返回浏览回浏览；
 # 换源时清空搜索；onSearchClick 参数删除（MH 侧同步删调用）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v21]" in src:
     print("screen already 46v21, skip")
@@ -5274,7 +5276,7 @@ import sys
 # ① setContentMode 切到 sub 时 SEARCH 回落到 QUKU；② effectiveTab 的 sub 集去掉 SEARCH；③ QUKU 分支删 onSearchClick 传参；
 # ④ SEARCH 分支删 sub 臂（SubSearchScreen 调用），只剩脚本模式的 SearchTabLanding；⑤ sub 的 tabDefs97 删 SEARCH 一项。
 # 脚本模式的搜索 tab 与 SEARCH 枚举值不动。
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v21]" in src:
     print("MH already 46v21, skip")
@@ -5381,11 +5383,11 @@ print("OK 46v21 MH")
 PYEOF46V21
 python3 /tmp/patch_screen46v21.py
 python3 /tmp/patch_mh46v21.py
-rm -f avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubSearchScreen.kt
-[ ! -f avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubSearchScreen.kt ] || { echo "X 46v21 search file still there"; exit 1; }
+rm -f avbox/app/src/main/java/com/github/avbox/osc/ui/SubSearchScreen.kt
+[ ! -f avbox/app/src/main/java/com/github/avbox/osc/ui/SubSearchScreen.kt ] || { echo "X 46v21 search file still there"; exit 1; }
 grep -rq "SubSearchScreen(" avbox/app/src/main/java/ && { echo "X 46v21 SubSearchScreen refs remain"; exit 1; } || true
-grep -q "46v21" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v21 screen"; exit 1; }
-grep -q "46v21" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt || { echo "X 46v21 MH"; exit 1; }
+grep -q "46v21" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt || { echo "X 46v21 screen"; exit 1; }
+grep -q "46v21" avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt || { echo "X 46v21 MH"; exit 1; }
 echo "OK 46v21"
 echo "=== 46 v21 done ==="
 
@@ -5400,7 +5402,7 @@ import sys
 # ③ 新 detailEpisodes（详情拆全部分集成 SubTrack，id = 原 id + "#" + 集号，标题取集名、缺名补“原标题 集号”）；
 # ④ episodeCache（详情只拉一次：detailEpisodes 与 resolvePlay 共享，超 20 条清掉）；
 # ⑤ resolvePlay 改走 parsePlayParts + 缓存：id 带 "#" 按集号取播放 id，越界报“该分集不存在”；其余播放链（playerContent/vip 标志/parse=1 拒绝）与旧版逐字一致
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v22]" in src:
     print("bridge already 46v22, skip")
@@ -5444,7 +5446,7 @@ rep(
             val firstGroup = urls.split("$$$")[0]
             val firstEp = firstGroup.split("#")[0]
             val playId = firstEp.substringAfter("$", firstEp)
-            val pr = sp.playerContent(flag, playId, ApiConfig.get().getVipParseFlags())
+            val pr = sp.playerContent(flag, playId, ApiConfig.get().vipParseFlags)
                 ?: return@withContext PlayResult.Fail("取播放地址失败")
             val pj = JSONObject(pr)
             val parse = pj.optInt("parse", 0)
@@ -5520,7 +5522,7 @@ rep(
             }
             val playId = parts.second.getOrNull(wantIdx)
                 ?: return@withContext PlayResult.Fail("该分集不存在")
-            val pr = sp.playerContent(parts.first, playId, ApiConfig.get().getVipParseFlags())
+            val pr = sp.playerContent(parts.first, playId, ApiConfig.get().vipParseFlags)
                 ?: return@withContext PlayResult.Fail("取播放地址失败")
             val pj = JSONObject(pr)
             val parse = pj.optInt("parse", 0)
@@ -5548,7 +5550,7 @@ import sys
 # ③ 钻入分页：滑到底（末项合成时）拉下一页追加，全重/空页即止；段卡点开重置分页；
 # ④ 钻入下拉刷新：PullToRefreshBox 包钻入网格（同 PlaylistScreen/RecommendScreen 的三参用法），重拉第一页；
 # ⑤ 换 tab/清空搜索/换源时退出分集网格
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v22]" in src:
     print("screen already 46v22, skip")
@@ -5859,8 +5861,8 @@ print("OK 46v22 screen")
 PYEOF46V22
 python3 /tmp/patch_bridge46v22.py
 python3 /tmp/patch_screen46v22.py
-grep -q "46v22" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v22 bridge"; exit 1; }
-grep -q "46v22" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v22 screen"; exit 1; }
+grep -q "46v22" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt || { echo "X 46v22 bridge"; exit 1; }
+grep -q "46v22" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt || { echo "X 46v22 screen"; exit 1; }
 echo "OK 46v22"
 echo "=== 46 v22 done ==="
 
@@ -5876,7 +5878,7 @@ import sys
 # ② loadBrowse 在 home 到手后先调 loadSections 再调 applyTab；③ applyTab(t==1) 不再自带拉取循环，只做兜底；
 # ④ 换源失败时清 sectionsKey/分段，容后重试；⑤ 歌单 tab 空时：还在拉分段显示“正在加载歌单…”，拉完仍空才说“该源暂无歌单”；
 # ⑥ 附带：换源时清 chartItems，避免旧源条目留在新源歌单池里
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v23]" in src:
     print("screen already 46v23, skip")
@@ -6047,7 +6049,7 @@ open(path, "w", encoding="utf-8").write(src)
 print("OK 46v23 screen")
 PYEOF46V23
 python3 /tmp/patch_screen46v23.py
-grep -q "46v23" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v23 screen"; exit 1; }
+grep -q "46v23" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt || { echo "X 46v23 screen"; exit 1; }
 echo "OK 46v23"
 echo "=== 46 v23 done ==="
 
@@ -6063,7 +6065,7 @@ import sys
 # 才是顶层扩展函数才要 import；全仓无人 import 过 lazy.grid.item（v22 那行是唯一一处），而 LazyColumn 里的 `item {`
 # （MusicHomeActivity.kt:1905、LxArtistDetailActivity.kt:277 等）全都不带 import——同款实证；
 # 修法：只删 import 行，钻入网格底的 `item { "正在加载更多…" }` 尾巴原样保留（它是作用域成员调用）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v24]" in src:
     print("screen already 46v24, skip")
@@ -6079,7 +6081,7 @@ open(path, "w", encoding="utf-8").write(src)
 print("OK 46v24 screen")
 PYEOF46V24
 python3 /tmp/patch_screen46v24.py
-grep -q "46v22" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v24 screen"; exit 1; }
+grep -q "46v22" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt || { echo "X 46v24 screen"; exit 1; }
 echo "OK 46v24"
 echo "=== 46 v24 done ==="
 
@@ -6095,7 +6097,7 @@ import sys
 # （新增 chartOnlySections 派生，isChartLike 既有口径：榜/排行/飙升/新歌/畅听/会员/热歌/金曲/视频）；
 # ③ 歌单 tab＝isCollection(pool)＋非榜单类段的条目全并入（去重，歌手类段条目必进歌单、不依赖备注）；
 # ④ 不建歌手 tab、不猜人名、不逐卡探详情；歌单仍只取各段第 1 页
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v25]" in src:
     print("screen already 46v25, skip")
@@ -6150,7 +6152,7 @@ open(path, "w", encoding="utf-8").write(src)
 print("OK 46v25 screen")
 PYEOF46V25
 python3 /tmp/patch_screen46v25.py
-grep -q "46v25" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v25 screen"; exit 1; }
+grep -q "46v25" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt || { echo "X 46v25 screen"; exit 1; }
 echo "OK 46v25"
 echo "=== 46 v25 done ==="
 
@@ -6163,7 +6165,7 @@ import sys
 # 顶部横向可滑分类条（源站自己的分类：歌手/歌单/榜单/250榜……按源站顺序向右延伸），点分类只换当页内容、不跳新页；
 # 内容区复用钻入网格（chartDetail/gridItems/分页/下拉刷新），点分类即以前段卡点开的动作，去掉“← 返回榜单”；
 # 首页条目放第一个分类片“推荐”（管理那 5 张歌手走的就是这条）；数据层不动，仍只取各段第 1 页
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v26]" in src:
     print("screen already 46v26, skip")
@@ -6652,7 +6654,7 @@ print("patched 46v26")
 
 PYEOF46V26
 python3 /tmp/patch_screen46v26.py
-grep -q "46v26" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v26 screen"; exit 1; }
+grep -q "46v26" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt || { echo "X 46v26 screen"; exit 1; }
 echo "OK 46v26"
 echo "=== 46 v26 done ==="
 
@@ -6665,7 +6667,7 @@ import sys
 # 主体在 PlayLoader.mergeSiteHeaders＋PlayUrlResolver.jsonParse 把源站 header 与结果里的 UA/Referer 带上。
 # 修法：resolvePlay 从 playerContent 返回里取头（header/headers 对象＋user-agent/referer，data 包裹也认；源站 header 只补没有的键），随 Ok 一起带出；
 # 曲库 playTrack 把头传进 LxPlayerManager.play()（headers 参数，21 v56 接）；切歌/自动下一首走 21 v55 的 resolveAndPlay，同样带头（21 v56 改）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v27]" in src:
     print("bridge already 46v27, skip")
@@ -6735,14 +6737,14 @@ print("patched 46v27 bridge")
 
 PYEOF46V27
 python3 /tmp/patch_screen46v27.py
-grep -q "46v27" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v27 bridge"; exit 1; }
+grep -q "46v27" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt || { echo "X 46v27 bridge"; exit 1; }
 echo "OK 46v27 bridge"
 
 cat > /tmp/patch_screen46v27b.py << 'PYEOF46V27B'
 import sys
 
 # 46 v27（曲库屏）：playTrack 把桥接返回的头传进播放器
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v27]" in src:
     print("screen already 46v27, skip")
@@ -6772,7 +6774,7 @@ print("patched 46v27 screen")
 
 PYEOF46V27B
 python3 /tmp/patch_screen46v27b.py
-grep -q "46v27" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v27 screen"; exit 1; }
+grep -q "46v27" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt || { echo "X 46v27 screen"; exit 1; }
 echo "OK 46v27 screen"
 echo "=== 46 v27 done ==="
 
@@ -6783,7 +6785,7 @@ import sys
 # 46 v28（桥接）：详情封面回填——列表条目常不带 vod_pic（歌手卡全是首字占位），详情对象里一般有 vod_pic（跟播放地址同一个对象）；
 # 修法：detailEpisodes 顺带把详情 vod_pic 带回来（分集封面＝列表图，没有就用详情图）；episodeCache 一并存封面（flag to 播放 id 列表 to 详情封面），
 # resolvePlay 经缓存命中也能拿到封面，随 Ok 一起带出（Ok 加 pic 字段，默认空串）；不多花一次请求。配 21 v57（切歌也用详情封面）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt"
 src = open(path, encoding="utf-8").read()
 if "[46v28]" in src: # [46v28] 守卫用裸标记：多处标记写作 [46v27][46v28] 连写，"// [46v28]" 子串匹配不到
     print("bridge already 46v28, skip")
@@ -6889,7 +6891,7 @@ print("patched 46v28 bridge")
 
 PYEOF46V28
 python3 /tmp/patch_screen46v28.py
-grep -q "46v28" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v28 bridge"; exit 1; }
+grep -q "46v28" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt || { echo "X 46v28 bridge"; exit 1; }
 echo "OK 46v28 bridge"
 
 cat > /tmp/patch_screen46v28b.py << 'PYEOF46V28B'
@@ -6897,7 +6899,7 @@ import sys
 
 # 46 v28（曲库屏）：详情封面回填到卡片与播放页——点卡一次就把详情 vod_pic 存进 picOverrides（key = 源:条目 id 去 #），
 # 四处卡片（搜索/分集/钻入/推荐）统一走 picOf（回填优先、列表原图次之）；点播时封面＝picOf，没有再用 resolvePlay 返回的详情封面
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "[46v28]" in src: # [46v28] 守卫用裸标记：多处标记写作 [46v27][46v28] 连写，"// [46v28]" 子串匹配不到
     print("screen already 46v28, skip")
@@ -6967,7 +6969,7 @@ print("patched 46v28 screen")
 
 PYEOF46V28B
 python3 /tmp/patch_screen46v28b.py
-grep -q "46v28" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v28 screen"; exit 1; }
+grep -q "46v28" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt || { echo "X 46v28 screen"; exit 1; }
 echo "OK 46v28 screen"
 echo "=== 46 v28 done ==="
 
@@ -6980,7 +6982,7 @@ import sys
 # ② detailEpisodes 的 (emptyList() to "") 推不出类型：to 是双泛型中缀函数，期望类型 Pair<List<SubTrack>, String> 流不回 emptyList 的元素类型 T，
 #    也流不回 to 自身的 A，致 202/205/207/210/220 五处 Cannot infer type（202 是 withContext 的 T，级联）；v22 原版只写 emptyList() 能推，是因期望类型直达。
 #    修法：四处全写死 emptyList<SubTrack>()。仿真不编译 Kotlin，抓不出这类错（同 v24 教训）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt"
 src = open(path, encoding="utf-8").read()
 if "[46v29]" in src:
     print("bridge already 46v29, skip")
@@ -7036,7 +7038,7 @@ print("patched 46v29 bridge")
 
 PYEOF46V29
 python3 /tmp/patch_screen46v29.py
-grep -q "46v29" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v29 bridge"; exit 1; }
+grep -q "46v29" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt || { echo "X 46v29 bridge"; exit 1; }
 echo "OK 46v29 bridge"
 echo "=== 46 v29 done ==="
 
@@ -7048,7 +7050,7 @@ import sys
 # playTrack/openItem 原先各起一个无 guard 的协程，先点的解析慢回包、后点的解析先回包，最后执行的 play() 获胜——不是最后点的获胜，
 # 先点的歌会盖掉后点的歌，放的歌和点的歌不一样。修法：点歌取号（playReq 单调递增），只认最新一号的解析结果，过期的直接丢弃、不播也不改提示；
 # 队列是同步赋值的（点即换队），本来就是最后点的获胜，只乱序回包要堵。配 21 v58（切歌那边同款问题）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt"
 src = open(path, encoding="utf-8").read()
 if "[46v30]" in src:
     print("screen already 46v30, skip")
@@ -7119,7 +7121,7 @@ print("patched 46v30 screen")
 
 PYEOF46V30
 python3 /tmp/patch_screen46v30.py
-grep -q "46v30" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicScreen.kt || { echo "X 46v30 screen"; exit 1; }
+grep -q "46v30" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicScreen.kt || { echo "X 46v30 screen"; exit 1; }
 echo "OK 46v30 screen"
 echo "=== 46 v30 done ==="
 
@@ -7131,7 +7133,7 @@ import sys
 # 但它的订阅分支（46 v12 加的）一直没跟上 21 v56/v57：play() 没传 headers（源站挡 UA、无头就报网络异常），封面只用 t.pic（不认 r.pic 的详情封面），
 # 也没有 21 v58 的取号防串。后果：曲库点歌（playTrack，走管理器、有头）能播的歌，一进播放页切歌/自动下一首就掉回无头播放、又报网络异常；
 # 连点切歌时旧解析也可能盖回。修法：与管理器 resolveAndPlay 订阅分支对齐——带头、封面回落、取号防串
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerActivity.kt"
 src = open(path, encoding="utf-8").read()
 if "[46v31]" in src:
     print("player already 46v31, skip")
@@ -7186,7 +7188,7 @@ print("patched 46v31 player")
 
 PYEOF46V31
 python3 /tmp/patch_player46v31.py
-grep -q "46v31" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt || { echo "X 46v31 player"; exit 1; }
+grep -q "46v31" avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerActivity.kt || { echo "X 46v31 player"; exit 1; }
 echo "OK 46v31 player"
 echo "=== 46 v31 done ==="
 
@@ -7199,7 +7201,7 @@ import sys
 # 名字与地址本来就错位，也可能是第一组 $$$ 不是音乐组、也可能是 playerContent 对 playId 回了别的歌。
 # 修法先不猜：把原始分集映射和取址结果写进运行日志（设置源管理里的日志抽屉能看到），点一次陈奕迅的歌、截一张日志图，
 # 就能钉死是源数据错位、还是解析错位、还是取址错位。诊断完可随时删这两行日志
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt"
 src = open(path, encoding="utf-8").read()
 if "[46v32]" in src:
     print("bridge already 46v32, skip")
@@ -7213,7 +7215,7 @@ def rep(old, new, tag):
 # 1) 导运行日志（与管理器同款 import，用法同款 try 包裹）
 rep(
     "import org.json.JSONObject",
-    "import org.json.JSONObject\nimport com.github.tvbox.osc.util.LxRuntimeLog // [46v32] 诊断：分集映射与取址结果写运行日志",
+    "import org.json.JSONObject\nimport com.github.avbox.osc.util.LxRuntimeLog // [46v32] 诊断：分集映射与取址结果写运行日志",
     "runtime-log-import",
 )
 
@@ -7245,7 +7247,7 @@ print("patched 46v32 bridge")
 
 PYEOF46V32
 python3 /tmp/patch_bridge46v32.py
-grep -q "46v32" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v32 bridge"; exit 1; }
+grep -q "46v32" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt || { echo "X 46v32 bridge"; exit 1; }
 echo "OK 46v32 bridge"
 echo "=== 46 v32 done ==="
 
@@ -7257,7 +7259,7 @@ import sys
 # 不读顶层 user-agent/referer、不看 data 包裹；我们 v27 多读了顶层 user-agent/referer＋data 包裹，等于比主体多发一个 Referer，
 # 若那个 Referer 不对、反而会被源站挡（DJ 歌 HQ·497kbps 仍网络异常的嫌疑之一；主体用更少的头能播）。修法：只读 header/headers 对象，
 # 对象或 JSON 文本都认（与主体 appendJsonHeaders 同款）；源站 header 仍只补没有的键；UA 不动（仍走 v56 浏览器 UA 回落，探针已证能通）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt"
 src = open(path, encoding="utf-8").read()
 if "[46v33]" in src:
     print("bridge already 46v33, skip")
@@ -7328,7 +7330,7 @@ print("patched 46v33 bridge")
 
 PYEOF46V33
 python3 /tmp/patch_bridge46v33.py
-grep -q "46v33" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v33 bridge"; exit 1; }
+grep -q "46v33" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt || { echo "X 46v33 bridge"; exit 1; }
 echo "OK 46v33 bridge"
 echo "=== 46 v33 done ==="
 
@@ -7343,7 +7345,7 @@ import sys
 # 另：v59 Range＋v33 收敛头都没修好它，正因为地址本身就是错的——头和 Range 修不了一个带括号的地址。
 # 修法：取到 url 后先归一化——协议相对地址补 http:、[...] 数组拆包取第一条可播地址（video:// 去前缀、proxy:// 跳过）、
 # video:// 去前缀并标 parse=1；归一化后的 parse 再进原有 parse==1 判断
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt"
 src = open(path, encoding="utf-8").read()
 if "[46v34]" in src:
     print("bridge already 46v34, skip")
@@ -7400,7 +7402,7 @@ print("patched 46v34 bridge")
 
 PYEOF46V34
 python3 /tmp/patch_bridge46v34.py
-grep -q "46v34" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v34 bridge"; exit 1; }
+grep -q "46v34" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt || { echo "X 46v34 bridge"; exit 1; }
 echo "OK 46v34 bridge"
 echo "=== 46 v34 done ==="
 
@@ -7412,7 +7414,7 @@ import sys
 # （纯音质标签，不是地址），播放器把它当文件路径、报 code=2005 FILE_NOT_FOUND。根因：酷我蜘蛛的 url 数组第一项是音质标签，
 # 真地址在后面某项（00:34 日志里数组尾就是一条真地址 …&loginUid$）。v34 只取第一项是错的。
 # 修法：拆包时跳过纯标签，只认以 http 开头的项；项若是“标签$地址”格式，先取 $ 后的地址（只在项不以 http 开头时切，地址本身含 $ 不受影响）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt"
 src = open(path, encoding="utf-8").read()
 if "[46v35]" in src:
     print("bridge already 46v35, skip")
@@ -7460,7 +7462,7 @@ print("patched 46v35 bridge")
 
 PYEOF46V35
 python3 /tmp/patch_bridge46v35.py
-grep -q "46v35" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/SubMusicBridge.kt || { echo "X 46v35 bridge"; exit 1; }
+grep -q "46v35" avbox/app/src/main/java/com/github/avbox/osc/ui/SubMusicBridge.kt || { echo "X 46v35 bridge"; exit 1; }
 echo "OK 46v35 bridge"
 echo "=== 46 v35 done ==="
 # === 46 v36: 修构建红——推荐页点歌瞬时刷新漏传参（用户截图 22:36，MH:627:21 No value passed for parameter 'playerIsLoading'） ===
@@ -7473,7 +7475,7 @@ cat > /tmp/patch_mh46v36.py << 'PYEOF46V36'
 import sys
 
 # 46 v36：修构建红 MH:627——46 v11 重建的 RecommendScreen 调用点漏传 playerIsLoading
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 src = open(path, encoding="utf-8").read()
 if "// [46v36]" in src:
     print("MH already 46v36, skip")
@@ -7499,6 +7501,6 @@ print("OK 46v36 MH")
 
 PYEOF46V36
 python3 /tmp/patch_mh46v36.py
-grep -q "46v36" avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt || { echo "X 46v36 MH"; exit 1; }
+grep -q "46v36" avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt || { echo "X 46v36 MH"; exit 1; }
 echo "OK 46v36 MH"
 echo "=== 46 v36 done ==="

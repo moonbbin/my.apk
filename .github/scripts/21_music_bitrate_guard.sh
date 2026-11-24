@@ -1,4 +1,7 @@
 #!/bin/bash
+# [base-a6da734e] round1 tvbox->avbox
+# [base-a6da734e] round2 player
+# round2 审计（2026-11-24）：v19-v74 逐块核对（v73 本脚本 0 处，系已否决版本；v66 为行内单行标记）。probeAndSetQuality/tryQuality 链路 26 处引用均走 HttpURLConnection + android.util.Log，无 LOG/OkGoHelper/HawkConfig/RefreshEvent 调用；LxRuntimeLog 一律 .add(String)，与 32 v115 定义 fun add(msg: String) 一致；v56 注释所称 PlayLoader.mergeSiteHeaders 与 PlayUrlResolver.jsonParse 已在 base_new 核实存在；"UA" 均为 User-Agent 字符串、非已删 UA.kt；"tvbox" 仅 round1 注释本身。无重接点，不改代码。
 # 21 - 播放器音质验货（防糊）：v18
 # ============================================================================
 # 版本导航（v1→v9 一句话）：
@@ -39,7 +42,7 @@ echo "=== 播放器音质验货补丁 v7 ==="
 python3 << 'PYEOF'
 import sys
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
@@ -831,7 +834,7 @@ PYEOF
 # ===== v7：音质请求顺序升级（Hi-Res 优先拉取） =====
 python3 << 'PYEOF_V7'
 import re
-path7 = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path7 = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 with open(path7, encoding="utf-8") as f:
     s7 = f.read()
 MARK7 = "// 音质请求顺序 v7"
@@ -863,7 +866,7 @@ PYEOF_V7
 # ===== v8：音质顺序全文件扫描（宽松匹配） =====
 python3 << 'PYEOF_V8SCAN'
 import re, sys
-p8 = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+p8 = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 with open(p8, encoding="utf-8") as f:
     s8 = f.read()
 M8 = "// 音质请求顺序 v8"
@@ -893,7 +896,7 @@ PYEOF_V8SCAN
 # ===== v9：QUALITY_ORDER 精确替换（解码13号确认锚点） =====
 python3 << 'PYEOF_V9'
 import sys
-p9 = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+p9 = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 with open(p9, encoding="utf-8") as f:
     s9 = f.read()
 M9 = "// QUALITY_ORDER v9"
@@ -917,7 +920,7 @@ PYEOF_V9
 python3 << 'PYEOF'
 import sys
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
@@ -964,7 +967,7 @@ echo "=== 完成 ==="
 python3 << 'PYEOF'
 import sys
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
@@ -996,7 +999,7 @@ PYEOF
 python3 << 'PYEOF'
 import sys
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
@@ -1036,7 +1039,7 @@ echo "=== 21 v19: 切歌清空音质状态 ==="
 python3 << 'PYEOF'
 import re
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
@@ -1076,7 +1079,7 @@ echo "=== 21 v20 ==="
 python3 << 'PYEOF'
 import re, sys
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 MARK = "// [21v20] clear only on url change"
 
 with open(path, encoding="utf-8") as f:
@@ -1133,7 +1136,7 @@ echo "=== 21 v22 ==="
 python3 << 'PYEOF2'
 import re, sys
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 MARK = "// [21v22] clear on song change"
 
 with open(path, encoding="utf-8") as f:
@@ -1189,7 +1192,7 @@ echo "=== 21 v23 ==="
 python3 << 'PYEOF3'
 import re, sys
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 MARK_V23 = "// [21v23]"
 MARK_V22 = "// [21v22] clear on song change"
 
@@ -1280,7 +1283,7 @@ echo "=== 21 v25 ==="
 python3 << 'PYEOF25'
 import re, sys
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 MARK = "// [21v25]"
 
 with open(path, encoding="utf-8") as f:
@@ -1446,7 +1449,7 @@ echo "=== 21 v26 ==="
 python3 << 'PYEOF26'
 import sys, re
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 MARK = "// [21v26]"
 
 with open(path, encoding="utf-8") as f:
@@ -1568,7 +1571,7 @@ echo "=== 21 v28 ==="
 python3 << 'PYEOF28'
 import sys
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 MARK = "// [21v28]"
 
 with open(path, encoding="utf-8") as f:
@@ -1622,7 +1625,7 @@ echo "=== 21 v28 完成 ==="
 echo "=== 21 v29: isProbing 状态闭环 ==="
 python3 << 'PYEOF29'
 import sys, re
-PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+PATH = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 with open(PATH, encoding='utf-8') as f:
     content = f.read()
 if '// [21v29]' in content:
@@ -1693,7 +1696,7 @@ PYEOF29
 echo "=== 21 v30: 密封复位 + probeDbg ==="
 python3 << 'PYEOF30'
 import sys
-PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+PATH = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 with open(PATH, encoding='utf-8') as f:
     c = f.read()
 if '// [21v30]' in c:
@@ -1788,7 +1791,7 @@ echo "=== 21 v31 ==="
 python3 << 'PYEOF31'
 import sys
 
-PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+PATH = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 MARK = "// [21v31]"
 
 with open(PATH, encoding="utf-8") as f:
@@ -1939,7 +1942,7 @@ echo "=== 21 v32 ==="
 python3 << 'PYEOF32'
 import sys
 
-PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+PATH = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 MARK = "// [21v32]"
 
 with open(PATH, encoding="utf-8") as f:
@@ -2052,7 +2055,7 @@ echo "=== 21 v33 ==="
 python3 << 'PYEOF33'
 import sys
 
-PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+PATH = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 MARK = "// [21v33]"
 
 with open(PATH, encoding="utf-8") as f:
@@ -2117,7 +2120,7 @@ echo "=== 21 v34 ==="
 python3 << 'PYEOF34'
 import sys
 
-PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+PATH = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 MARK = "// [21v34]"
 
 with open(PATH, encoding="utf-8") as f:
@@ -2202,7 +2205,7 @@ echo "=== 21 v35 ==="
 python3 << 'PYEOF35'
 import sys
 
-PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+PATH = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 MARK = "// [21v35]"
 
 with open(PATH, encoding="utf-8") as f:
@@ -2282,7 +2285,7 @@ echo "=== 21 v36 ==="
 python3 << 'PYEOF36'
 import sys
 
-PATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+PATH = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 MARK = "// [21v36]"
 DEP = '    @Deprecated("系统 EQ 遗留：纯 DSP 版本将移除") // [21v36]'
 
@@ -2325,7 +2328,7 @@ echo "=== 21 v36 完成 ==="
 # === 21 v37: 纯 DSP（移除系统 EQ 全部遗留代码） ===
 python3 << 'PYEOF21V37'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -2404,7 +2407,7 @@ echo "=== 21 v37 完成 ==="
 # === 21 v38: 立体声拓宽开关下发 ===
 python3 << 'PYEOF21V38'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -2421,7 +2424,7 @@ echo "=== 21 v38 完成 ==="
 # === 21 v39: 多段压缩开关下发 ===
 python3 << 'PYEOF21V39'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -2438,7 +2441,7 @@ echo "=== 21 v39 完成 ==="
 # === 21 v40: 瞬态增强开关下发 ===
 python3 << 'PYEOF21V40'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -2455,7 +2458,7 @@ echo "=== 21 v40 完成 ==="
 # === 21 v41: Sub 合成 + Crossfeed 开关下发 ===
 python3 << 'PYEOF21V41'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -2473,7 +2476,7 @@ echo "=== 21 v41 完成 ==="
 # === 21 v42: 评论（只读）StateFlow + 网易云热评拉取 ===
 python3 << 'PYEOF21V42'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -2573,7 +2576,7 @@ echo "=== 21 v42 完成 ==="
 # 自然播完自动切歌不走 playNext/Previous（STATE_ENDED 内联逻辑），故不置位，合乎“只锁点击”的范围。
 python3 << 'PYEOF21V43'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -2653,7 +2656,7 @@ echo "=== 21 v43 完成 ==="
 # === 21 v44: 激励器 + 等响度开关下发 + 音量刷新 ===
 python3 << 'PYEOF21V44'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -2702,7 +2705,7 @@ echo "=== 21 v44 完成 ==="
 # === 21 v45: Sub 开关键改 subfx（避与 60Hz 滑块键 sub 撞键，切歌不再自动关） ===
 python3 << 'PYEOF21V45'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -2720,7 +2723,7 @@ echo "=== 21 v45 完成 ==="
 # === 21 v46: Autogain 开关下发 + 均衡页调试快照 ===
 python3 << 'PYEOF21V46'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -2742,7 +2745,7 @@ echo "=== 21 v46 完成 ==="
 # === 21 v47: 混响开关下发 ===
 python3 << 'PYEOF21V47'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -2760,7 +2763,7 @@ echo "=== 21 v47 完成 ==="
 # === 21 v48: 去齿音 + 延时对齐下发 ===
 python3 << 'PYEOF21V48'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -2781,7 +2784,7 @@ echo "=== 21 v48 完成 ==="
 # === 21 v49: 低频起振开关下发 ===
 python3 << 'PYEOF21V49'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -2799,7 +2802,7 @@ echo "=== 21 v49 完成 ==="
 # === 21 v50: 低频处理器力度下发 ===
 python3 << 'PYEOF21V50'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -2817,7 +2820,7 @@ echo "=== 21 v50 完成 ==="
 # === 21 v51: 车载蓝牙 MediaSession（车机 AVRCP 显示歌名/歌手） ===
 python3 << 'PYEOF21V51'
 import sys
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(path, encoding="utf-8").read()
 if "[21v51]" in s:
     print("跳过（21 v51 MediaSession 已应用）"); sys.exit(0)
@@ -2965,13 +2968,13 @@ open(path, "w", encoding="utf-8").write(s)
 print("OK 21 v51 MediaSession 已写")
 PYEOF21V51
 echo "=== 21 v51 完成 ==="
-grep -q '21v51' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v51 写入失败"; exit 1; }
+grep -q '21v51' app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 21 v51 写入失败"; exit 1; }
 echo "OK 21 v51 车载蓝牙 MediaSession 已写入"
 
 # === 21 v52: 通知 token 方法名修正（CI 1754 行报错修复） ===
 python3 << 'PYEOF21V52'
 import sys
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(path, encoding="utf-8").read()
 if "[21v52]" in s:
     print("跳过（21 v52 方法名修正已应用）"); sys.exit(0)
@@ -2990,13 +2993,13 @@ open(path, "w", encoding="utf-8").write(s)
 print("OK 21 v52 方法名修正已写")
 PYEOF21V52
 echo "=== 21 v52 完成 ==="
-grep -q '21v52' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v52 写入失败"; exit 1; }
+grep -q '21v52' app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 21 v52 写入失败"; exit 1; }
 echo "OK 21 v52 通知 token 方法名修正已写入"
 
 # === 21 v53: 车载蓝牙歌词（歌手位置） ===
 python3 << 'PYEOF21V53'
 import sys
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(path, encoding="utf-8").read()
 if "[21v53]" in s:
     print("跳过（21 v53 车载蓝牙歌词已应用）"); sys.exit(0)
@@ -3063,13 +3066,13 @@ open(path, "w", encoding="utf-8").write(s)
 print("OK 21 v53 车载蓝牙歌词已写")
 PYEOF21V53
 echo "=== 21 v53 完成 ==="
-grep -q '21v53' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v53 写入失败"; exit 1; }
+grep -q '21v53' app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 21 v53 写入失败"; exit 1; }
 echo "OK 21 v53 车载蓝牙歌词已写入"
 
 # === 21 v54: 切歌预取（URL 预加载，后台顺序预取往后地址，切歌缓存命中秒起） ===
 python3 << 'PYEOF21V54'
 import sys
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(path, encoding="utf-8").read()
 if "[21v54]" in s:
     print("跳过（21 v54 切歌预取已应用）"); sys.exit(0)
@@ -3169,8 +3172,8 @@ rep1("    private fun updateMediaSessionMetadata() {",
     private fun resolveUrlOnly(song: Map<String, String>): String? {
         return try {
             val ctx = appContext ?: return null
-            try { if (!com.github.tvbox.osc.ui.activity.LxEngineHolder.isReady) com.github.tvbox.osc.ui.activity.LxEngineHolder.warmUp(ctx) } catch (_: Exception) { }
-            val engine = com.github.tvbox.osc.ui.activity.LxEngineHolder.get()
+            try { if (!com.github.avbox.osc.ui.LxEngineHolder.isReady) com.github.avbox.osc.ui.LxEngineHolder.warmUp(ctx) } catch (_: Exception) { }
+            val engine = com.github.avbox.osc.ui.LxEngineHolder.get()
             val songId = song["songId"] ?: return null
             val platform = song["platform"] ?: "wy"
             val musicInfo = mapOf(
@@ -3255,7 +3258,7 @@ open(path, "w", encoding="utf-8").write(s)
 print("OK 21 v54 切歌预取已写")
 PYEOF21V54
 echo "=== 21 v54 完成 ==="
-grep -q '21v54' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v54 写入失败"; exit 1; }
+grep -q '21v54' app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 21 v54 写入失败"; exit 1; }
 echo "OK 21 v54 切歌预取已写入"
 
 # === 21 v55: 订阅队列解析接缝 ===
@@ -3268,9 +3271,9 @@ import sys
 
 # 21 v55：订阅队列解析接缝（播放器页关闭时切歌/自动下一首也走桥接解析）＋预取跳过订阅条目
 # 21 脚本中途 cd avbox（故 CI 里路径不带 avbox/ 前缀），仿真单跑时在 sim 根目录（带 avbox/ 前缀），两处自适应
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 if not os.path.exists(path):
-    path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+    path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 src = open(path, encoding="utf-8").read()
 if "// [21v55]" in src:
     print("manager already 21v55, skip")
@@ -3312,7 +3315,7 @@ assert src.count("// [21v55]") == 2
 open(path, "w", encoding="utf-8").write(src)
 print("OK 21v55 manager")
 PYEOF21V55
-grep -q "21v55" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v55"; exit 1; }
+grep -q "21v55" app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 21 v55"; exit 1; }
 echo "OK 21 v55"
 echo "=== 21 v55 done ==="
 
@@ -3327,9 +3330,9 @@ import sys
 # 主体在 PlayLoader.mergeSiteHeaders＋PlayUrlResolver.jsonParse 把源站 header 与结果里的 UA/Referer 带上。修法：play() 接 headers 参数，
 # 建播时留住 DefaultHttpDataSource.Factory，每首歌先把头写进工厂（UA 取头里的 User-Agent，没有就用探针同款浏览器 UA；其余头原样写，无头时清掉上一首的头）；
 # resolveAndPlay 的订阅分支（v55）也把桥接返回的头传进 play()。落雪链不受影响（headers 默认空，只换 UA 为浏览器 UA，与 32v122 验活口径一致）
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 if not os.path.exists(path):
-    path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+    path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 src = open(path, encoding="utf-8").read()
 if "// [21v56]" in src:
     print("manager already 21v56, skip")
@@ -3405,7 +3408,7 @@ open(path, "w", encoding="utf-8").write(src)
 print("patched 21v56")
 
 PYEOF21V56
-grep -q "21v56" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v56"; exit 1; }
+grep -q "21v56" app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 21 v56"; exit 1; }
 echo "OK 21 v56"
 echo "=== 21 v56 done ==="
 
@@ -3417,9 +3420,9 @@ import sys
 
 # 21 v57：切歌也用详情封面（配 46 v28）——订阅队列里存的是列表封面（常为空），切歌/自动下一首走 resolveAndPlay 时，
 # 桥接 resolvePlay 已随 Ok 带回详情封面（46 v28 的 pic 字段，经 episodeCache 或当次详情）；队列封面为空时用它，封面切歌不断
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 if not os.path.exists(path):
-    path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+    path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 src = open(path, encoding="utf-8").read()
 if "[21v57]" in src: # [21v57] 守卫用裸标记：本行标记写作 [21v56][21v57] 连写，"// [21v57]" 子串匹配不到
     print("manager already 21v57, skip")
@@ -3453,7 +3456,7 @@ open(path, "w", encoding="utf-8").write(src)
 print("patched 21v57")
 
 PYEOF21V57
-grep -q "21v57" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v57"; exit 1; }
+grep -q "21v57" app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 21 v57"; exit 1; }
 echo "OK 21 v57"
 echo "=== 21 v57 done ==="
 
@@ -3467,9 +3470,9 @@ import sys
 # 连点上下首/自动下一首与点歌交错时，先起的解析慢回包、后起的先回包，最后 post 的 play() 获胜——不是最后点的获胜，
 # 先点的歌会盖掉后点的歌。修法：切歌取号（subResolveReq 单调递增），只认最新一号的解析结果，过期的直接丢弃、不播不报错；
 # 队列下标是同步推进的（点即换位），本来就是最后点的获胜，只乱序回包要堵
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 if not os.path.exists(path):
-    path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+    path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 src = open(path, encoding="utf-8").read()
 if "[21v58]" in src:
     print("manager already 21v58, skip")
@@ -3521,7 +3524,7 @@ open(path, "w", encoding="utf-8").write(src)
 print("patched 21v58")
 
 PYEOF21V58
-grep -q "21v58" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v58"; exit 1; }
+grep -q "21v58" app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 21 v58"; exit 1; }
 echo "OK 21 v58"
 echo "=== 21 v58 done ==="
 
@@ -3536,9 +3539,9 @@ import sys
 # 播放器首请求是普通 GET（无 Range），部分源站只认 Range 请求、普通 GET 直接挡。修法：每首歌写头时默认补 Range: bytes=0-，
 # 让首请求配方与探针一致（浏览器 UA＋Range）；切歌/续播时 DataSpec 自带 Range，会覆盖此默认项，seek 不受影响；
 # 头里若已有 Range（理论上不会，playerContent 不回 Range）先去掉再补，避免双 Range 头
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 if not os.path.exists(path):
-    path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+    path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 src = open(path, encoding="utf-8").read()
 if "[21v59]" in src:
     print("manager already 21v59, skip")
@@ -3572,7 +3575,7 @@ open(path, "w", encoding="utf-8").write(src)
 print("patched 21v59")
 
 PYEOF21V59
-grep -q "21v59" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v59"; exit 1; }
+grep -q "21v59" app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 21 v59"; exit 1; }
 echo "OK 21 v59"
 echo "=== 21 v59 done ==="
 
@@ -3585,9 +3588,9 @@ import sys
 # 21 v60：播放地址归一化（与 46 v34/v35 同款）——用户说脚本源也放不了歌，试了还是不行。订阅源的数组地址是在桥接里拆的，
 # 脚本源（落雪链）的地址走引擎直出、不经过桥接，若引擎也回数组或标签地址，播放器同样认不出。修法：在 Manager.play() 播之前统一归一化
 # （数组拆包只认 http 地址、标签加美元符加地址取美元符后、协议相对地址补 http:、video:// 去前缀），已是干净地址时原样返回，本地 file 与 content 地址不受影响
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 if not os.path.exists(path):
-    path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+    path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 src = open(path, encoding="utf-8").read()
 if "[21v60]" in src:
     print("manager already 21v60, skip")
@@ -3662,7 +3665,7 @@ open(path, "w", encoding="utf-8").write(src)
 print("patched 21v60")
 
 PYEOF21V60
-grep -q "21v60" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v60"; exit 1; }
+grep -q "21v60" app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 21 v60"; exit 1; }
 echo "OK 21 v60"
 echo "=== 21 v60 done ==="
 
@@ -3677,9 +3680,9 @@ import sys
 # tryAutoNextOnFailure 又进下一首，循环切歌永不播放。修法：resolveAndPlay 的 tryNext 改调 LxEngineHolder.resolveMusicUrlFirst
 #（39pool 的池竞速，含主引擎+池引擎，首个可用地址即赢；39pool4 后回 Pair<源id, 地址>，此处拆包取地址）。
 # 注意：21 在 39 之前跑，写补丁时 resolveMusicUrlFirst 尚不存在，但编译在全部脚本跑完后，39 已补上，故可引用。
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 if not os.path.exists(path):
-    path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+    path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 src = open(path, encoding="utf-8").read()
 if "[21v61]" in src:
     print("manager already 21v61, skip")
@@ -3717,7 +3720,7 @@ open(path, "w", encoding="utf-8").write(src)
 print("patched 21v61")
 
 PYEOF21V61
-grep -q "21v61" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v61"; exit 1; }
+grep -q "21v61" app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 21 v61"; exit 1; }
 echo "OK 21 v61"
 echo "=== 21 v61 done ==="
 
@@ -3732,9 +3735,9 @@ import sys
 # v59 当初为订阅源 DJ 歌（那类源站只认 Range）把默认 Range 加给了所有播放，属矫枉过正。
 # 修法：①applyPlayHeaders 只有调用方传了 headers（订阅源路径）时才补默认 Range；脚本源 headers 为空时不补，回普通 GET；
 # ②probeBytes Range 取不到时用普通 GET（不带 Range）再取一次前 64KB，探针亦恢复。
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 if not os.path.exists(path):
-    path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+    path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 src = open(path, encoding="utf-8").read()
 if "[21v62]" in src:
     print("manager already 21v62, skip")
@@ -3795,7 +3798,7 @@ open(path, "w", encoding="utf-8").write(src)
 print("patched 21v62")
 
 PYEOF21V62
-grep -q "21v62" app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v62"; exit 1; }
+grep -q "21v62" app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 21 v62"; exit 1; }
 echo "OK 21 v62"
 echo "=== 21 v62 done ==="
 
@@ -3804,16 +3807,16 @@ python3 << 'PYEOF63'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v63 锚点 %s: %d" % (name, src.count(old))
     return src.replace(old, new, 1)
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(M, encoding="utf-8").read()
 if "[21v63]" in s:
     print("跳过（21 v63 已应用）")
@@ -3841,7 +3844,7 @@ else:
         if (_playMode.value == MODE_LOOP_ONE) return false
         consecutiveAutoFailCount++ // [21v63] 自动切歌连败计数
         if (consecutiveAutoFailCount >= 3) { // [21v63] 连败 3 首即停，不无限切歌
-            try { com.github.tvbox.osc.util.LxRuntimeLog.add("自动切歌连败 " + consecutiveAutoFailCount + " 首，停止切歌") } catch (_: Exception) { }
+            try { com.github.avbox.osc.util.LxRuntimeLog.add("自动切歌连败 " + consecutiveAutoFailCount + " 首，停止切歌") } catch (_: Exception) { }
             return false
         }
         return try {
@@ -3872,16 +3875,16 @@ python3 << 'PYEOF64'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v64 锚点 %s: %d" % (name, src.count(old))
     return src.replace(old, new, 1)
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(M, encoding="utf-8").read()
 if "[21v64]" in s:
     print("跳过（21 v64 已应用）")
@@ -3936,16 +3939,16 @@ python3 << 'PYEOF65'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v65 锚点 %s: %d" % (name, src.count(old))
     return src.replace(old, new, 1)
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(M, encoding="utf-8").read()
 if "[21v65]" in s:
     print("跳过（21 v65 已应用）")
@@ -3988,7 +3991,7 @@ else:
                                         // [21v65] 验活：地址先验活，失败则排除该源、同档位同平台再竞速（与 tryQuality 的 39pool4 对齐）
                                         val alive = try { isStreamUrlAlive(url) } catch (_: Exception) { false }
                                         if (!alive) {
-                                            try { com.github.tvbox.osc.util.LxRuntimeLog.add("地址验活失败: " + title + " / " + artist + " | 档位 " + q + " " + url.take(80)) } catch (_: Exception) { }
+                                            try { com.github.avbox.osc.util.LxRuntimeLog.add("地址验活失败: " + title + " / " + artist + " | 档位 " + q + " " + url.take(80)) } catch (_: Exception) { }
                                             Log.w(TAG, "音质 $q @平台 ${cand.plat} 地址验活失败，换池内下一源重试")
                                             excludedSources.add(urlSourceId)
                                             try { LxEngineHolder.markSourceCoolDown(urlSourceId) } catch (_: Exception) { } // [21v66] 坏源搁置 5 分钟，下一首不优先试（与 39pool6 对齐）
@@ -4009,15 +4012,15 @@ if "[21v67]" in s:
 else:
     # 1) play()：通知行加诊断
     old = """            try { appContext?.let { LxMediaNotification.show(it, title, artist, true) } } catch (e: Exception) { }"""
-    new = """            try { appContext?.let { LxMediaNotification.show(it, title, artist, true); try { com.github.tvbox.osc.util.LxRuntimeLog.add("通知已调: " + title) } catch (_: Exception) { } } } catch (e: Exception) { try { com.github.tvbox.osc.util.LxRuntimeLog.add("通知失败: " + e.javaClass.simpleName + " " + (e.message ?: "")) } catch (_: Exception) { } } // [21v67]"""
+    new = """            try { appContext?.let { LxMediaNotification.show(it, title, artist, true); try { com.github.avbox.osc.util.LxRuntimeLog.add("通知已调: " + title) } catch (_: Exception) { } } } catch (e: Exception) { try { com.github.avbox.osc.util.LxRuntimeLog.add("通知失败: " + e.javaClass.simpleName + " " + (e.message ?: "")) } catch (_: Exception) { } } // [21v67]"""
     s = rep(s, old, new, "play 通知诊断")
     # 2) toggle()：通知行加诊断
     old = """        try { appContext?.let { LxMediaNotification.show(it, _currentTitle.value, _currentArtist.value, player?.isPlaying == true) } } catch (e: Exception) { }"""
-    new = """        try { appContext?.let { LxMediaNotification.show(it, _currentTitle.value, _currentArtist.value, player?.isPlaying == true); try { com.github.tvbox.osc.util.LxRuntimeLog.add("通知已调: " + _currentTitle.value) } catch (_: Exception) { } } } catch (e: Exception) { try { com.github.tvbox.osc.util.LxRuntimeLog.add("通知失败: " + e.javaClass.simpleName + " " + (e.message ?: "")) } catch (_: Exception) { } } // [21v67]"""
+    new = """        try { appContext?.let { LxMediaNotification.show(it, _currentTitle.value, _currentArtist.value, player?.isPlaying == true); try { com.github.avbox.osc.util.LxRuntimeLog.add("通知已调: " + _currentTitle.value) } catch (_: Exception) { } } } catch (e: Exception) { try { com.github.avbox.osc.util.LxRuntimeLog.add("通知失败: " + e.javaClass.simpleName + " " + (e.message ?: "")) } catch (_: Exception) { } } // [21v67]"""
     s = rep(s, old, new, "toggle 通知诊断")
     # 3) pause()：通知行加诊断
     old = """        try { appContext?.let { LxMediaNotification.show(it, _currentTitle.value, _currentArtist.value, false) } } catch (e: Exception) { }"""
-    new = """        try { appContext?.let { LxMediaNotification.show(it, _currentTitle.value, _currentArtist.value, false); try { com.github.tvbox.osc.util.LxRuntimeLog.add("通知已调: " + _currentTitle.value) } catch (_: Exception) { } } } catch (e: Exception) { try { com.github.tvbox.osc.util.LxRuntimeLog.add("通知失败: " + e.javaClass.simpleName + " " + (e.message ?: "")) } catch (_: Exception) { } } // [21v67]"""
+    new = """        try { appContext?.let { LxMediaNotification.show(it, _currentTitle.value, _currentArtist.value, false); try { com.github.avbox.osc.util.LxRuntimeLog.add("通知已调: " + _currentTitle.value) } catch (_: Exception) { } } } catch (e: Exception) { try { com.github.avbox.osc.util.LxRuntimeLog.add("通知失败: " + e.javaClass.simpleName + " " + (e.message ?: "")) } catch (_: Exception) { } } // [21v67]"""
     s = rep(s, old, new, "pause 通知诊断")
     assert "[21v67]" in s, "v67 标记未落"
     open(M, "w", encoding="utf-8").write(s)
@@ -4033,16 +4036,16 @@ python3 << 'PYEOF68'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v68 锚点 %s: %d" % (name, src.count(old))
     return src.replace(old, new, 1)
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(M, encoding="utf-8").read()
 if "[21v68]" in s:
     print("跳过（21 v68 已应用）")
@@ -4068,7 +4071,7 @@ else:
                             autoRetryCount++
                             val myReqId = requestIdCounter.incrementAndGet()
                             val savedPos = try { player?.currentPosition ?: 0L } catch (_: Exception) { 0L }
-                            try { com.github.tvbox.osc.util.LxRuntimeLog.add("播放中途断流，静默换源重试 " + autoRetryCount + "/2: " + _currentTitle.value) } catch (_: Exception) { }
+                            try { com.github.avbox.osc.util.LxRuntimeLog.add("播放中途断流，静默换源重试 " + autoRetryCount + "/2: " + _currentTitle.value) } catch (_: Exception) { }
                             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                                 try {
                                     val song = try { playQueue.getOrNull(queueIndex) } catch (_: Exception) { null } ?: return@launch
@@ -4078,9 +4081,9 @@ else:
                                     val artist = song["artist"] ?: ""
                                     val pic = song["picUrl"] ?: ""
                                     val musicInfo = mapOf("id" to songId, "songId" to songId, "songmid" to songId, "name" to title, "title" to title, "artist" to artist)
-                                    val failedSid = com.github.tvbox.osc.ui.activity.LxEngineHolder.lastGoodSourceId
+                                    val failedSid = com.github.avbox.osc.ui.LxEngineHolder.lastGoodSourceId
                                     val excluded = if (failedSid != null) setOf(failedSid) else emptySet()
-                                    val result = com.github.tvbox.osc.ui.activity.LxEngineHolder.resolveUrlWithFallback(platform, musicInfo, "lossless", excluded)
+                                    val result = com.github.avbox.osc.ui.LxEngineHolder.resolveUrlWithFallback(platform, musicInfo, "lossless", excluded)
                                     val newUrl = result.second
                                     if (newUrl.isBlank()) return@launch
                                     if (requestIdCounter.get() != myReqId) return@launch
@@ -4097,10 +4100,10 @@ else:
                                                 }
                                             } catch (_: Exception) { }
                                         }
-                                        try { com.github.tvbox.osc.util.LxRuntimeLog.add("换源成功，继续播: " + title) } catch (_: Exception) { }
+                                        try { com.github.avbox.osc.util.LxRuntimeLog.add("换源成功，继续播: " + title) } catch (_: Exception) { }
                                     }
                                 } catch (e: Exception) {
-                                    try { com.github.tvbox.osc.util.LxRuntimeLog.add("换源失败: " + (e.message ?: "").take(80)) } catch (_: Exception) { }
+                                    try { com.github.avbox.osc.util.LxRuntimeLog.add("换源失败: " + (e.message ?: "").take(80)) } catch (_: Exception) { }
                                 }
                             }
                             return
@@ -4121,7 +4124,7 @@ echo "=== 21 v68 完成 ==="
 # === 21 v69: MediaSession 补封面（车载蓝牙海报，LyricDock 口径） ===
 python3 << 'PYEOF21V69'
 import sys
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(path, encoding="utf-8").read()
 if "[21v69]" in s:
     print("跳过（21 v69 MediaSession 补封面已应用）"); sys.exit(0)
@@ -4233,13 +4236,13 @@ open(path, "w", encoding="utf-8").write(s)
 print("OK 21 v69 MediaSession 补封面已写")
 PYEOF21V69
 echo "=== 21 v69 完成 ==="
-grep -q '21v69' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v69 写入失败"; exit 1; }
+grep -q '21v69' app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 21 v69 写入失败"; exit 1; }
 echo "OK 21 v69 MediaSession 补封面已写入"
 
 # === 21 v70: 歌名位置换歌词＋歌词行切了重发通知（车载蓝牙歌词上车） ===
 python3 << 'PYEOF21V70'
 import sys
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(path, encoding="utf-8").read()
 if "[21v70]" in s:
     print("跳过（21 v70 歌名位置换歌词已应用）"); sys.exit(0)
@@ -4304,12 +4307,12 @@ open(path, "w", encoding="utf-8").write(s)
 print("OK 21 v70 歌名位置换歌词已写")
 PYEOF21V70
 echo "=== 21 v70 完成 ==="
-grep -q '21v70' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v70 写入失败"; exit 1; }
+grep -q '21v70' app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 21 v70 写入失败"; exit 1; }
 echo "OK 21 v70 歌名位置换歌词已写入"
 # === 21 v71: MediaSession 状态同步（控制中心/锁屏/车机进度与播放态定格修复） ===
 python3 << 'PYEOF21V71'
 import sys
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(path, encoding="utf-8").read()
 if "[21v71]" in s:
     print("跳过（21 v71 MediaSession 状态同步已应用）"); sys.exit(0)
@@ -4334,12 +4337,12 @@ open(path, "w", encoding="utf-8").write(s)
 print("OK 21 v71 MediaSession 状态同步已写")
 PYEOF21V71
 echo "=== 21 v71 完成 ==="
-grep -q '21v71' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v71 写入失败"; exit 1; }
+grep -q '21v71' app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 21 v71 写入失败"; exit 1; }
 echo "OK 21 v71 MediaSession 状态同步已写入"
 # === 21 v72: 车载歌词搬进 Manager（行计算与推送改由 Manager 按位置做，页销毁后照样推） ===
 python3 << 'PYEOF21V72'
 import sys
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(path, encoding="utf-8").read()
 if "[21v72]" in s:
     print("跳过（21 v72 车载歌词搬进 Manager 已应用）"); sys.exit(0)
@@ -4478,12 +4481,12 @@ open(path, "w", encoding="utf-8").write(s)
 print("OK 21 v72 车载歌词搬进 Manager 已写")
 PYEOF21V72
 echo "=== 21 v72 完成 ==="
-grep -q '21v72' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v72 写入失败"; exit 1; }
+grep -q '21v72' app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 21 v72 写入失败"; exit 1; }
 echo "OK 21 v72 车载歌词搬进 Manager 已写入"
 # === 21 v74: 锁屏切歌刷新（A 时长＋B 位置）＋歌词搬进 Manager（C 根治） ===
 python3 << 'PYEOF21V74'
 import sys
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(path, encoding="utf-8").read()
 if "[21v74]" in s:
     print("跳过（21 v74 锁屏切歌刷新＋歌词搬进 Manager 已应用）"); sys.exit(0)
@@ -4788,5 +4791,5 @@ open(path, "w", encoding="utf-8").write(s)
 print("OK 21 v74 锁屏切歌刷新＋歌词搬进 Manager 已写")
 PYEOF21V74
 echo "=== 21 v74 完成 ==="
-grep -q '21v74' app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 21 v74 写入失败"; exit 1; }
+grep -q '21v74' app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 21 v74 写入失败"; exit 1; }
 echo "OK 21 v74 锁屏切歌刷新＋歌词搬进 Manager 已写入"

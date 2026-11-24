@@ -1,4 +1,7 @@
 #!/bin/bash
+# [base-a6da734e] round1 tvbox->avbox
+# [base-a6da734e] round2 player
+# round2 审计（2026-11-24）：v1-v10 逐块核对，目标 LxPlayerManager + EqDspProcessor，全文 LOG/HawkConfig/RefreshEvent/OkGoHelper/PlayerHelper/MyVideoView 均为 0 处，无重接点，不改代码。v8/v9 读 .github/irs/irs.txt 是 CI 环境文件（my.apk 仓内存在），仿真须先把 myapk/.github/irs/ 拷进仿真副本的 .github/irs/ 再跑，否则 42 的红分不清是改名问题还是缺文件。
 set -e
 # 42 - 一键音效（蝰蛇味组合：参数调好、一键开/关；新系统，build.yml 调用行由用户手动加在 41 之后）
 cd "$(dirname "$0")/../.."
@@ -7,7 +10,7 @@ echo "=== 42 一键音效 ==="
 # === 42 v1: 引擎：一键三新级 + BS2B 分支 + 系数 + 快照 + 复位 ===
 python3 << 'PYEOF42V1ENG'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -289,7 +292,7 @@ echo "=== 42 v1 引擎完成 ==="
 # === 42 v1: 页面：一键卡片 + 状态变量 + 预设清一键 ===
 python3 << 'PYEOF42V1PAGE'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -439,7 +442,7 @@ echo "=== 42 v1 页面完成 ==="
 # === 42 v1: 下发：一键开关经 applyEqFromPrefs 到引擎 ===
 python3 << 'PYEOF42V1MGR'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -457,7 +460,7 @@ echo "=== 42 v1 下发完成 ==="
 # === 42 v2: 卷积空间（分区 FFT 卷积，链首，仅一键） ===
 python3 << 'PYEOF42V2ENG'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -758,7 +761,7 @@ echo "=== 42 v2 引擎完成 ==="
 
 python3 << 'PYEOF42V2PAGE'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -776,7 +779,7 @@ echo "=== 42 v2 页面完成 ==="
 # === 42 v3: 卷积开销自适应（修超时闩锁：开销随采样率平方涨） ===
 python3 << 'PYEOF42V3ENG'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -869,7 +872,7 @@ echo "=== 42 v3 引擎完成 ==="
 # === 42 v4: 清晰度包（按案例：双混响去一 + 湿声 0.30 + 尾巴双频段阻尼） ===
 python3 << 'PYEOF42V4ENG'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -917,7 +920,7 @@ echo "=== 42 v4 引擎完成 ==="
 
 python3 << 'PYEOF42V4PAGE'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -945,25 +948,25 @@ print("OK 42 v4 页面已写")
 PYEOF42V4PAGE
 echo "=== 42 v4 页面完成 ==="
 
-grep -q 'onetapEnabled' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v1 引擎写入失败"; exit 1; }
-grep -q '一键音效' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v1 页面写入失败"; exit 1; }
-grep -q 'onetapEnabled' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 42 v1 下发写入失败"; exit 1; }
+grep -q 'onetapEnabled' avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt || { echo "X 42 v1 引擎写入失败"; exit 1; }
+grep -q '一键音效' avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt || { echo "X 42 v1 页面写入失败"; exit 1; }
+grep -q 'onetapEnabled' avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 42 v1 下发写入失败"; exit 1; }
 echo "OK 42 v1 一键音效已写入"
 echo "=== 42 v1 完成 ==="
 
-grep -q 'convSample' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v2 卷积写入失败"; exit 1; }
-grep -q '卷积空间' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v2 文案写入失败"; exit 1; }
+grep -q 'convSample' avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt || { echo "X 42 v2 卷积写入失败"; exit 1; }
+grep -q '卷积空间' avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt || { echo "X 42 v2 文案写入失败"; exit 1; }
 echo "OK 42 v2 卷积空间已写入"
 echo "=== 42 v2 完成 ==="
 
-grep -q '42v3' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v3 自适应写入失败"; exit 1; }
+grep -q '42v3' avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt || { echo "X 42 v3 自适应写入失败"; exit 1; }
 echo "OK 42 v3 卷积自适应已写入"
 echo "=== 42 v3 完成 ==="
 
 # === 42 v5: 一键改手机专用（目标：手机上比原声稍好即过，不堆加工） ===
 python3 << 'PYEOF42V5ENG'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -1007,7 +1010,7 @@ echo "=== 42 v5 引擎完成 ==="
 
 python3 << 'PYEOF42V5PAGE'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -1036,20 +1039,20 @@ print("OK 42 v5 页面已写")
 PYEOF42V5PAGE
 echo "=== 42 v5 页面完成 ==="
 
-grep -q '42v4' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v4 清晰度写入失败"; exit 1; }
-grep -q '42v4' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v4 文案写入失败"; exit 1; }
+grep -q '42v4' avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt || { echo "X 42 v4 清晰度写入失败"; exit 1; }
+grep -q '42v4' avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt || { echo "X 42 v4 文案写入失败"; exit 1; }
 echo "OK 42 v4 清晰度包已写入"
 echo "=== 42 v4 完成 ==="
 
-grep -q '42v5' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v5 手机专用写入失败"; exit 1; }
-grep -q '42v5' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v5 文案写入失败"; exit 1; }
+grep -q '42v5' avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt || { echo "X 42 v5 手机专用写入失败"; exit 1; }
+grep -q '42v5' avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt || { echo "X 42 v5 文案写入失败"; exit 1; }
 echo "OK 42 v5 手机专用包已写入"
 echo "=== 42 v5 完成 ==="
 
 # === 42 v6: 推条（临时调校滑块：湿声/高频扩展量活量 + 下发，调好锁定后删掉） ===
 python3 << 'PYEOF42V6ENG'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -1078,7 +1081,7 @@ echo "=== 42 v6 引擎完成 ==="
 
 python3 << 'PYEOF42V6MGR'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -1096,7 +1099,7 @@ echo "=== 42 v6 下发完成 ==="
 
 python3 << 'PYEOF42V6PAGE'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -1261,15 +1264,15 @@ print("OK 42 v6 页面已写")
 PYEOF42V6PAGE
 echo "=== 42 v6 页面完成 ==="
 
-grep -q '42v6' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v6 引擎写入失败"; exit 1; }
-grep -q '42v6' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 42 v6 下发写入失败"; exit 1; }
-grep -q '42v6' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v6 页面写入失败"; exit 1; }
+grep -q '42v6' avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt || { echo "X 42 v6 引擎写入失败"; exit 1; }
+grep -q '42v6' avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 42 v6 下发写入失败"; exit 1; }
+grep -q '42v6' avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt || { echo "X 42 v6 页面写入失败"; exit 1; }
 echo "OK 42 v6 推条已写入"
 echo "=== 42 v6 完成 ==="
 # === 42 v7: 锁定（用户 2026-10-29 调后值：湿声 0.25、高频扩展 1.05；推条卡片与下发删掉） ===
 python3 << 'PYEOF42V7ENG'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -1293,7 +1296,7 @@ echo "=== 42 v7 引擎完成 ==="
 
 python3 << 'PYEOF42V7MGR'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -1318,7 +1321,7 @@ echo "=== 42 v7 下发完成 ==="
 
 python3 << 'PYEOF42V7PAGE'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -1376,10 +1379,10 @@ print("OK 42 v7 页面已删")
 PYEOF42V7PAGE
 echo "=== 42 v7 页面完成 ==="
 
-grep -q '42v7' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v7 引擎写入失败"; exit 1; }
-grep -q '推条' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt && { echo "X 42 v7 页面残留推条"; exit 1; }
-grep -q 'convwet' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt && { echo "X 42 v7 下发残留湿声"; exit 1; }
-grep -q 'specext' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt && { echo "X 42 v7 下发残留高频扩展"; exit 1; }
+grep -q '42v7' avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt || { echo "X 42 v7 引擎写入失败"; exit 1; }
+grep -q '推条' avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt && { echo "X 42 v7 页面残留推条"; exit 1; }
+grep -q 'convwet' avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt && { echo "X 42 v7 下发残留湿声"; exit 1; }
+grep -q 'specext' avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt && { echo "X 42 v7 下发残留高频扩展"; exit 1; }
 echo "OK 42 v7 锁定已写入"
 echo "=== 42 v7 完成 ==="
 # === 42 v8: 卷积 IR 试听（7 个外置 IR + 临时选择器；合成路径一字不动，定稿后删选择器、只留胜出 IR） ===
@@ -1388,7 +1391,7 @@ import os, sys, base64
 base = ".github/irs"
 man = os.path.join(base, "irs.txt")
 assert os.path.exists(man), "缺 .github/irs/irs.txt"
-out = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/ConvIrData.kt"
+out = "avbox/app/src/main/java/com/github/avbox/osc/ui/ConvIrData.kt"
 entries = []
 for line in open(man, encoding="utf-8"):
     line = line.strip()
@@ -1410,7 +1413,7 @@ if os.path.exists(out):
 def chunks(s, n=30000):
     return [s[i:i+n] for i in range(0, len(s), n)]
 L = []
-L.append("package com.github.tvbox.osc.ui.activity")
+L.append("package com.github.avbox.osc.ui")
 L.append("")
 L.append("// [42v8] 卷积 IR 试听数据（构建期由 42 脚本从 .github/irs/*.b64 生成，勿手改）")
 L.append("internal object ConvIrData {")
@@ -1436,7 +1439,7 @@ echo "=== 42 v8 数据完成 ==="
 
 python3 << 'PYEOF42V8ENG'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -1553,7 +1556,7 @@ echo "=== 42 v8 引擎完成 ==="
 
 python3 << 'PYEOF42V8MGR'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -1570,7 +1573,7 @@ echo "=== 42 v8 下发完成 ==="
 
 python3 << 'PYEOF42V8PAGE'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -1671,16 +1674,16 @@ print("OK 42 v8 页面已写")
 PYEOF42V8PAGE
 echo "=== 42 v8 页面完成 ==="
 
-grep -q '42v8' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v8 引擎写入失败"; exit 1; }
-grep -q '42v8' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt || { echo "X 42 v8 下发写入失败"; exit 1; }
-grep -q '42v8' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v8 页面写入失败"; exit 1; }
-grep -q 'oppo01' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/ConvIrData.kt || { echo "X 42 v8 IR 数据写入失败"; exit 1; }
+grep -q '42v8' avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt || { echo "X 42 v8 引擎写入失败"; exit 1; }
+grep -q '42v8' avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt || { echo "X 42 v8 下发写入失败"; exit 1; }
+grep -q '42v8' avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt || { echo "X 42 v8 页面写入失败"; exit 1; }
+grep -q 'oppo01' avbox/app/src/main/java/com/github/avbox/osc/ui/ConvIrData.kt || { echo "X 42 v8 IR 数据写入失败"; exit 1; }
 echo "OK 42 v8 卷积 IR 试听已写入"
 echo "=== 42 v8 完成 ==="
 # === 42 v9: 卷积 IR 锁定 Plate-Decay（默认；选择卡片删掉；其余核的 .b64 留仓库，之后想换一行即回） ===
 python3 << 'PYEOF42V9GEN'
 import os, sys, base64
-out = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/ConvIrData.kt"
+out = "avbox/app/src/main/java/com/github/avbox/osc/ui/ConvIrData.kt"
 if os.path.exists(out):
     old = open(out, encoding="utf-8").read()
     if "[42v9]" in old:
@@ -1702,7 +1705,7 @@ def chunks(s, n=30000):
 expr = (" +\n        ").join('"%s"' % c for c in chunks(b64))
 esc = label.replace("\\", "\\\\").replace('"', '\\"')
 L = []
-L.append("package com.github.tvbox.osc.ui.activity")
+L.append("package com.github.avbox.osc.ui")
 L.append("")
 L.append("// [42v9] 卷积 IR 锁定：仅 Plate-Decay（构建期由 42 脚本从 .github/irs/plate.b64 生成，勿手改）")
 L.append("internal object ConvIrData {")
@@ -1723,7 +1726,7 @@ echo "=== 42 v9 数据完成 ==="
 
 python3 << 'PYEOF42V9ENG'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -1746,7 +1749,7 @@ echo "=== 42 v9 引擎完成 ==="
 
 python3 << 'PYEOF42V9MGR'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -1766,7 +1769,7 @@ echo "=== 42 v9 下发完成 ==="
 
 python3 << 'PYEOF42V9PAGE'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -1814,16 +1817,16 @@ print("OK 42 v9 页面已删")
 PYEOF42V9PAGE
 echo "=== 42 v9 页面完成 ==="
 
-grep -q '42v9' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/EqDspProcessor.kt || { echo "X 42 v9 引擎写入失败"; exit 1; }
-grep -q 'plate' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/ConvIrData.kt || { echo "X 42 v9 IR 数据写入失败"; exit 1; }
-if grep -q '卷积 IR' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt; then echo "X 42 v9 页面删除失败"; exit 1; fi
-if grep -q 'convir' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt; then echo "X 42 v9 下发删除失败"; exit 1; fi
+grep -q '42v9' avbox/app/src/main/java/com/github/avbox/osc/ui/EqDspProcessor.kt || { echo "X 42 v9 引擎写入失败"; exit 1; }
+grep -q 'plate' avbox/app/src/main/java/com/github/avbox/osc/ui/ConvIrData.kt || { echo "X 42 v9 IR 数据写入失败"; exit 1; }
+if grep -q '卷积 IR' avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt; then echo "X 42 v9 页面删除失败"; exit 1; fi
+if grep -q 'convir' avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt; then echo "X 42 v9 下发删除失败"; exit 1; fi
 echo "OK 42 v9 卷积 IR 锁定 Plate-Decay 已写入"
 echo "=== 42 v9 完成 ==="
 # === 42 v10: 一键开关与预设 chip 联动修复（声一直是对的，只修显示） ===
 python3 << 'PYEOF42V10PAGE'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 s = open(P, encoding="utf-8").read()
@@ -1852,6 +1855,6 @@ print("OK 42 v10 页面已写")
 PYEOF42V10PAGE
 echo "=== 42 v10 页面完成 ==="
 
-grep -q '42v10' avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxEqSettingsActivity.kt || { echo "X 42 v10 页面写入失败"; exit 1; }
+grep -q '42v10' avbox/app/src/main/java/com/github/avbox/osc/ui/LxEqSettingsActivity.kt || { echo "X 42 v10 页面写入失败"; exit 1; }
 echo "OK 42 v10 一键预设联动已写入"
 echo "=== 42 v10 完成 ==="
