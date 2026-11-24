@@ -897,3 +897,46 @@ print("OK 14v12")
 PYEOF
 
 echo "=== 14 v12 done ==="
+# === 14 v13: 歌手页预取扩面（前 5 首 -> 前 10 首） ===
+echo "=== 14 v13 ==="
+
+python3 << 'PYEOF'
+path = "app/src/main/java/com/github/avbox/osc/ui/LxArtistDetailActivity.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [14v13]"
+if MARK in src:
+    print("skip: 14v13 already present")
+    sys.exit(0)
+
+
+def rep(old, new, cnt=1):
+    global src
+    assert src.count(old) == cnt, f"anchor count {src.count(old)}: {old[:70]!r}"
+    src = src.replace(old, new, cnt)
+
+
+# 1) 歌手页预取扩面：前 5 首 -> 前 10 首（函数改名 Top5 -> Top10；双标记 [14v12][14v13] 保 v12 幂等守卫）
+rep("    // [14v12] 歌手页前 5 首搜 ID 预取（抄 41 v11）：列表加载后对该页前 5 首静默搜 ID 填 pool19 缓存，只搜 ID、不取址、不探活",
+    "    // [14v12][14v13] 歌手页前 10 首搜 ID 预取（14v12 的 take(5) 扩面）：列表加载后对该页前 10 首静默搜 ID 填 pool19 缓存，只搜 ID、不取址、不探活")
+rep("    fun prefetchArtistTop5(list: List<LxMusicSearchApi.SongInfo>) {",
+    "    fun prefetchArtistTop10(list: List<LxMusicSearchApi.SongInfo>) {")
+rep("            for (s in list.take(5)) {",
+    "            for (s in list.take(10)) {")
+rep("                prefetchArtistTop5(newSongs) // [14v12] 新页加载后预取该页前 5 首 ID",
+    "                prefetchArtistTop10(newSongs) // [14v12][14v13] 新页加载后预取该页前 10 首 ID")
+assert src.count("fun prefetchArtistTop10") == 1
+assert src.count("prefetchArtistTop10(newSongs)") == 1
+assert src.count("fun prefetchArtistTop5") == 0
+assert src.count("prefetchArtistTop5(newSongs)") == 0
+assert src.count("(") == src.count(")")
+assert src.count("{") == src.count("}")
+assert src.count("[") == src.count("]")
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("OK 14v13")
+
+PYEOF
+
+echo "=== 14 v13 done ==="
