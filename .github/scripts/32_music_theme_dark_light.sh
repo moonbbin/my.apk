@@ -1,4 +1,6 @@
 #!/bin/bash
+# [base-a6da734e] round2 theme
+# [base-a6da734e] round1 tvbox->avbox
 # 32_music_theme_dark_light.sh v3 (2026-10-17): 修复重复 cd avbox (2026-10-17): 桥接方案完整实装 (2026-10-17): 全局深色/浅色切换 + 播放页动态取色
 # 包含：浅色 Token、Theme 双盘、ThemeViewModel(DataStore)、MainActivity 注入、设置页开关、PlayerScreen 动态取色、build.gradle 依赖
 set -e
@@ -9,7 +11,7 @@ echo "=== 32 v12：深色/浅色全局切换 ==="
 # ===== Part 1: Color.kt 追加浅色 Token =====
 python3 << 'PYEOF'
 import sys, re
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxMusicTheme.kt"
 with open(path, encoding="utf-8") as f:
     src = f.read()
 MARK = "// [32v2] LxMusicTheme bridge"
@@ -72,7 +74,7 @@ echo "=== 32 v12 PartA3: 补 Import ==="
 python3 << 'PYEOF'
 import re
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxMusicTheme.kt"
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
@@ -85,9 +87,9 @@ required_imports = [
     "import androidx.compose.runtime.Composable",
     "import androidx.compose.runtime.CompositionLocalProvider",
     "import androidx.compose.ui.graphics.Color",
-    "import com.github.tvbox.osc.ui.music.theme.BrandGreen",
-    "import com.github.tvbox.osc.ui.music.theme.ErrorRed",
-    "import com.github.tvbox.osc.ui.music.theme.TextOnAccent",
+    "import com.github.avbox.osc.ui.music.theme.BrandGreen",
+    "import com.github.avbox.osc.ui.music.theme.ErrorRed",
+    "import com.github.avbox.osc.ui.music.theme.TextOnAccent",
 ]
 
 # 找最后一个 import 的位置
@@ -116,7 +118,7 @@ PYEOF
 # 32 v12: PartB 详细打印 MainActivity setContent 结构
 echo "=== 32 v12 PartB: MainActivity 详细结构 ==="
 
-MAIN="app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
+MAIN="app/src/main/java/com/github/avbox/osc/ui/MainActivity.kt"
 if [ ! -f "$MAIN" ]; then
     echo "错误：找不到 MainActivity.kt"
     # 尝试 find
@@ -131,7 +133,7 @@ echo "--- setContent 上下文 (前后 30 行) ---"
 python3 << 'PYEOF'
 import re
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/MainActivity.kt"
 with open(path, encoding="utf-8") as f:
     lines = f.readlines()
 
@@ -156,7 +158,7 @@ else:
 print("")
 print("--- 主题相关调用 ---")
 for i, line in enumerate(lines):
-    if re.search(r'(LxMusicTheme|MaterialTheme|TVBoxTheme|AppTheme|MyTheme)\s*[\{\(]', line):
+    if re.search(r'(LxMusicTheme|MaterialTheme|AVBoxTheme|AppTheme|MyTheme)\s*[\{\(]', line):
         print(f"第 {i+1} 行: {line.strip()}")
 PYEOF
 
@@ -171,7 +173,7 @@ set -e
 echo "=== 32 v12 PartC：isSystemInDarkTheme 排查 ==="
 
 # 只查 music 相关目录，避免动主体其他部分
-TARGET_DIR="app/src/main/java/com/github/tvbox/osc/ui/music"
+TARGET_DIR="app/src/main/java/com/github/avbox/osc/ui/music"
 
 if [ ! -d "$TARGET_DIR" ]; then
     echo "警告：未找到 $TARGET_DIR，跳过"
@@ -202,7 +204,7 @@ set -e
 
 echo "=== 32 v12 PartD：shadow 检查 ==="
 
-TARGET_DIR="app/src/main/java/com/github/tvbox/osc/ui/music"
+TARGET_DIR="app/src/main/java/com/github/avbox/osc/ui/music"
 
 if [ ! -d "$TARGET_DIR" ]; then
     echo "警告：未找到 $TARGET_DIR，跳过"
@@ -227,7 +229,7 @@ echo "=== 32 v12 PartD 完成 ==="
 echo "=== 32 v12: 修复 BrandGreen ==="
 
 python3 << 'PYEOF'
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxMusicTheme.kt"
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
@@ -238,8 +240,8 @@ print(f"替换 BrandGreen -> PlayerGreen: {count} 处")
 
 # 修正 import
 src = src.replace(
-    "import com.github.tvbox.osc.ui.music.theme.BrandGreen",
-    "import com.github.tvbox.osc.ui.music.theme.PlayerGreen"
+    "import com.github.avbox.osc.ui.music.theme.BrandGreen",
+    "import com.github.avbox.osc.ui.music.theme.PlayerGreen"
 )
 print("Import 已修正")
 
@@ -252,7 +254,7 @@ PYEOF
 echo "=== 32 v12: PlayerGreen public ==="
 
 python3 << 'PYEOF'
-path = "app/src/main/java/com/github/tvbox/osc/ui/music/theme/Color.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/music/theme/Color.kt"
 with open(path, encoding="utf-8") as f:
     src = f.read()
 
@@ -283,7 +285,7 @@ python3 << 'PYEOF'
 import re
 
 # ===== 1) Color.kt: 所有 private val -> internal val，确保 BrandGreen 存在 =====
-cpath = "app/src/main/java/com/github/tvbox/osc/ui/music/theme/Color.kt"
+cpath = "app/src/main/java/com/github/avbox/osc/ui/music/theme/Color.kt"
 with open(cpath, encoding="utf-8") as f:
     csrc = f.read()
 
@@ -312,7 +314,7 @@ with open(cpath, "w", encoding="utf-8") as f:
     f.write(csrc_new)
 
 # ===== 2) LxMusicTheme.kt: PlayerGreen -> BrandGreen，确保 import =====
-lpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+lpath = "app/src/main/java/com/github/avbox/osc/ui/LxMusicTheme.kt"
 with open(lpath, encoding="utf-8") as f:
     lsrc = f.read()
 
@@ -323,15 +325,15 @@ print(f"LxMusicTheme.kt: PlayerGreen -> BrandGreen: {cnt} 处")
 
 # 确保 import BrandGreen，移除 PlayerGreen 的 import
 lsrc = lsrc.replace(
-    "import com.github.tvbox.osc.ui.music.theme.PlayerGreen",
-    "import com.github.tvbox.osc.ui.music.theme.BrandGreen"
+    "import com.github.avbox.osc.ui.music.theme.PlayerGreen",
+    "import com.github.avbox.osc.ui.music.theme.BrandGreen"
 )
-if "import com.github.tvbox.osc.ui.music.theme.BrandGreen" not in lsrc:
+if "import com.github.avbox.osc.ui.music.theme.BrandGreen" not in lsrc:
     # 加到最后一个 import 后
     imports = list(re.finditer(r'^import .+$', lsrc, re.MULTILINE))
     if imports:
         pos = imports[-1].end()
-        lsrc = lsrc[:pos] + "\nimport com.github.tvbox.osc.ui.music.theme.BrandGreen" + lsrc[pos:]
+        lsrc = lsrc[:pos] + "\nimport com.github.avbox.osc.ui.music.theme.BrandGreen" + lsrc[pos:]
         print("LxMusicTheme.kt: 已加 BrandGreen import")
 
 with open(lpath, "w", encoding="utf-8") as f:
@@ -347,7 +349,7 @@ python3 << 'PYEOF'
 import re
 
 # ===== 1) Color.kt: 确保 BrandGreen = Color(0xFF34C759)，非 private =====
-cpath = "app/src/main/java/com/github/tvbox/osc/ui/music/theme/Color.kt"
+cpath = "app/src/main/java/com/github/avbox/osc/ui/music/theme/Color.kt"
 with open(cpath, encoding="utf-8") as f:
     csrc = f.read()
 
@@ -377,7 +379,7 @@ with open(cpath, "w", encoding="utf-8") as f:
     f.write(csrc)
 
 # ===== 2) LxMusicTheme.kt: PlayerGreen -> BrandGreen =====
-lpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+lpath = "app/src/main/java/com/github/avbox/osc/ui/LxMusicTheme.kt"
 with open(lpath, encoding="utf-8") as f:
     lsrc = f.read()
 
@@ -387,13 +389,13 @@ print(f"2) LxMusicTheme.kt: PlayerGreen -> BrandGreen: {cnt} 处")
 
 # ===== 3) 确保 import =====
 # 移除旧的 PlayerGreen import（如果还有）
-lsrc = lsrc.replace("import com.github.tvbox.osc.ui.music.theme.PlayerGreen\n", "")
+lsrc = lsrc.replace("import com.github.avbox.osc.ui.music.theme.PlayerGreen\n", "")
 # 确保有 BrandGreen import
-if "import com.github.tvbox.osc.ui.music.theme.BrandGreen" not in lsrc:
+if "import com.github.avbox.osc.ui.music.theme.BrandGreen" not in lsrc:
     imports = list(re.finditer(r'^import .+$', lsrc, re.MULTILINE))
     if imports:
         pos = imports[-1].end()
-        lsrc = lsrc[:pos] + "\nimport com.github.tvbox.osc.ui.music.theme.BrandGreen" + lsrc[pos:]
+        lsrc = lsrc[:pos] + "\nimport com.github.avbox.osc.ui.music.theme.BrandGreen" + lsrc[pos:]
         print("3) LxMusicTheme.kt: 已加 BrandGreen import")
 else:
     print("3) LxMusicTheme.kt: BrandGreen import 已存在")
@@ -410,7 +412,7 @@ echo "=== 32 v12: 强制 BrandGreen 定义 ==="
 python3 << 'PYEOF'
 import re
 
-cpath = "app/src/main/java/com/github/tvbox/osc/ui/music/theme/Color.kt"
+cpath = "app/src/main/java/com/github/avbox/osc/ui/music/theme/Color.kt"
 with open(cpath, encoding="utf-8") as f:
     csrc = f.read()
 
@@ -430,7 +432,7 @@ with open(cpath, "w", encoding="utf-8") as f:
     f.write(csrc)
 
 # 4) LxMusicTheme.kt: 确保用 BrandGreen + import
-lpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+lpath = "app/src/main/java/com/github/avbox/osc/ui/LxMusicTheme.kt"
 with open(lpath, encoding="utf-8") as f:
     lsrc = f.read()
 
@@ -438,12 +440,12 @@ cnt = lsrc.count("PlayerGreen")
 lsrc = lsrc.replace("PlayerGreen", "BrandGreen")
 print(f"4) PlayerGreen -> BrandGreen: {cnt} 处")
 
-lsrc = lsrc.replace("import com.github.tvbox.osc.ui.music.theme.PlayerGreen\n", "")
-if "import com.github.tvbox.osc.ui.music.theme.BrandGreen" not in lsrc:
+lsrc = lsrc.replace("import com.github.avbox.osc.ui.music.theme.PlayerGreen\n", "")
+if "import com.github.avbox.osc.ui.music.theme.BrandGreen" not in lsrc:
     imports = list(re.finditer(r'^import .+$', lsrc, re.MULTILINE))
     if imports:
         pos = imports[-1].end()
-        lsrc = lsrc[:pos] + "\nimport com.github.tvbox.osc.ui.music.theme.BrandGreen" + lsrc[pos:]
+        lsrc = lsrc[:pos] + "\nimport com.github.avbox.osc.ui.music.theme.BrandGreen" + lsrc[pos:]
         print("4) 已加 BrandGreen import")
 else:
     print("4) BrandGreen import 已存在")
@@ -461,7 +463,7 @@ python3 << 'PYEOF'
 import re
 
 # ===== SettingsScreen.kt =====
-spath = "app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+spath = "app/src/main/java/com/github/avbox/osc/ui/music/settings/SettingsScreen.kt"
 print("=" * 60)
 print("SettingsScreen.kt 结构")
 print("=" * 60)
@@ -503,7 +505,7 @@ print()
 print("=" * 60)
 print("MainActivity.kt setContent 结构")
 print("=" * 60)
-mpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
+mpath = "app/src/main/java/com/github/avbox/osc/ui/MainActivity.kt"
 try:
     with open(mpath, encoding="utf-8") as f:
         msrc = f.read()
@@ -528,7 +530,7 @@ python3 << 'PYEOF'
 import re
 
 # ===== 1) MainActivity: AVBoxTheme -> LxMusicTheme =====
-mpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
+mpath = "app/src/main/java/com/github/avbox/osc/ui/MainActivity.kt"
 with open(mpath, encoding="utf-8") as f:
     msrc = f.read()
 
@@ -538,7 +540,7 @@ if MARK1 not in msrc:
     # LxMusicTheme 默认 isDarkTheme = isSystemInDarkTheme()，先跟随系统
     old = "AVBoxTheme {"
     if old in msrc:
-        msrc = msrc.replace(old, f"{MARK1}\n                com.github.tvbox.osc.ui.activity.LxMusicTheme {{", 1)
+        msrc = msrc.replace(old, f"{MARK1}\n                com.github.avbox.osc.ui.LxMusicTheme {{", 1)
         print("1) MainActivity: AVBoxTheme -> LxMusicTheme")
     else:
         print("1) 警告: 未找到 AVBoxTheme {")
@@ -939,7 +941,7 @@ echo "=== 32 v20: MainActivity 读主题 ==="
 python3 << 'PYEOF'
 import re
 
-mpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
+mpath = "app/src/main/java/com/github/avbox/osc/ui/MainActivity.kt"
 with open(mpath, encoding="utf-8") as f:
     src = f.read()
 
@@ -949,7 +951,7 @@ if MARK in src:
 else:
     # 找到 LxMusicTheme {，在其前插入主题读取逻辑
     # v14 已把 AVBoxTheme 换成 LxMusicTheme
-    old = "com.github.tvbox.osc.ui.activity.LxMusicTheme {"
+    old = "com.github.avbox.osc.ui.LxMusicTheme {"
     if old in src:
         new_code = f'''{MARK} 读取用户主题设置
                 val themeCtx = androidx.compose.ui.platform.LocalContext.current
@@ -960,7 +962,7 @@ else:
                     2 -> false
                     else -> androidx.compose.foundation.isSystemInDarkTheme()
                 }}
-                com.github.tvbox.osc.ui.activity.LxMusicTheme(isDarkTheme = isDarkTheme) {{'''
+                com.github.avbox.osc.ui.LxMusicTheme(isDarkTheme = isDarkTheme) {{'''
         src = src.replace(old, new_code, 1)
         print("MainActivity 已接主题设置读取")
     else:
@@ -1001,7 +1003,7 @@ echo "=== 32 v23: MainActivity 回滚 ==="
 python3 << 'PYEOF'
 import re
 
-mpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
+mpath = "app/src/main/java/com/github/avbox/osc/ui/MainActivity.kt"
 with open(mpath, encoding="utf-8") as f:
     src = f.read()
 
@@ -1026,7 +1028,7 @@ else:
     # 确保 MainScreen 被 AVBoxTheme 包裹（不是 LxMusicTheme）
     # 找 LxMusicTheme 包裹 MainScreen 的，换回 AVBoxTheme
     src = re.sub(
-        r'(?:com\.github\.tvbox\.osc\.ui\.activity\.)?LxMusicTheme(?:\(isDarkTheme[^\)]*\))?\s*\{\s*\n(\s*)MainScreen\(\)',
+        r'(?:com\.github\.avbox\.osc\.ui\.)?LxMusicTheme(?:\(isDarkTheme[^\)]*\))?\s*\{\s*\n(\s*)MainScreen\(\)',
         r'AVBoxTheme {\n\1MainScreen()',
         src
     )
@@ -1071,7 +1073,7 @@ echo "=== 32 v24 完成 ==="
 echo "=== 32 v25: 硬恢复 MainActivity ==="
 
 python3 << 'PYEOF'
-mpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
+mpath = "app/src/main/java/com/github/avbox/osc/ui/MainActivity.kt"
 with open(mpath, encoding="utf-8") as f:
     src = f.read()
 
@@ -1118,8 +1120,8 @@ echo "=== 32 v25 完成 ==="
 
 echo "=== 32 v26: 原版覆盖 MainActivity ==="
 
-MPATH="app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
-URL="https://raw.githubusercontent.com/moonbbin/AVBox/main/app/src/main/java/com/github/tvbox/osc/ui/activity/MainActivity.kt"
+MPATH="app/src/main/java/com/github/avbox/osc/ui/MainActivity.kt"
+URL="https://raw.githubusercontent.com/XiaochangXu/AVBox/a6da734ed2b14e9eb290e90bd5d7bddf29f23c58/app/src/main/java/com/github/avbox/osc/ui/MainActivity.kt"
 
 if curl -sL "$URL" -o /tmp/MainActivity_avbox.kt; then
     ORIG_SIZE=$(wc -c < /tmp/MainActivity_avbox.kt)
@@ -1301,7 +1303,7 @@ echo "=== 32 v29 完成 ==="
 
 echo "=== 32 v30: 主题页三档切换 ==="
 
-TPATH="app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt"
+TPATH="app/src/main/java/com/github/avbox/osc/ui/LxThemeSettingsActivity.kt"
 if [ ! -f "$TPATH" ]; then
     echo "错误: 未找到 $TPATH（12 号脚本未生成？）"
     exit 1
@@ -1310,7 +1312,7 @@ fi
 python3 << 'PYEOF'
 import re, sys
 
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt", encoding="utf-8") as f:
+with open("app/src/main/java/com/github/avbox/osc/ui/LxThemeSettingsActivity.kt", encoding="utf-8") as f:
     src = f.read()
 
 MARK = "// [32v30]"
@@ -1377,7 +1379,7 @@ new_ui = '''                    // [32v30] 三档主题切换：跟随系统/深
 
 src = src.replace(old_switch, new_ui)
 
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt", "w", encoding="utf-8") as f:
+with open("app/src/main/java/com/github/avbox/osc/ui/LxThemeSettingsActivity.kt", "w", encoding="utf-8") as f:
     f.write(src)
 print("三档切换已插入")
 PYEOF
@@ -1391,7 +1393,7 @@ echo "=== 32 v31: 三档切换接通 ==="
 python3 << 'PYEOF'
 import re, sys
 
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt", encoding="utf-8") as f:
+with open("app/src/main/java/com/github/avbox/osc/ui/LxThemeSettingsActivity.kt", encoding="utf-8") as f:
     src = f.read()
 
 MARK = "// [32v31]"
@@ -1439,7 +1441,7 @@ if old_when not in src:
 
 src = src.replace(old_when, new_when)
 
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt", "w", encoding="utf-8") as f:
+with open("app/src/main/java/com/github/avbox/osc/ui/LxThemeSettingsActivity.kt", "w", encoding="utf-8") as f:
     f.write(src)
 print("跟随系统已接通")
 PYEOF
@@ -1453,7 +1455,7 @@ echo "=== 32 v32: 删除背景随封面变化 ==="
 python3 << 'PYEOF'
 import re, sys
 
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt", encoding="utf-8") as f:
+with open("app/src/main/java/com/github/avbox/osc/ui/LxThemeSettingsActivity.kt", encoding="utf-8") as f:
     src = f.read()
 
 MARK = "// [32v32]"
@@ -1499,7 +1501,7 @@ if not m:
 # 标记删除
 src = src[:m.start()] + "\n                // [32v32] 背景随封面变化已删除（用户确认无用）\n" + src[m.end():]
 
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt", "w", encoding="utf-8") as f:
+with open("app/src/main/java/com/github/avbox/osc/ui/LxThemeSettingsActivity.kt", "w", encoding="utf-8") as f:
     f.write(src)
 print("背景随封面变化已删除")
 PYEOF
@@ -1510,7 +1512,7 @@ echo "=== 32 v32 完成 ==="
 
 echo "=== 32 v33: 清 bgFollowCover 代码 ==="
 
-LPATH="app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+LPATH="app/src/main/java/com/github/avbox/osc/ui/LxMusicTheme.kt"
 if [ ! -f "$LPATH" ]; then
     echo "错误: 未找到 $LPATH"
     exit 1
@@ -1519,7 +1521,7 @@ fi
 python3 << 'PYEOF'
 import re, sys
 
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt", encoding="utf-8") as f:
+with open("app/src/main/java/com/github/avbox/osc/ui/LxMusicTheme.kt", encoding="utf-8") as f:
     src = f.read()
 
 MARK = "// [32v33]"
@@ -1570,7 +1572,7 @@ else:
 
 print(f"长度: {orig_len} -> {len(src)}")
 
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt", "w", encoding="utf-8") as f:
+with open("app/src/main/java/com/github/avbox/osc/ui/LxMusicTheme.kt", "w", encoding="utf-8") as f:
     f.write(src)
 print("已写入")
 PYEOF
@@ -1587,7 +1589,7 @@ import re, os, sys
 MARK = "// [32v34]"
 
 # 1) LxMusicTheme.kt: 删除残留的 KEY_BG_FOLLOW_COVER 引用（第 109 行附近）
-lpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+lpath = "app/src/main/java/com/github/avbox/osc/ui/LxMusicTheme.kt"
 with open(lpath, encoding="utf-8") as f:
     src = f.read()
 
@@ -1695,7 +1697,7 @@ PYEOF
 
 echo "=== 32 v35: 音乐首页背景接主题 ==="
 
-MPATH="app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MPATH="app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 if [ ! -f "$MPATH" ]; then
     echo "错误: 未找到 $MPATH"
     exit 1
@@ -1704,7 +1706,7 @@ fi
 python3 << 'PYEOF'
 import sys
 
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", encoding="utf-8") as f:
+with open("app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt", encoding="utf-8") as f:
     src = f.read()
 
 MARK = "// [32v35]"
@@ -1730,7 +1732,7 @@ if old2 in src:
 else:
     print("警告: 未找到 NavigationBar 锚点，跳过")
 
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", "w", encoding="utf-8") as f:
+with open("app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt", "w", encoding="utf-8") as f:
     f.write(src)
 print("已写入")
 PYEOF
@@ -1741,12 +1743,12 @@ echo "=== 32 v35 完成 ==="
 
 echo "=== 32 v36: 硬编码黑底换主题 ==="
 
-MPATH="app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MPATH="app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 
 python3 << 'PYEOF'
 import sys
 
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", encoding="utf-8") as f:
+with open("app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt", encoding="utf-8") as f:
     src = f.read()
 
 MARK = "// [32v36]"
@@ -1780,7 +1782,7 @@ print(f"替换 BgDarker: {n3} 处")
 # 加标记（文件末尾）
 src = src.rstrip() + f"\n{MARK} 硬编码黑底已换主题，共 {count} 处\n"
 
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", "w", encoding="utf-8") as f:
+with open("app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt", "w", encoding="utf-8") as f:
     f.write(src)
 print(f"总计替换 {count} 处")
 PYEOF
@@ -1791,12 +1793,12 @@ echo "=== 32 v36 完成 ==="
 
 echo "=== 32 v37: TopAppBar 接主题 ==="
 
-MPATH="app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MPATH="app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 
 python3 << 'PYEOF'
 import sys
 
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", encoding="utf-8") as f:
+with open("app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt", encoding="utf-8") as f:
     src = f.read()
 
 MARK = "// [32v37]"
@@ -1813,7 +1815,7 @@ if old not in src:
 src = src.replace(old, new, 1)
 print("TopAppBar 已透明")
 
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", "w", encoding="utf-8") as f:
+with open("app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt", "w", encoding="utf-8") as f:
     f.write(src)
 print("已写入")
 PYEOF
@@ -1822,7 +1824,7 @@ echo ""
 echo "=== 5. 状态栏检查（只查不改） ==="
 # 检查 MusicHomeActivity 是否设置状态栏
 python3 << 'PYEOF2'
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", encoding="utf-8") as f:
+with open("app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt", encoding="utf-8") as f:
     src = f.read()
 if "isAppearanceLightStatusBars" in src:
     print("MusicHomeActivity 里有 isAppearanceLightStatusBars")
@@ -1841,14 +1843,14 @@ echo "=== 32 v37 完成 ==="
 
 echo "=== 32 v38: 终极三修复 ==="
 
-MPATH="app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
-LPATH="app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+MPATH="app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
+LPATH="app/src/main/java/com/github/avbox/osc/ui/LxMusicTheme.kt"
 
 python3 << 'PYEOF'
 import sys
 print("--- v38: skip setContent, handled by v40 ---")
 try:
-    with open("app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt", encoding="utf-8") as f:
+    with open("app/src/main/java/com/github/avbox/osc/ui/LxMusicTheme.kt", encoding="utf-8") as f:
         lsrc = f.read()
     print("LxMusicTheme.kt exists")
 except FileNotFoundError:
@@ -1865,7 +1867,7 @@ echo "=== 32 v39: 修 window 作用域 ==="
 python3 << 'PYEOF'
 import re, sys
 
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", encoding="utf-8") as f:
+with open("app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt", encoding="utf-8") as f:
     src = f.read()
 
 # v38 插入的代码有 bug：SideEffect 里用 window 拿不到
@@ -1896,7 +1898,7 @@ else:
     print("v38 标记未找到（v38 为跳过版），由 v40 处理")
     # 不退出，继续
 
-with open("app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt", "w", encoding="utf-8") as f:
+with open("app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt", "w", encoding="utf-8") as f:
     f.write(src)
 print("已写入")
 PYEOF
@@ -1920,7 +1922,7 @@ echo "=== 32 v41: 主题接线重写版 ==="
 python3 << 'PYEOF'
 import sys
 
-MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MPATH = "app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 with open(MPATH, encoding="utf-8") as f:
     src = f.read()
 
@@ -2049,7 +2051,7 @@ echo "=== 32 v42: 清 Tab 黑底 ==="
 python3 << 'PYEOF'
 import re, sys
 
-MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MPATH = "app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 with open(MPATH, encoding="utf-8") as f:
     src = f.read()
 
@@ -2121,8 +2123,8 @@ python3 << 'PYEOF'
 import sys, os
 
 files = [
-    "app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt",
-    "app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlaybackSettingsActivity.kt",
+    "app/src/main/java/com/github/avbox/osc/ui/LxThemeSettingsActivity.kt",
+    "app/src/main/java/com/github/avbox/osc/ui/LxPlaybackSettingsActivity.kt",
 ]
 
 MARK = "// [32v43]"
@@ -2166,7 +2168,7 @@ echo "=== 32 v44: 全局清黑底 ==="
 python3 << 'PYEOF'
 import sys
 
-MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MPATH = "app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 with open(MPATH, encoding="utf-8") as f:
     src = f.read()
 
@@ -2208,7 +2210,7 @@ echo "=== 32 v45: 暴力清黑底 ==="
 python3 << 'PYEOF'
 import re, sys
 
-MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MPATH = "app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 with open(MPATH, encoding="utf-8") as f:
     src = f.read()
 
@@ -2259,7 +2261,7 @@ echo "=== 32 v46: 同步主题状态 ==="
 python3 << 'PYEOF'
 import sys
 
-MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MPATH = "app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 with open(MPATH, encoding="utf-8") as f:
     src = f.read()
 
@@ -2298,7 +2300,7 @@ echo "=== 32 v47: onCreate 预设主题 ==="
 python3 << 'PYEOF'
 import re, sys
 
-MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MPATH = "app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 with open(MPATH, encoding="utf-8") as f:
     src = f.read()
 
@@ -2345,7 +2347,7 @@ echo "=== 32 v48: 25页面背景 ==="
 python3 << 'PYEOF'
 import os, re, sys
 
-BASE = "app/src/main/java/com/github/tvbox/osc/ui/music"
+BASE = "app/src/main/java/com/github/avbox/osc/ui/music"
 MARK = "// [32v48]"
 done = 0
 
@@ -2370,12 +2372,12 @@ for root, dirs, filenames in os.walk(BASE):
         if n > 0:
             # 加 import
             # musicColors 在 ui.activity 包
-            if 'import com.github.tvbox.osc.ui.activity.musicColors' not in new_src:
+            if 'import com.github.avbox.osc.ui.musicColors' not in new_src:
                 # 找最后一个 import 的位置
                 m = list(re.finditer(r'^import .+$', new_src, re.MULTILINE))
                 if m:
                     pos = m[-1].end()
-                    new_src = new_src[:pos] + '\nimport com.github.tvbox.osc.ui.activity.musicColors' + new_src[pos:]
+                    new_src = new_src[:pos] + '\nimport com.github.avbox.osc.ui.musicColors' + new_src[pos:]
             new_src = MARK + "\n" + new_src
             with open(fp, "w", encoding="utf-8") as f:
                 f.write(new_src)
@@ -2397,7 +2399,7 @@ python3 << 'PYEOF'
 import os, re, sys
 
 MARK = "// [32v49]"
-IMPORT = "import com.github.tvbox.osc.ui.activity.musicColors"
+IMPORT = "import com.github.avbox.osc.ui.musicColors"
 
 def add_import(src):
     if IMPORT in src:
@@ -2412,7 +2414,7 @@ done = 0
 
 # 1. SearchScreen.kt: 热搜文字 White -> textPrimary
 # 找文件
-for root, dirs, files in os.walk("app/src/main/java/com/github/tvbox/osc/ui/music"):
+for root, dirs, files in os.walk("app/src/main/java/com/github/avbox/osc/ui/music"):
     for fn in files:
         if fn == "SearchScreen.kt":
             fp = os.path.join(root, fn)
@@ -2436,7 +2438,7 @@ for root, dirs, files in os.walk("app/src/main/java/com/github/tvbox/osc/ui/musi
                 done += 1
 
 # 2. SettingsScreen.kt: 卡片背景深色 -> card
-for root, dirs, files in os.walk("app/src/main/java/com/github/tvbox/osc/ui/music"):
+for root, dirs, files in os.walk("app/src/main/java/com/github/avbox/osc/ui/music"):
     for fn in files:
         if fn == "SettingsScreen.kt":
             fp = os.path.join(root, fn)
@@ -2475,7 +2477,7 @@ echo "=== 32 v50: 补全映射 ==="
 python3 << 'PYEOF'
 import sys, re
 
-MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+MPATH = "app/src/main/java/com/github/avbox/osc/ui/LxMusicTheme.kt"
 with open(MPATH, encoding="utf-8") as f:
     src = f.read()
 
@@ -2567,7 +2569,7 @@ print("✓ LxMusicTheme 映射已补全")
 
 # 修 SettingsScreen 第95行
 import os
-for root, dirs, files in os.walk("app/src/main/java/com/github/tvbox/osc/ui/music"):
+for root, dirs, files in os.walk("app/src/main/java/com/github/avbox/osc/ui/music"):
     for fn in files:
         if fn == "SettingsScreen.kt":
             fp = os.path.join(root, fn)
@@ -2581,11 +2583,11 @@ for root, dirs, files in os.walk("app/src/main/java/com/github/tvbox/osc/ui/musi
                 "musicColors().divider"
             )
             if new_s != s:
-                if "import com.github.tvbox.osc.ui.activity.musicColors" not in new_s:
+                if "import com.github.avbox.osc.ui.musicColors" not in new_s:
                     m = list(re.finditer(r'^import .+$', new_s, re.MULTILINE))
                     if m:
                         pos = m[-1].end()
-                        new_s = new_s[:pos] + '\nimport com.github.tvbox.osc.ui.activity.musicColors' + new_s[pos:]
+                        new_s = new_s[:pos] + '\nimport com.github.avbox.osc.ui.musicColors' + new_s[pos:]
                 new_s = "// [32v50]\n" + new_s
                 with open(fp, "w", encoding="utf-8") as f:
                     f.write(new_s)
@@ -2601,7 +2603,7 @@ echo "=== 32 v53: 统一值源 ==="
 python3 << 'PYEOF'
 import sys, re
 
-MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MPATH = "app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 with open(MPATH, encoding="utf-8") as f:
     src = f.read()
 
@@ -2638,7 +2640,7 @@ echo "=== 32 v54: 响应式主题 ==="
 python3 << 'PYEOF'
 import sys, re
 
-MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MPATH = "app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 with open(MPATH, encoding="utf-8") as f:
     src = f.read()
 
@@ -2691,7 +2693,7 @@ echo "=== 32 v55: 修正委托 ==="
 python3 << 'PYEOF'
 import sys, re
 
-MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MPATH = "app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 with open(MPATH, encoding="utf-8") as f:
     src = f.read()
 
@@ -2727,9 +2729,9 @@ echo "=== 32 v56: 暴力替换 ==="
 python3 << 'PYEOF'
 import os, re, sys
 
-BASE = "app/src/main/java/com/github/tvbox/osc/ui/music"
+BASE = "app/src/main/java/com/github/avbox/osc/ui/music"
 MARK = "// [32v56]"
-IMPORT = "import com.github.tvbox.osc.ui.activity.musicColors"
+IMPORT = "import com.github.avbox.osc.ui.musicColors"
 
 def add_import(src):
     if IMPORT in src:
@@ -2792,7 +2794,7 @@ for root, dirs, files in os.walk(BASE):
 print(f"共处理 {done} 个文件，{total_repl} 处替换")
 
 # 2. 修 MusicHomeActivity 的 PlaylistDetailScreen 头部黑底
-MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MPATH = "app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 with open(MPATH, encoding="utf-8") as f:
     src = f.read()
 if MARK not in src:
@@ -2819,7 +2821,7 @@ echo "=== 32 v57: 修复误伤 ==="
 python3 << 'PYEOF'
 import sys, re
 
-MPATH = "app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MPATH = "app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 with open(MPATH, encoding="utf-8") as f:
     src = f.read()
 
@@ -2856,7 +2858,7 @@ PYEOF
 
 echo "=== 32 v57 完成 ==="
 
-# 32 v58: 精准修三处 + 补 ui/activity 目录
+# 32 v58: 精准修三处 + 补 ui 目录
 
 echo "=== 32 v58: 精准修复 ==="
 
@@ -2864,10 +2866,10 @@ python3 << 'PYEOF'
 import os, re, sys
 
 MARK = "// [32v58]"
-IMPORT_ACT = "import com.github.tvbox.osc.ui.activity.musicColors"
+IMPORT_ACT = "import com.github.avbox.osc.ui.musicColors"
 
 def add_import_activity(src):
-    # ui/activity 包下的文件，musicColors 在同一包，不需要 import
+    # ui 包下的文件，musicColors 在同一包，不需要 import
     return src
 
 def add_import_music(src):
@@ -2894,8 +2896,8 @@ replacements = [
     (r'MaterialTheme\.colorScheme\.outlineVariant\b', 'musicColors().divider'),
 ]
 
-# 1. 处理 ui/activity 下的 Activity 文件（LxFavoritesActivity 等）
-ACT_BASE = "app/src/main/java/com/github/tvbox/osc/ui/activity"
+# 1. 处理 ui 下的 Activity 文件（LxFavoritesActivity 等）
+ACT_BASE = "app/src/main/java/com/github/avbox/osc/ui"
 act_targets = [
     "LxFavoritesActivity.kt",
     "LxQualitySettingsActivity.kt",
@@ -2929,7 +2931,7 @@ for fn in act_targets:
         print(f"✓ {fn}: {count} 处")
 
 # 2. 补 PlaylistScreen 的 surfaceContainerLow（v56 漏了）
-MUSIC_BASE = "app/src/main/java/com/github/tvbox/osc/ui/music"
+MUSIC_BASE = "app/src/main/java/com/github/avbox/osc/ui/music"
 for root, dirs, files in os.walk(MUSIC_BASE):
     for fn in files:
         if fn == "PlaylistScreen.kt":
@@ -2958,7 +2960,7 @@ echo "=== 32 v59: 主题页预设 ==="
 python3 << 'PYEOF'
 import sys, re
 
-FP = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt"
+FP = "app/src/main/java/com/github/avbox/osc/ui/LxThemeSettingsActivity.kt"
 with open(FP, encoding="utf-8") as f:
     src = f.read()
 
@@ -3034,7 +3036,7 @@ def patch_file(path, patches):
 
 # 1. 歌手详情页
 print("1. LxArtistDetailActivity.kt")
-p1 = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxArtistDetailActivity.kt"
+p1 = "app/src/main/java/com/github/avbox/osc/ui/LxArtistDetailActivity.kt"
 # 先读文件找 setContent 位置，注入主题预设
 with open(p1, encoding="utf-8") as f:
     s1 = f.read()
@@ -3073,7 +3075,7 @@ if MARK not in s1:
 # 2. 歌单卡片 (v58 已修，此处幂等跳过)
 print("2. PlaylistScreen.kt")
 import glob
-found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
+found = glob.glob("app/src/main/java/com/github/avbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
 if found:
     p2 = found[0]
     with open(p2, encoding="utf-8") as _f:
@@ -3090,7 +3092,7 @@ else:
 
 # 3. 切换榜单弹窗 (RankScreen ModalBottomSheet)
 print("3. RankScreen.kt")
-p3 = "app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt"
+p3 = "app/src/main/java/com/github/avbox/osc/ui/music/rank/RankScreen.kt"
 with open(p3, encoding="utf-8") as f:
     s3 = f.read()
 if MARK not in s3:
@@ -3109,7 +3111,7 @@ if MARK not in s3:
 
 # 4+5. 音乐源管理页 + 导入弹窗 (同一文件)
 print("4+5. LxSourceSettings.kt")
-p45 = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+p45 = "app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 with open(p45, encoding="utf-8") as f:
     s45 = f.read()
 if MARK not in s45:
@@ -3163,7 +3165,7 @@ MARK = "// [32v62]"
 
 # 1. Color.kt 加 Overlay 常量
 print("1. Color.kt Overlay 常量")
-cpath = "app/src/main/java/com/github/tvbox/osc/ui/activity/Color.kt"
+cpath = "app/src/main/java/com/github/avbox/osc/ui/Color.kt"
 # 可能在 theme 包
 if not os.path.exists(cpath):
     found = glob.glob("app/src/main/java/**/Color.kt", recursive=True)
@@ -3186,7 +3188,7 @@ else:
 
 # 2. PlaylistScreen 播放量标签用常量
 print("2. PlaylistScreen 播放量标签")
-found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
+found = glob.glob("app/src/main/java/com/github/avbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
 if found:
     fp = found[0]
     with open(fp, encoding="utf-8") as f:
@@ -3241,7 +3243,7 @@ else:
 
 # 3. 导入弹窗 TabRow
 print("3. LxSourceSettings TabRow")
-sp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+sp = "app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 with open(sp, encoding="utf-8") as f:
     s = f.read()
 if MARK not in s:
@@ -3308,7 +3310,7 @@ MARK = "// [32v63]"
 
 # 1. 播放量标签：确保 Overlay 常量被使用
 print("1. PlaylistScreen 播放量标签")
-found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
+found = glob.glob("app/src/main/java/com/github/avbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
 if found:
     fp = found[0]
     with open(fp, encoding="utf-8") as f:
@@ -3358,7 +3360,7 @@ else:
 
 # 2. 搜索 Activity 状态栏
 print("2. LxMusicSearchActivity 状态栏")
-sp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicSearchActivity.kt"
+sp = "app/src/main/java/com/github/avbox/osc/ui/LxMusicSearchActivity.kt"
 if os.path.exists(sp):
     with open(sp, encoding="utf-8") as f:
         s = f.read()
@@ -3396,7 +3398,7 @@ else:
 
 # 3. 源设置页根背景强制
 print("3. LxSourceSettings 根背景")
-ssp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+ssp = "app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 with open(ssp, encoding="utf-8") as f:
     s = f.read()
 if MARK not in s:
@@ -3425,7 +3427,7 @@ python3 << 'PYEOF'
 import os, sys
 
 MARK = "// [32v64]"
-sp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+sp = "app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 
 with open(sp, encoding="utf-8") as f:
     s = f.read()
@@ -3480,7 +3482,7 @@ python3 << 'PYEOF'
 import sys
 
 MARK = "// [32v65]"
-sp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+sp = "app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 
 with open(sp, encoding="utf-8") as f:
     s = f.read()
@@ -3517,7 +3519,7 @@ MARK = "// [32v66]"
 
 # 1. 播放量标签：硬编码黑底白字 + 阴影
 print("1. PlaylistScreen 播放量标签")
-found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
+found = glob.glob("app/src/main/java/com/github/avbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
 if found:
     fp = found[0]
     with open(fp, encoding="utf-8") as f:
@@ -3558,7 +3560,7 @@ else:
 
 # 2. 源设置页
 print("2. LxSourceSettings")
-sp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+sp = "app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 with open(sp, encoding="utf-8") as f:
     s = f.read()
 if MARK not in s:
@@ -3630,7 +3632,7 @@ python3 << 'PYEOF'
 import sys, glob
 
 MARK = "// [32v67]"
-found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
+found = glob.glob("app/src/main/java/com/github/avbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
 if not found:
     print("未找到 PlaylistScreen")
     sys.exit(1)
@@ -3673,7 +3675,7 @@ MARK = "// [32v68]"
 
 # 1. 播放量标签：描边胶囊
 print("1. PlaylistScreen 播放量胶囊")
-found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
+found = glob.glob("app/src/main/java/com/github/avbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
 if not found:
     print("  ✗ 未找到")
     sys.exit(1)
@@ -3719,7 +3721,7 @@ else:
 
 # 2. TopAppBar 透明
 print("2. LxSourceSettings TopAppBar")
-sp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+sp = "app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 with open(sp, encoding="utf-8") as f:
     s = f.read()
 if MARK not in s:
@@ -3752,7 +3754,7 @@ MARK = "// [32v69]"
 
 # 1. LxSourceSettings: TopAppBarDefaults
 print("1. LxSourceSettings")
-sp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+sp = "app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 with open(sp, encoding="utf-8") as f:
     s = f.read()
 if MARK not in s:
@@ -3770,7 +3772,7 @@ else:
 
 # 2. PlaylistScreen: RoundedCornerShape
 print("2. PlaylistScreen")
-found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
+found = glob.glob("app/src/main/java/com/github/avbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
 if found:
     fp = found[0]
     with open(fp, encoding="utf-8") as f:
@@ -3802,7 +3804,7 @@ MARK = "// [32v70]"
 
 # 1. 播放量标签：0.8f 黑底白字
 print("1. 播放量标签")
-found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
+found = glob.glob("app/src/main/java/com/github/avbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
 if found:
     fp = found[0]
     with open(fp, encoding="utf-8") as f:
@@ -3818,7 +3820,7 @@ if found:
 
 # 2. 主题页：LxMusicTheme 包裹 + 响应式
 print("2. LxThemeSettingsActivity")
-tp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt"
+tp = "app/src/main/java/com/github/avbox/osc/ui/LxThemeSettingsActivity.kt"
 with open(tp, encoding="utf-8") as f:
     s = f.read()
 if MARK not in s:
@@ -3872,7 +3874,7 @@ else:
 
 # 3. 源设置页状态栏 + 标题颜色
 print("3. LxSourceSettings")
-sp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+sp = "app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 with open(sp, encoding="utf-8") as f:
     s = f.read()
 if MARK not in s:
@@ -3918,7 +3920,7 @@ MARK = "// [32v71]"
 
 # 1. 播放量标签：强制白字（修 v56 的误伤）
 print("1. PlaylistScreen badge")
-found = glob.glob("app/src/main/java/com/github/tvbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
+found = glob.glob("app/src/main/java/com/github/avbox/osc/ui/music/**/PlaylistScreen.kt", recursive=True)
 if not found:
     print("  ✗ 未找到")
     sys.exit(1)
@@ -3963,7 +3965,7 @@ else:
 
 # 2. 主题页：MaterialTheme -> LxMusicTheme
 print("2. LxThemeSettingsActivity")
-tp = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt"
+tp = "app/src/main/java/com/github/avbox/osc/ui/LxThemeSettingsActivity.kt"
 with open(tp, encoding="utf-8") as f:
     s = f.read()
 if MARK not in s:
@@ -3999,7 +4001,7 @@ PYEOF
 
 echo "=== 32 v76: HistoryActivity 全量覆盖 ==="
 
-TARGET="app/src/main/java/com/github/tvbox/osc/ui/activity/LxHistoryActivity.kt"
+TARGET="app/src/main/java/com/github/avbox/osc/ui/LxHistoryActivity.kt"
 
 if [ ! -f "$TARGET" ]; then
     echo "  ✗ 未找到 $TARGET"
@@ -4007,7 +4009,7 @@ if [ ! -f "$TARGET" ]; then
 fi
 
 cat << 'KOTLIN_EOF' > "$TARGET"
-package com.github.tvbox.osc.ui.activity
+package com.github.avbox.osc.ui
 
 import android.app.Activity
 import android.content.Context
@@ -4151,7 +4153,7 @@ echo "=== 32 v76 完成 ==="
 
 echo "=== 32 v85 ==="
 
-TARGET="app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlaybackSettingsActivity.kt"
+TARGET="app/src/main/java/com/github/avbox/osc/ui/LxPlaybackSettingsActivity.kt"
 
 if [ ! -f "$TARGET" ]; then
     echo "✗ 文件不存在: $TARGET"
@@ -4160,7 +4162,7 @@ fi
 
 cat << 'KOTLIN_EOF' > "$TARGET"
 // [32v85]
-package com.github.tvbox.osc.ui.activity
+package com.github.avbox.osc.ui
 
 import android.content.Context
 import android.os.Bundle
@@ -4365,7 +4367,7 @@ echo "=== 32 v85 完成 ==="
 # 32 v86: 四页面方案A全量覆盖 + 死代码清理
 echo "=== 32 v86 ==="
 
-BASE="app/src/main/java/com/github/tvbox/osc/ui/activity/"
+BASE="app/src/main/java/com/github/avbox/osc/ui/"
 
 # --- LxQualitySettingsActivity ---
 TARGET="$BASE/LxQualitySettingsActivity.kt"
@@ -4375,7 +4377,7 @@ if [ ! -f "$TARGET" ]; then
 fi
 cat << 'KOTLIN_EOF' > "$TARGET"
 // [32v86]
-package com.github.tvbox.osc.ui.activity
+package com.github.avbox.osc.ui
 
 import android.content.Context
 import android.os.Bundle
@@ -4517,7 +4519,7 @@ if [ ! -f "$TARGET" ]; then
 fi
 cat << 'KOTLIN_EOF' > "$TARGET"
 // [32v86]
-package com.github.tvbox.osc.ui.activity
+package com.github.avbox.osc.ui
 
 import android.content.Context
 import android.os.Bundle
@@ -4875,7 +4877,7 @@ if [ ! -f "$TARGET" ]; then
 fi
 cat << 'KOTLIN_EOF' > "$TARGET"
 // [32v86]
-package com.github.tvbox.osc.ui.activity
+package com.github.avbox.osc.ui
 
 import android.content.Context
 import android.os.Bundle
@@ -5093,7 +5095,7 @@ if [ ! -f "$TARGET" ]; then
 fi
 cat << 'KOTLIN_EOF' > "$TARGET"
 // [32v86]
-package com.github.tvbox.osc.ui.activity
+package com.github.avbox.osc.ui
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -5216,7 +5218,7 @@ echo "=== 32 v86 完成 ==="
 
 echo "=== 32 v87 ==="
 
-TARGET="app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt"
+TARGET="app/src/main/java/com/github/avbox/osc/ui/LxThemeSettingsActivity.kt"
 
 if [ ! -f "$TARGET" ]; then
     echo "✗ 文件不存在: $TARGET"
@@ -5225,7 +5227,7 @@ fi
 
 cat << 'KOTLIN_EOF' > "$TARGET"
 // [32v87]
-package com.github.tvbox.osc.ui.activity
+package com.github.avbox.osc.ui
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -5375,7 +5377,7 @@ echo "=== 32 v87 完成 ==="
 
 echo "=== 32 v88 ==="
 
-TARGET="app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlaybackSettingsActivity.kt"
+TARGET="app/src/main/java/com/github/avbox/osc/ui/LxPlaybackSettingsActivity.kt"
 
 if [ ! -f "$TARGET" ]; then
     echo "✗ 文件不存在: $TARGET"
@@ -5384,7 +5386,7 @@ fi
 
 cat << 'KOTLIN_EOF' > "$TARGET"
 // [32v88]
-package com.github.tvbox.osc.ui.activity
+package com.github.avbox.osc.ui
 
 import android.content.Context
 import android.os.Bundle
@@ -5550,7 +5552,7 @@ echo "=== 32 v88 完成 ==="
 
 echo "=== 32 v89 ==="
 
-TARGET="app/src/main/java/com/github/tvbox/osc/ui/activity/LxThemeSettingsActivity.kt"
+TARGET="app/src/main/java/com/github/avbox/osc/ui/LxThemeSettingsActivity.kt"
 
 if [ ! -f "$TARGET" ]; then
     echo "✗ 文件不存在: $TARGET"
@@ -5559,7 +5561,7 @@ fi
 
 cat << 'KOTLIN_EOF' > "$TARGET"
 // [32v89]
-package com.github.tvbox.osc.ui.activity
+package com.github.avbox.osc.ui
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -5692,7 +5694,7 @@ echo "=== 32 v92 ==="
 python3 << 'PYEOF90'
 import re, sys
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 MARK = "// [32v92]"
 
 with open(path, encoding="utf-8") as f:
@@ -5779,7 +5781,7 @@ echo "=== 32 v92 ==="
 python3 << 'PYEOF91'
 import sys
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 MARK = "// [32v92]"
 
 with open(path, encoding="utf-8") as f:
@@ -5822,7 +5824,7 @@ echo "=== 32 v92 ==="
 python3 << 'PYEOF92'
 import sys
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 MARK = "// [32v92]"
 
 with open(path, encoding="utf-8") as f:
@@ -5869,7 +5871,7 @@ echo "=== 32 v93 ==="
 python3 << 'PYEOF93'
 import sys
 
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 MARK = "// [32v93]"
 
 with open(path, encoding="utf-8") as f:
@@ -5915,7 +5917,7 @@ echo "=== 32 v93 完成 ==="
 echo "=== 32 v94 ==="
 python3 << 'PYEOF94'
 import sys
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxFavoritesActivity.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxFavoritesActivity.kt"
 try:
     src = open(path, encoding="utf-8").read()
 except FileNotFoundError:
@@ -5942,7 +5944,7 @@ echo "=== 32 v94 完成 ==="
 echo "=== 32 v95 ==="
 python3 << 'PYEOF95'
 import sys
-path = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxFavoritesActivity.kt"
+path = "app/src/main/java/com/github/avbox/osc/ui/LxFavoritesActivity.kt"
 try:
     src = open(path, encoding="utf-8").read()
 except FileNotFoundError:
@@ -5996,7 +5998,7 @@ def load(p):
 def save(p, s):
     open(p, "w", encoding="utf-8").write(s)
 
-BASE = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/"
+BASE = "avbox/app/src/main/java/com/github/avbox/osc/ui/"
 p = BASE + "MusicHomeActivity.kt"
 s = load(p)
 if "[32v96]" in s:
@@ -6006,7 +6008,7 @@ else:
     assert s.count(old) == 2, "v96 MH theme_mode 锚点数 " + str(s.count(old))
     s = s.replace(old, 'getInt("theme_mode", 1) /* [32v96] 默认深色 */')
     old_item = ('SettingItem("主题外观", "深色模式、动态取色") {\n'
-                '                    context.startActivity(android.content.Intent(context, com.github.tvbox.osc.ui.activity.LxThemeSettingsActivity::class.java))\n'
+                '                    context.startActivity(android.content.Intent(context, com.github.avbox.osc.ui.LxThemeSettingsActivity::class.java))\n'
                 '                },')
     assert s.count(old_item) == 1, "v96 主题外观项锚点"
     new_item = ('SettingItem("主题外观", "深色模式、动态取色") {\n'
@@ -6042,7 +6044,7 @@ def load(p):
 def save(p, s):
     open(p, "w", encoding="utf-8").write(s)
 
-ACT = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/"
+ACT = "avbox/app/src/main/java/com/github/avbox/osc/ui/"
 MH = ACT + "MusicHomeActivity.kt"
 s = load(MH)
 if "[32v97]" in s:
@@ -6251,15 +6253,15 @@ def bump(path, old, new, tag):
     save(path, t)
     print("OK 32 v97 " + tag + " 底部避让")
 
-bump("avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt",
+bump("avbox/app/src/main/java/com/github/avbox/osc/ui/music/settings/SettingsScreen.kt",
      "        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 24.dp), // 细节1：左右16dp 上下24dp",
      "        contentPadding = PaddingValues(start = 16.dp, top = 24.dp, end = 16.dp, bottom = 104.dp), // [32v97] 底部避让悬浮胶囊",
      "SettingsScreen")
-bump("avbox/app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt",
+bump("avbox/app/src/main/java/com/github/avbox/osc/ui/music/rank/RankScreen.kt",
      "        LazyColumn(\n            modifier = Modifier\n                .fillMaxSize()\n                .background(musicColors().background),\n        ) {",
      "        LazyColumn(\n            modifier = Modifier\n                .fillMaxSize()\n                .background(musicColors().background),\n            contentPadding = PaddingValues(bottom = 104.dp), // [32v97] 底部避让悬浮胶囊\n        ) {",
      "RankScreen")
-bump("avbox/app/src/main/java/com/github/tvbox/osc/ui/music/playlist/PlaylistScreen.kt",
+bump("avbox/app/src/main/java/com/github/avbox/osc/ui/music/playlist/PlaylistScreen.kt",
      "            contentPadding = PaddingValues(16.dp),",
      "            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 104.dp), // [32v97] 底部避让悬浮胶囊",
      "PlaylistScreen")
@@ -6274,7 +6276,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MH = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = load(MH)
 if "[32v98]" in s:
     print("跳过（32 v98 已应用）")
@@ -6310,7 +6312,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MH = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = load(MH)
 if "[32v99]" in s:
     print("跳过（32 v99 MH 已应用）")
@@ -6388,7 +6390,7 @@ else:
     print("OK 32 v99 MiniPlayerBar 单行瘦身完成")
 
 # --- RankScreen FAB 上移 ---
-RS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt"
+RS = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/rank/RankScreen.kt"
 t = load(RS)
 if "[32v99]" in t:
     print("跳过（32 v99 FAB 已应用）")
@@ -6410,7 +6412,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-RS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt"
+RS = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/rank/RankScreen.kt"
 s = load(RS)
 if "[32v100]" in s:
     print("跳过（32 v100 已应用）")
@@ -6527,7 +6529,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-SS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+SS = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/settings/SettingsScreen.kt"
 s = load(SS)
 if "[32v101]" in s:
     print("跳过（32 v101 已应用）")
@@ -6574,7 +6576,7 @@ else:
     print("OK 32 v102 gradle 依赖已加")
 
 # --- 2) MH: imports + HazeState + 胶囊改造 ---
-MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MH = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = load(MH)
 if "[32v102]" in s:
     print("跳过（32 v102 MH 已应用）")
@@ -6631,7 +6633,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MH = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = load(MH)
 if "[32v102fix]" in s:
     print("跳过（32 v102fix 已应用）")
@@ -6655,7 +6657,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MH = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = load(MH)
 if "[32v102fix2]" in s:
     print("跳过（32 v102fix2 已应用）")
@@ -6680,7 +6682,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MH = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = load(MH)
 if "[32v102fix3]" in s:
     print("跳过（32 v102fix3 已应用）")
@@ -6721,7 +6723,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MH = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = load(MH)
 if "[32v103]" in s:
     print("跳过（32 v103 已应用）")
@@ -6744,15 +6746,15 @@ echo "=== 32 v103 完成 ==="
 python3 << 'PYEOF104A'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-GLASS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/glass/GlassSettings.kt"
+GLASS = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/glass/GlassSettings.kt"
 if os.path.exists(GLASS) and "[32v104]" in open(GLASS, encoding="utf-8").read():
     print("跳过（GlassSettings 已存在）")
 else:
     os.makedirs(os.path.dirname(GLASS), exist_ok=True)
-    content = '''package com.github.tvbox.osc.ui.music.glass
+    content = '''package com.github.avbox.osc.ui.music.glass
 
 import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -6832,7 +6834,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MH = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = load(MH)
 if "[32v104]" in s:
     print("跳过（32 v104 MH 已应用）")
@@ -6878,14 +6880,14 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-SS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+SS = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/settings/SettingsScreen.kt"
 s = load(SS)
 if "[32v104]" in s:
     print("跳过（32 v104 设置页卡已应用）")
 else:
-    a = "import com.github.tvbox.osc.ui.activity.musicColors // [25glass1]"
+    a = "import com.github.avbox.osc.ui.musicColors // [25glass1]"
     assert s.count(a) == 1, "v104 SS musicColors import 锚点"
-    s = s.replace(a, a + "\nimport com.github.tvbox.osc.ui.music.glass.GlassSettings // [32v104]", 1)
+    s = s.replace(a, a + "\nimport com.github.avbox.osc.ui.music.glass.GlassSettings // [32v104]", 1)
     a = "import androidx.compose.foundation.layout.Row"
     assert s.count(a) == 1, "v104 SS Row import 锚点"
     s = s.replace(a, a + "\nimport androidx.compose.foundation.layout.Spacer", 1)
@@ -7029,7 +7031,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-GLASS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/glass/GlassSettings.kt"
+GLASS = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/glass/GlassSettings.kt"
 s = load(GLASS)
 if "[32v105]" in s:
     print("跳过（32 v105 GlassSettings 已应用）")
@@ -7078,7 +7080,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MH = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = load(MH)
 if "glassCap.border" in s:
     print("跳过（32 v105 MH 已应用）")
@@ -7098,7 +7100,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-SS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+SS = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/settings/SettingsScreen.kt"
 s = load(SS)
 if "borderSlider" in s:
     print("跳过（32 v105 设置卡已应用）")
@@ -7175,7 +7177,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-GLASS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/glass/GlassSettings.kt"
+GLASS = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/glass/GlassSettings.kt"
 s = load(GLASS)
 if "[32v106]" in s:
     print("跳过（32 v106 GlassSettings 已应用）")
@@ -7241,7 +7243,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-RS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt"
+RS = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/rank/RankScreen.kt"
 s = load(RS)
 if "[32v106]" in s:
     print("跳过（32 v106 RankScreen 已应用）")
@@ -7256,7 +7258,7 @@ else:
         "import dev.chrisbanes.haze.blur.hazeBlur // [32v106]",
         "import dev.chrisbanes.haze.blur.HazeBlurStyle // [32v106]",
         "import dev.chrisbanes.haze.blur.HazeColorEffect // [32v106]",
-        "import com.github.tvbox.osc.ui.music.glass.GlassSettings // [32v106]",
+        "import com.github.avbox.osc.ui.music.glass.GlassSettings // [32v106]",
     ]:
         if imp.split(" // ")[0] not in s:
             add += "\n" + imp
@@ -7265,7 +7267,7 @@ else:
     s = s.replace(a, add, 1)
     a = "    var showDrawer by remember { mutableStateOf(false) } // [32v100] 抽屉显隐(原底部弹窗状态)"
     assert s.count(a) == 1, "v106 state 锚点"
-    s = s.replace(a, a + "\n    val drawerHazeState = rememberHazeState() // [32v106] 抽屉毛玻璃采样(本页自建源)\n    val drawerGlass by GlassSettings.drawer.collectAsState() // [32v106] 抽屉玻璃参数(独立组)\n    val drawerDark by com.github.tvbox.osc.ui.activity.MusicThemeManager.isDarkTheme // [32v106]", 1)
+    s = s.replace(a, a + "\n    val drawerHazeState = rememberHazeState() // [32v106] 抽屉毛玻璃采样(本页自建源)\n    val drawerGlass by GlassSettings.drawer.collectAsState() // [32v106] 抽屉玻璃参数(独立组)\n    val drawerDark by com.github.avbox.osc.ui.MusicThemeManager.isDarkTheme // [32v106]", 1)
     a = "                .fillMaxSize()\n                .background(musicColors().background),"
     assert s.count(a) == 1, "v106 LazyColumn 锚点"
     s = s.replace(a, "                .fillMaxSize()\n                .hazeSource(drawerHazeState) // [32v106] 榜单内容作抽屉采样源\n                .background(musicColors().background),", 1)
@@ -7406,7 +7408,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-RS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt"
+RS = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/rank/RankScreen.kt"
 s = load(RS)
 if "[32v107]" in s:
     print("跳过（32 v107 已应用）")
@@ -7426,7 +7428,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-GLASS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/glass/GlassSettings.kt"
+GLASS = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/glass/GlassSettings.kt"
 s = load(GLASS)
 if "KEY_DRW_TINT, 50" in s:
     print("跳过（32 v108 GlassSettings 已应用）")
@@ -7443,7 +7445,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MH = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = load(MH)
 if "[32v108]" in s:
     print("跳过（32 v108 MH 已应用）")
@@ -7463,7 +7465,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-RS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt"
+RS = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/rank/RankScreen.kt"
 s = load(RS)
 if "[32v108]" in s:
     print("跳过（32 v108 RankScreen 已应用）")
@@ -7490,7 +7492,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-SS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+SS = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/settings/SettingsScreen.kt"
 s = load(SS)
 if "GlassDrawerCard" in s:
     print("跳过（32 v108 抽屉卡已应用）")
@@ -7638,7 +7640,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-MH = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+MH = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = load(MH)
 if "[32v109]" in s:
     print("跳过（32 v109 已应用）")
@@ -7664,7 +7666,7 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-SS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+SS = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/settings/SettingsScreen.kt"
 s = load(SS)
 if "[32v110]" in s:
     print("跳过（32 v110 已应用）")
@@ -7693,12 +7695,12 @@ echo "=== 32 v110 完成 ==="
 python3 << 'PYEOF111A'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-GLASSDIR = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/glass"
+GLASSDIR = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/glass"
 os.makedirs(GLASSDIR, exist_ok=True)
-content = '''package com.github.tvbox.osc.ui.music.glass
+content = '''package com.github.avbox.osc.ui.music.glass
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -7722,7 +7724,7 @@ import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import com.github.tvbox.osc.ui.activity.musicColors
+import com.github.avbox.osc.ui.musicColors
 import kotlin.math.roundToInt
 
 // [32v111] 紧凑滑杆: 系统 Slider 强制 48dp 触摸高度撑大卡片, 自绘版只占 28dp(点按+拖动, 离散步进与原 Slider 一致)
@@ -7798,14 +7800,14 @@ def load(p):
     while not os.path.exists(p) and os.getcwd() != "/":
         os.chdir("..")
     return open(p, encoding="utf-8").read()
-SS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/settings/SettingsScreen.kt"
+SS = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/settings/SettingsScreen.kt"
 s = load(SS)
 if "[32v111]" in s:
     print("跳过（32 v111 设置页已应用）")
 else:
-    a = "import com.github.tvbox.osc.ui.music.glass.GlassSettings // [32v104]"
+    a = "import com.github.avbox.osc.ui.music.glass.GlassSettings // [32v104]"
     assert s.count(a) == 1, "v111 import 锚点"
-    s = s.replace(a, a + "\nimport com.github.tvbox.osc.ui.music.glass.CompactSlider // [32v111]", 1)
+    s = s.replace(a, a + "\nimport com.github.avbox.osc.ui.music.glass.CompactSlider // [32v111]", 1)
     def swap(body, n):
         assert body.count("                Slider(") == n, "v111 滑杆数"
         body = body.replace("                Slider(", "                CompactSlider(", n)
@@ -7830,10 +7832,10 @@ echo "=== 32 v111 完成 ==="
 python3 << 'PYEOF112'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-CS = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/glass/CompactSlider.kt"
+CS = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/glass/CompactSlider.kt"
 s = open(CS, encoding="utf-8").read()
 if "[32v112]" in s:
     print("跳过（32 v112 已应用）")
@@ -7856,10 +7858,10 @@ echo "=== 32 v112 完成 ==="
 python3 << 'PYEOF113'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-SR = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchResultScreen.kt"
+SR = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/search/SearchResultScreen.kt"
 s = open(SR, encoding="utf-8").read()
 if "[32v113]" in s:
     print("跳过（32 v113 已应用）")
@@ -7889,12 +7891,12 @@ echo "=== 32 v113 完成 ==="
 python3 << 'PYEOF115'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-LOG = "avbox/app/src/main/java/com/github/tvbox/osc/util/LxRuntimeLog.kt"
+LOG = "avbox/app/src/main/java/com/github/avbox/osc/util/LxRuntimeLog.kt"
 if not os.path.exists(LOG):
-    open(LOG, "w", encoding="utf-8").write("""package com.github.tvbox.osc.util
+    open(LOG, "w", encoding="utf-8").write("""package com.github.avbox.osc.util
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -7924,12 +7926,12 @@ object LxRuntimeLog {
 else:
     print("SKIP LxRuntimeLog.kt 已存在")
 
-E = "avbox/app/src/main/java/com/github/tvbox/osc/util/LxScriptEngine.kt"
+E = "avbox/app/src/main/java/com/github/avbox/osc/util/LxScriptEngine.kt"
 s = open(E, encoding="utf-8").read()
 if "[32v115]" in s:
     print("跳过（32 v115 引擎漏斗已应用）")
 else:
-    assert "package com.github.tvbox.osc.util" in s, "v115 引擎包名"
+    assert "package com.github.avbox.osc.util" in s, "v115 引擎包名"
     # 漏斗 helper：插在 runOnMain 之前
     a = "    // ---------------- 内部：工具 ----------------"
     assert s.count(a) == 1, "v115 工具区锚点"
@@ -7989,10 +7991,10 @@ echo "=== 32 v115 完成 ==="
 python3 << 'PYEOF116'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(P, encoding="utf-8").read()
 if "[32v116]" in s:
     print("跳过（32 v116 已应用）")
@@ -8003,8 +8005,8 @@ else:
         s = s.replace(old, new, 1)
 
     # ---- imports ----
-    rep("import com.github.tvbox.osc.util.LxScriptEngine",
-        "import com.github.tvbox.osc.util.LxScriptEngine\nimport com.github.tvbox.osc.util.LxRuntimeLog", "util import")
+    rep("import com.github.avbox.osc.util.LxScriptEngine",
+        "import com.github.avbox.osc.util.LxScriptEngine\nimport com.github.avbox.osc.util.LxRuntimeLog", "util import")
     rep("import androidx.compose.material3.MaterialTheme",
         "import androidx.compose.material3.MaterialTheme\nimport androidx.compose.material3.ModalBottomSheet\nimport androidx.compose.material3.rememberModalBottomSheetState", "sheet import")
     rep("import androidx.compose.foundation.layout.fillMaxWidth",
@@ -8263,10 +8265,10 @@ else:
     print("OK 32 v116 验证侧 + 源管理页 UI 完成")
 PYEOF116
 # 抽屉 composable 追加到文件尾（CWD 可能是仓库根或 avbox/，两路都认）
-if [ -f avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt ]; then
-  TGT116=avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt
+if [ -f avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt ]; then
+  TGT116=avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt
 else
-  TGT116=app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt
+  TGT116=app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt
 fi
 cat >> "$TGT116" << 'KT116EOF'
 
@@ -8339,10 +8341,10 @@ echo "=== 32 v116 完成 ==="
 python3 << 'PYEOF117'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(P, encoding="utf-8").read()
 if "[32v117]" in s:
     print("跳过（32 v117 已应用）")
@@ -8361,7 +8363,7 @@ echo "=== 32 v117 完成 ==="
 python3 << 'PYEOF118'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
 P = "avbox/pyramid/build.gradle.kts"
@@ -8390,7 +8392,7 @@ echo "=== 32 v118 完成 ==="
 python3 << 'PYEOF119'
 import os, re
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
 P = "avbox/pyramid/build.gradle.kts"
@@ -8415,10 +8417,10 @@ echo "=== 32 v119 完成 ==="
 python3 << 'PYEOF120'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v120]" in s:
     print("跳过（32 v120 已应用）")
@@ -8430,7 +8432,7 @@ else:
 
     # import（Manager 此前无 util 包 import）
     rep("import android.util.Log",
-        "import android.util.Log\nimport com.github.tvbox.osc.util.LxRuntimeLog // [32v120] 播放器报错入运行日志",
+        "import android.util.Log\nimport com.github.avbox.osc.util.LxRuntimeLog // [32v120] 播放器报错入运行日志",
         "Manager import")
     # 播放器流错误：onPlayerError（直接写 _error，不走 setError，必须单点补）
     rep("""                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
@@ -8460,7 +8462,7 @@ else:
     open(M, "w", encoding="utf-8").write(s)
     print("OK 32 v120 播放器报错已接入运行日志")
 
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 t = open(P, encoding="utf-8").read()
 if "[32v120]" in t:
     print("跳过（32 v120 抽屉高亮已应用）")
@@ -8481,10 +8483,10 @@ echo "=== 32 v120 完成 ==="
 python3 << 'PYEOF121'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v121]" in s:
     print("跳过（32 v121 已应用）")
@@ -8540,10 +8542,10 @@ echo "=== 32 v121 完成 ==="
 python3 << 'PYEOF122'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v122]" in s:
     print("跳过（32 v122 已应用）")
@@ -8572,12 +8574,12 @@ echo "=== 32 v122 完成 ==="
 python3 << 'PYEOF123'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
 
 # ---- 1) 引擎：存下 inited 声明 + 取声明口子 ----
-E = "avbox/app/src/main/java/com/github/tvbox/osc/util/LxScriptEngine.kt"
+E = "avbox/app/src/main/java/com/github/avbox/osc/util/LxScriptEngine.kt"
 e = open(E, encoding="utf-8").read()
 if "[32v123]" in e:
     print("跳过（32 v123 引擎已应用）")
@@ -8605,7 +8607,7 @@ else:
     print("OK 32 v123 引擎声明存盘 + 取声明口子已接")
 
 # ---- 2) Manager：按源声明过滤 + 队列链用过滤后顺序 ----
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v123]" in s:
     print("跳过（32 v123 Manager 已应用）")
@@ -8626,7 +8628,7 @@ else:
     fun getQualityTryOrderFor(sourceKey: String): List<String> {
         val base = qualityTryOrder()
         return try {
-            val declared = com.github.tvbox.osc.ui.activity.LxEngineHolder.get().getSourceQualitys(sourceKey)
+            val declared = com.github.avbox.osc.ui.LxEngineHolder.get().getSourceQualitys(sourceKey)
             if (declared.isNullOrEmpty()) base else {
                 val filtered = base.filter { it in declared }
                 if (filtered.isEmpty()) base else {
@@ -8637,9 +8639,9 @@ else:
         } catch (_: Exception) { base }
     }""",
         "按源过滤函数")
-    rep("""                val engine = com.github.tvbox.osc.ui.activity.LxEngineHolder.get()
+    rep("""                val engine = com.github.avbox.osc.ui.LxEngineHolder.get()
                 val tryOrder = qualityTryOrder()""",
-        """                val engine = com.github.tvbox.osc.ui.activity.LxEngineHolder.get()
+        """                val engine = com.github.avbox.osc.ui.LxEngineHolder.get()
                 val tryOrder = getQualityTryOrderFor(platform) // [32v123] 队列链解析前取交集""",
         "队列链取交集")
     open(M, "w", encoding="utf-8").write(s)
@@ -8651,10 +8653,10 @@ echo "=== 32 v123 完成 ==="
 python3 << 'PYEOF124'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v124]" in s:
     print("跳过（32 v124 已应用）")
@@ -9030,10 +9032,10 @@ echo "=== 32 v124 完成 ==="
 python3 << 'PYEOF125'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v125]" in s:
     print("跳过（32 v125 已应用）")
@@ -9121,10 +9123,10 @@ echo "=== 32 v125 完成 ==="
 python3 << 'PYEOF126'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v126]" in s:
     print("跳过（32 v126 已应用）")
@@ -9204,10 +9206,10 @@ echo "=== 32 v126 完成 ==="
 python3 << 'PYEOF127'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v127]" in s:
     print("跳过（32 v127 已应用）")
@@ -9367,10 +9369,10 @@ echo "=== 32 v127 完成 ==="
 python3 << 'PYEOF128'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v128]" in s:
     print("跳过（32 v128 已应用）")
@@ -9485,10 +9487,10 @@ echo "=== 32 v128 完成 ==="
 python3 << 'PYEOF129'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v129]" in s:
     print("跳过（32 v129 已应用）")
@@ -9555,10 +9557,10 @@ echo "=== 32 v129 完成 ==="
 python3 << 'PYEOF130'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v130]" in s:
     print("跳过（32 v130 已应用）")
@@ -9742,10 +9744,10 @@ echo "=== 32 v130 完成 ==="
 python3 << 'PYEOF130B'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 for line, tag in [
     ("import androidx.compose.ui.unit.IntRect // [32v126] PopupPositionProvider 官方签名用 IntRect\n", "IntRect import"),
@@ -9768,10 +9770,10 @@ echo "=== 32 v130 附完成 ==="
 python3 << 'PYEOF131'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v131]" in s:
     print("跳过（32 v131 已应用）")
@@ -9804,10 +9806,10 @@ echo "=== 32 v131 完成 ==="
 python3 << 'PYEOF132'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v132]" in s:
     print("跳过（32 v132 已应用）")
@@ -9828,10 +9830,10 @@ echo "=== 32 v132 完成 ==="
 python3 << 'PYEOF133'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v133]" in s:
     print("跳过（32 v133 已应用）")
@@ -9874,10 +9876,10 @@ echo "=== 32 v133 完成 ==="
 python3 << 'PYEOF134'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v134]" in s:
     print("跳过（32 v134 已应用）")
@@ -9903,10 +9905,10 @@ echo "=== 32 v134 完成 ==="
 python3 << 'PYEOF135'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v135]" in s:
     print("跳过（32 v135 已应用）")
@@ -9926,10 +9928,10 @@ echo "=== 32 v135 完成 ==="
 python3 << 'PYEOF136'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/music/rank/RankScreen.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/rank/RankScreen.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/rank/RankScreen.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v136]" in s:
     print("跳过（32 v136 已应用）")
@@ -9978,10 +9980,10 @@ echo "=== 32 v136 完成 ==="
 python3 << 'PYEOF137'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v137]" in s:
     print("跳过（32 v137 已应用）")
@@ -10012,10 +10014,10 @@ echo "=== 32 v137 完成 ==="
 python3 << 'PYEOF138'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v138]" in s:
     print("跳过（32 v138 已应用）")
@@ -10132,23 +10134,23 @@ PYEOF138
 echo "=== 32 v138 完成 ==="
 
 # === 32 v139: 控制台三键改用 FeedbackIconButton + 切歌锁接线（用户 2026-10-25 确认） ===
-# 新文件 ui/activity/FeedbackIconButton.kt（与 MH、PlayerControls 同包，两边用它都不用 import）：
+# 新文件 ui/FeedbackIconButton.kt（与 MH、PlayerControls 同包，两边用它都不用 import）：
 # 按下震动 LongPress + 缩放 0.85f（interactionSource + animateFloatAsState），enabled=false 时不发震动、不响应。
 # 控制台：签名加 locked；宿主传 isChangingTrack；三键改用组件；锁定时 prev/next 图标 alpha 0.35f 且不可点，
 # 中心键换黑转圈（白底、与现有黑图标一致）且不可点；X 关闭键不动（随时可关）。
 python3 << 'PYEOF139'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v139]" in s:
     print("跳过（32 v139 已应用）")
 else:
-    F = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/FeedbackIconButton.kt"
-    comp = '''package com.github.tvbox.osc.ui.activity
+    F = "avbox/app/src/main/java/com/github/avbox/osc/ui/FeedbackIconButton.kt"
+    comp = '''package com.github.avbox.osc.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -10273,10 +10275,10 @@ echo "=== 32 v139 完成 ==="
 python3 << 'PYEOF140'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v140]" in s:
     print("跳过（32 v140 已应用）")
@@ -10398,10 +10400,10 @@ echo "=== 32 v140 完成 ==="
 python3 << 'PYEOF141'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v141]" in s:
     print("跳过（32 v141 已应用）")
@@ -10425,10 +10427,10 @@ echo "=== 32 v141 完成 ==="
 python3 << 'PYEOF142'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v142]" in s:
     print("跳过（32 v142 已应用）")
@@ -10461,10 +10463,10 @@ echo "=== 32 v142 完成 ==="
 python3 << 'PYEOF143'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v143]" in s:
     print("跳过（32 v143 已应用）")
@@ -10724,12 +10726,12 @@ python3 << 'PYEOF144'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v144]" in s:
     print("跳过（32 v144 已应用）")
@@ -10807,12 +10809,12 @@ python3 << 'PYEOF145'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v145]" in s:
     print("跳过（32 v145 已应用）")
@@ -10852,12 +10854,12 @@ python3 << 'PYEOF146'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v146]" in s:
     print("跳过（32 v146 已应用）")
@@ -11092,12 +11094,12 @@ python3 << 'PYEOF147'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v147]" in s:
     print("跳过（32 v147 已应用）")
@@ -11337,12 +11339,12 @@ python3 << 'PYEOF148'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v148]" in s:
     print("跳过（32 v148 已应用）")
@@ -11401,12 +11403,12 @@ python3 << 'PYEOF149'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v149]" in s:
     print("跳过（32 v149 已应用）")
@@ -11503,12 +11505,12 @@ python3 << 'PYEOF150'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v150]" in s:
     print("跳过（32 v150 已应用）")
@@ -11519,11 +11521,11 @@ else:
         return s.replace(old, new)
 
     # 1) import：LxRuntimeLog 在 util 包（v115 建，object + add(String)）；v116 已给 LxSourceSettings 加过该 import（无标记），CI 全链到此已有 1 份，再加即 2 份致后验失败——故已存在时只补标记、不重复加（v152 修复，落 v150 块内：v150 后验先死，后续块跑不到）
-    if "import com.github.tvbox.osc.util.LxRuntimeLog" in s:
-        s = rep("""import com.github.tvbox.osc.util.LxRuntimeLog""", """import com.github.tvbox.osc.util.LxRuntimeLog // [32v150]""")
+    if "import com.github.avbox.osc.util.LxRuntimeLog" in s:
+        s = rep("""import com.github.avbox.osc.util.LxRuntimeLog""", """import com.github.avbox.osc.util.LxRuntimeLog // [32v150]""")
     else:
-        s = rep("""import com.github.tvbox.osc.util.ScriptInfo""", """import com.github.tvbox.osc.util.ScriptInfo
-import com.github.tvbox.osc.util.LxRuntimeLog // [32v150]""")
+        s = rep("""import com.github.avbox.osc.util.ScriptInfo""", """import com.github.avbox.osc.util.ScriptInfo
+import com.github.avbox.osc.util.LxRuntimeLog // [32v150]""")
 
     # 2) testOneSong 的 Range 段：Boolean 改明细，失败时写运行日志（码/类型/读数/异常；只记 host 不记完整 URL，签名参数不进日志）；格子原因仍为 Range失败
     s = rep("""    val rangeOk = try {
@@ -11600,7 +11602,7 @@ private fun testRangeOk(url: String): RangeDetail {""")
     for k, c in [
         ("private data class RangeDetail(", 1),
         ("fun testRangeOk(url: String): RangeDetail", 1),
-        ("import com.github.tvbox.osc.util.LxRuntimeLog", 1),
+        ("import com.github.avbox.osc.util.LxRuntimeLog", 1),
         ("LxRuntimeLog.add(\"探针 Range 失败:", 1),
         ("return RangeDetail(false, code, \"\", 0, \"状态码不通过\")", 1),
         ("return RangeDetail(false, code, contentType, 0, \"类型不通过\")", 1),
@@ -11624,12 +11626,12 @@ python3 << 'PYEOF151'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v151]" in s:
     print("跳过（32 v151 已应用）")
@@ -11844,12 +11846,12 @@ python3 << 'PYEOF153'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v153]" in s:
     print("跳过（32 v153 已应用）")
@@ -11885,9 +11887,9 @@ python3 << 'PYEOF154'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v154 锚点 %s: %d" % (name, src.count(old))
@@ -11896,7 +11898,7 @@ def rep(src, old, new, name):
 find_root()
 
 # ---------- 1) LxMusicTheme.kt：新增 dialogButtonBg Token ----------
-T = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+T = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxMusicTheme.kt"
 t = open(T, encoding="utf-8").read()
 if "[32v154]" in t:
     print("跳过主题部分（32 v154 已应用）")
@@ -11921,7 +11923,7 @@ else:
     print("OK 32 v154 dialogButtonBg Token 已注入")
 
 # ---------- 2) LxSourceSettings.kt：弹窗 UI 精修（探针逻辑不动） ----------
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v154]" in s:
     print("跳过弹窗部分（32 v154 已应用）")
@@ -11973,16 +11975,16 @@ python3 << 'PYEOF155'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v155 锚点 %s: %d" % (name, src.count(old))
     return src.replace(old, new, 1)
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v155]" in s:
     print("跳过（32 v155 已应用）")
@@ -12027,16 +12029,16 @@ python3 << 'PYEOF156'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v156 锚点 %s: %d" % (name, src.count(old))
     return src.replace(old, new, 1)
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v156]" in s:
     print("跳过（32 v156 已应用）")
@@ -12090,16 +12092,16 @@ python3 << 'PYEOF157'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v157 锚点 %s: %d" % (name, src.count(old))
     return src.replace(old, new, 1)
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v157]" in s:
     print("跳过（32 v157 已应用）")
@@ -12123,9 +12125,9 @@ python3 << 'PYEOF158'
 import os, re
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v158 锚点 %s: %d" % (name, src.count(old))
@@ -12139,7 +12141,7 @@ def stripped(t):
     return t
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v158]" in s:
     print("跳过（32 v158 已应用）")
@@ -12250,16 +12252,16 @@ python3 << 'PYEOF159'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v159 锚点 %s: %d" % (name, src.count(old))
     return src.replace(old, new, 1)
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v159]" in s:
     print("跳过（32 v159 已应用）")
@@ -12289,16 +12291,16 @@ python3 << 'PYEOF160'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v160 锚点 %s: %d" % (name, src.count(old))
     return src.replace(old, new, 1)
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v160]" in s:
     print("跳过（32 v160 已应用）")
@@ -12321,9 +12323,9 @@ python3 << 'PYEOF161'
 import os, re
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v161 锚点 %s: %d" % (name, src.count(old))
@@ -12337,7 +12339,7 @@ def stripped(t):
     return t
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v161]" in s:
     print("跳过（32 v161 已应用）")
@@ -12490,16 +12492,16 @@ python3 << 'PYEOF162'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v162 锚点 %s: %d" % (name, src.count(old))
     return src.replace(old, new, 1)
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v162]" in s:
     print("跳过（32 v162 已应用）")
@@ -12558,16 +12560,16 @@ python3 << 'PYEOF163'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v163 锚点 %s: %d" % (name, src.count(old))
     return src.replace(old, new, 1)
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxSourceSettings.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxSourceSettings.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v163]" in s:
     print("跳过（32 v163 已应用）")
@@ -12588,16 +12590,16 @@ python3 << 'PYEOF164'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v164 锚点 %s: %d" % (name, src.count(old))
     return src.replace(old, new, 1)
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v164]" in s:
     print("跳过（32 v164 已应用）")
@@ -12656,16 +12658,16 @@ python3 << 'PYEOF165'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v165 锚点 %s: %d" % (name, src.count(old))
     return src.replace(old, new, 1)
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v165]" in s:
     print("跳过（32 v165 已应用）")
@@ -12680,12 +12682,12 @@ else:
     new = """            client.newCall(req).execute().use { resp ->
                 val ok = resp.code == 200 || resp.code == 206
                 if (!ok) { // [32v165] 验活失败记实因（诊断用）：状态码＋地址 host，进运行日志抽屉
-                    try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活失败: HTTP " + resp.code + " " + url.take(100)) } catch (_: Exception) { }
+                    try { com.github.avbox.osc.util.LxRuntimeLog.add("验活失败: HTTP " + resp.code + " " + url.take(100)) } catch (_: Exception) { }
                 }
                 ok
             }
         } catch (e: Exception) { // [32v165] 验活异常记实因（诊断用）：异常类名＋消息，进运行日志抽屉
-            try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活异常: " + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
+            try { com.github.avbox.osc.util.LxRuntimeLog.add("验活异常: " + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
             false
         }
     }"""
@@ -12703,16 +12705,16 @@ python3 << 'PYEOF32V166'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v166 锚点 %s: %d" % (name, src.count(old))
     return src.replace(old, new, 1)
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v166]" in s:
     print("跳过（32 v166 已应用）")
@@ -12734,12 +12736,12 @@ else:
             client.newCall(req).execute().use { resp ->
                 val ok = resp.code == 200 || resp.code == 206
                 if (!ok) { // [32v165] 验活失败记实因（诊断用）：状态码＋地址 host，进运行日志抽屉
-                    try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活失败: HTTP " + resp.code + " " + url.take(100)) } catch (_: Exception) { }
+                    try { com.github.avbox.osc.util.LxRuntimeLog.add("验活失败: HTTP " + resp.code + " " + url.take(100)) } catch (_: Exception) { }
                 }
                 ok
             }
         } catch (e: Exception) { // [32v165] 验活异常记实因（诊断用）：异常类名＋消息，进运行日志抽屉
-            try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活异常: " + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
+            try { com.github.avbox.osc.util.LxRuntimeLog.add("验活异常: " + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
             false
         }
     }"""
@@ -12764,12 +12766,12 @@ else:
                 client.newCall(req).execute().use { resp ->
                     val ok = resp.code == 200 || resp.code == 206
                     if (!ok) { // [32v165] 验活失败记实因（诊断用）：状态码＋地址 host，进运行日志抽屉
-                        try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活失败: HTTP " + resp.code + " " + url.take(100)) } catch (_: Exception) { }
+                        try { com.github.avbox.osc.util.LxRuntimeLog.add("验活失败: HTTP " + resp.code + " " + url.take(100)) } catch (_: Exception) { }
                     }
                     ok
                 }
             } catch (e: Exception) { // [32v165] 验活异常记实因（诊断用）：异常类名＋消息，进运行日志抽屉
-                try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活异常: " + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
+                try { com.github.avbox.osc.util.LxRuntimeLog.add("验活异常: " + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
                 false
             }
         }
@@ -12792,16 +12794,16 @@ python3 << 'PYEOF167'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v167 锚点 %s: %d" % (name, src.count(old))
     return src.replace(old, new, 1)
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v167]" in s:
     print("跳过（32 v167 已应用）")
@@ -12828,12 +12830,12 @@ python3 << 'PYEOF168'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v168]" in s:
     print("跳过（32 v168 已应用）")
@@ -12875,7 +12877,7 @@ else:
                 try { ds.close() } catch (_: Exception) { }
             }
         } catch (e: Exception) {
-            try { com.github.tvbox.osc.util.LxRuntimeLog.add("验活异常(ExoPlayer): " + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
+            try { com.github.avbox.osc.util.LxRuntimeLog.add("验活异常(ExoPlayer): " + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
             false
         }
     }"""
@@ -12893,16 +12895,16 @@ python3 << 'PYEOF169'
 import os
 
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 
 def rep(src, old, new, name):
     assert src.count(old) == 1, "v169 锚点 %s: %d" % (name, src.count(old))
     return src.replace(old, new, 1)
 
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerManager.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v169]" in s:
     print("跳过（32 v169 已应用）")
@@ -12928,11 +12930,11 @@ echo "=== 32 v169 完成 ==="
 python3 << 'PYEOF170'
 import os
 def find_root():
-    while not os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt") and os.getcwd() != "/":
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
         os.chdir("..")
-    assert os.path.exists("avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"), "find_root 失败"
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
 find_root()
-M = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 s = open(M, encoding="utf-8").read()
 if "[32v170]" in s:
     print("跳过（32 v170 已应用）")
