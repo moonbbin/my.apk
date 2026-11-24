@@ -1116,12 +1116,12 @@ else:
 PYEOF
 echo "=== 32 v25 完成 ==="
 
-# 32 v26: 从 AVBox 原仓库直接覆盖 MainActivity.kt
+# 32 v26: 从 fork 直接覆盖 MainActivity.kt（2026-11-24 去上游依赖，内容与上游 a6da734e 逐字节一致）
 
 echo "=== 32 v26: 原版覆盖 MainActivity ==="
 
 MPATH="app/src/main/java/com/github/avbox/osc/ui/MainActivity.kt"
-URL="https://raw.githubusercontent.com/XiaochangXu/AVBox/a6da734ed2b14e9eb290e90bd5d7bddf29f23c58/app/src/main/java/com/github/avbox/osc/ui/MainActivity.kt"
+URL="https://raw.githubusercontent.com/moonbbin/AVBox/66b1691fa600acc5f9dd9b417913921e2f442013/app/src/main/java/com/github/avbox/osc/ui/MainActivity.kt"
 
 if curl -sL "$URL" -o /tmp/MainActivity_avbox.kt; then
     ORIG_SIZE=$(wc -c < /tmp/MainActivity_avbox.kt)
