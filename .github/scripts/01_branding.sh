@@ -1,4 +1,5 @@
 #!/bin/bash
+# [base-a6da734e] round1 tvbox->avbox
 set -e
 cd avbox
 sed -i 's/AVBox/清风/g' app/src/main/res/values/strings.xml

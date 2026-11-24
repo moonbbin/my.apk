@@ -1,4 +1,5 @@
 #!/bin/bash
+# [base-a6da734e] round1 tvbox->avbox
 # 17_music_cover.sh - 真实歌曲封面（Coil 依赖）
 set -e
 cd avbox

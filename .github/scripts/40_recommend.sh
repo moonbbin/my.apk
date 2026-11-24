@@ -1,10 +1,12 @@
 #!/bin/bash
+# [base-a6da734e] round1 tvbox->avbox
+# [base-a6da734e] round2 pool
 # 40_recommend.sh [40rec] 推荐 Tab（卡片式大图单列 Feed）：时效加权 Top3 + 收藏加成 + 平台偏好 + 已听排除 + 每日轮换 + 深挖扩展 + 每 8 张探索位；播放页/挂件/32/21/Manager/搜索 API 零改动
 set -e
 cd "$(dirname "$0")/../.." 2>/dev/null || true
-mkdir -p avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend
-cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt << 'EOF40REC'
-package com.github.tvbox.osc.ui.music.recommend
+mkdir -p avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend
+cat > avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend/RecommendScreen.kt << 'EOF40REC'
+package com.github.avbox.osc.ui.music.recommend
 
 import android.content.Context
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior // [40final]
@@ -32,8 +34,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType // [40final]
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback // [40final]
 import androidx.compose.ui.unit.dp
-import com.github.tvbox.osc.ui.activity.LxMusicSearchApi
-import com.github.tvbox.osc.ui.activity.musicColors
+import com.github.avbox.osc.ui.LxMusicSearchApi
+import com.github.avbox.osc.ui.musicColors
 import androidx.compose.animation.core.RepeatMode // [40feel]
 import androidx.compose.animation.core.animateFloat // [40feel]
 import androidx.compose.animation.core.infiniteRepeatable // [40feel]
@@ -486,8 +488,8 @@ fun RecommendScreen(
     }
 }
 EOF40REC
-cat > avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/FeedCard.kt << 'EOF40FEED'
-package com.github.tvbox.osc.ui.music.recommend
+cat > avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend/FeedCard.kt << 'EOF40FEED'
+package com.github.avbox.osc.ui.music.recommend
 
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -534,7 +536,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp // [40feed]
 import coil.compose.AsyncImage
-import com.github.tvbox.osc.ui.activity.musicColors
+import com.github.avbox.osc.ui.musicColors
 
 // [40final] 平台码 -> 中文名，未知码 fallback 显示原码
 private fun platformName(code: String): String = when (code) {
@@ -695,8 +697,8 @@ EOF40FEED
 python3 << 'PYEOF40'
 import io
 
-BASE = 'avbox/app/src/main/java/com/github/tvbox/osc/'
-MH = BASE + 'ui/activity/MusicHomeActivity.kt'
+BASE = 'avbox/app/src/main/java/com/github/avbox/osc/'
+MH = BASE + 'ui/MusicHomeActivity.kt'
 
 def load(p):
     with io.open(p, encoding='utf-8') as f:
@@ -714,7 +716,7 @@ def rep(s, old, new, tag, cnt=1):
 c = load(MH)
 if '[40rec]' not in c:
     c = rep(c, 'import androidx.compose.material3.*',
-        'import androidx.compose.material3.*\nimport com.github.tvbox.osc.ui.music.recommend.RecommendScreen // [40rec]', '40rec import')
+        'import androidx.compose.material3.*\nimport com.github.avbox.osc.ui.music.recommend.RecommendScreen // [40rec]', '40rec import')
     c = rep(c, '    SEARCH, RANKING, PLAYLIST, SETTINGS, HOME',
         '    SEARCH, RANKING, RECOMMEND, PLAYLIST, SETTINGS, HOME // [40rec]', '40rec 枚举')
     c = rep(c, '                MusicTab.PLAYLIST -> {',

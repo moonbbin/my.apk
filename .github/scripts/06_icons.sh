@@ -1,4 +1,5 @@
 #!/bin/bash
+# [base-a6da734e] round1 tvbox->avbox
 set -e
 cd avbox
 # 删除可能损坏的 foreground xml，用正确的 webp 替代

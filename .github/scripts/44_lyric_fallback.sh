@@ -1,9 +1,11 @@
 #!/bin/bash
+# [base-a6da734e] round1 tvbox->avbox
+# [base-a6da734e] round2 bridge: 载荷+目标文件已 grep 核实，无 LOG/HawkConfig/RefreshEvent/OkGoHelper/PlayerHelper/MyVideoView 引用（只调 LxMusicSearchApi/各平台取词函数/android.util.Log），无重接项
 # 44_lyric_fallback.sh
 # 播放页歌词跨平台兜底（35 后补丁）：本平台取空后，按歌名+歌手在其他平台搜一次，精确匹配才取词
 set -e
 cd "$(dirname "$0")/../.." 2>/dev/null || true
-PA="avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+PA="avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerActivity.kt"
 
 if grep -q "fetchLyricFallback" "$PA" 2>/dev/null; then
   echo "跳过（44v1 歌词兜底已写入）"
@@ -13,7 +15,7 @@ fi
 python3 << 'PYEOF'
 import sys
 
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerActivity.kt"
 with open(path, encoding="utf-8") as f:
     src = f.read()
 

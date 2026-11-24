@@ -1,4 +1,5 @@
 #!/bin/bash
+# [base-a6da734e] round1 tvbox->avbox
 set -e
 # 用法: bash 00_version.sh v1.2.3-alpha02
 # 将 Release 版本号同步到 App 的 versionName

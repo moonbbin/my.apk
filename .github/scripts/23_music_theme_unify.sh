@@ -1,4 +1,5 @@
 #!/bin/bash
+# [base-a6da734e] round1 tvbox->avbox
 # 23 - 音乐主题颜色源统一
 # 背景：20 号脚本定稿了 ui.music.theme（Color.kt/Type.kt/Theme.kt），但 LxMusicTheme.kt
 # 的 DarkMusicColors 仍用硬编码 Color(0xFF...)，与主题常量是两套平行系统，改色要改两处。
@@ -17,9 +18,9 @@ echo "=== 音乐主题颜色源统一 ==="
 python3 << 'PYEOF'
 import sys
 
-THEME_PKG = "com.github.tvbox.osc.ui.music.theme"
-COLOR_KT = "app/src/main/java/com/github/tvbox/osc/ui/music/theme/Color.kt"
-LXT = "app/src/main/java/com/github/tvbox/osc/ui/activity/LxMusicTheme.kt"
+THEME_PKG = "com.github.avbox.osc.ui.music.theme"
+COLOR_KT = "app/src/main/java/com/github/avbox/osc/ui/music/theme/Color.kt"
+LXT = "app/src/main/java/com/github/avbox/osc/ui/LxMusicTheme.kt"
 
 # ---------- 1) Color.kt：补 TextOnAccent / SliderTrack ----------
 with open(COLOR_KT, encoding="utf-8") as f:

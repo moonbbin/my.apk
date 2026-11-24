@@ -1,15 +1,17 @@
 #!/bin/bash
+# [base-a6da734e] round1 tvbox->avbox
+# [base-a6da734e] round2 bridge: 载荷+目标文件已 grep 核实，无 LOG/HawkConfig/RefreshEvent/OkGoHelper/PlayerHelper/MyVideoView 引用（只调 LxPlayerManager/lyricPrefs/Compose），无重接项
 # 43 v1: 车载蓝牙歌词接线（播放页侧，35 后补丁，build.yml 行用户加）
 # 作用：行切换时把当前歌词行推给管理器（写进 MediaSession ARTIST，歌手位置），歌名不动；
 # 更多弹窗加“车载蓝牙歌词”开关（默认开，写 lyric_settings 的 car_lyric）。
 # 43 v2: 更多弹窗里的开关组整个删掉；页进场时 LaunchedEffect(Unit) 把 car_lyric 写回 true，开关去掉后行为恒为开；不改 21 的 isCarLyricOn，不动 Manager。
 set -e
 cd "$(dirname "$0")/../.."
-PA="avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+PA="avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerActivity.kt"
 [ -f "$PA" ] || { echo "X 43 v1 目标文件不存在: $PA"; exit 1; }
 python3 << 'PYEOF43V1'
 import sys
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerActivity.kt"
 s = open(path, encoding="utf-8").read()
 if "[43v1]" in s:
     print("跳过（43 v1 车载蓝牙歌词接线已应用）"); sys.exit(0)
@@ -73,7 +75,7 @@ echo "OK 43 v1 车载蓝牙歌词接线已写入"
 
 python3 << 'PYEOF43V2'
 import sys
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerActivity.kt"
 s = open(path, encoding="utf-8").read()
 if "[43v2]" in s:
     print("跳过（43 v2 开关移除已应用）"); sys.exit(0)
@@ -146,7 +148,7 @@ echo "OK 43 v2 开关移除已写入"
 # === 43 v3: 歌词交接给 Manager（行计算与推送改由 Manager 按位置做，页销毁不再清行） ===
 python3 << 'PYEOF43V3'
 import sys
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/LxPlayerActivity.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerActivity.kt"
 s = open(path, encoding="utf-8").read()
 if "[43v3]" in s:
     print("跳过（43 v3 歌词交接已应用）"); sys.exit(0)

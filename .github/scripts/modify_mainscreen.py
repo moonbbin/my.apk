@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
+# [base-a6da734e] round1 tvbox->avbox
 """修改 MainScreen.kt：添加 MUSIC tab 枚举、内容分支和必要的 import"""
 import sys
 
-MS = "app/src/main/java/com/github/tvbox/osc/ui/page/MainScreen.kt"
+MS = "app/src/main/java/com/github/avbox/osc/ui/page/MainScreen.kt"
 
 with open(MS, 'r', encoding='utf-8') as f:
     content = f.read()
@@ -25,7 +26,7 @@ if "AppTab.MUSIC ->" not in content:
 imports = [
     ("import android.content.Intent", "import android.content.Intent\n"),
     ("import androidx.compose.ui.platform.LocalContext", "import androidx.compose.ui.platform.LocalContext\nimport androidx.compose.ui.res.stringResource\n"),
-    ("import com.github.tvbox.osc.ui.activity.LxSourceSettingsActivity", None),  # 特殊处理
+    ("import com.github.avbox.osc.ui.LxSourceSettingsActivity", None),  # 特殊处理
     ("import androidx.compose.foundation.layout.Box", None),
     ("import androidx.compose.foundation.layout.Column", None),
     ("import androidx.compose.foundation.layout.Spacer", None),
@@ -48,12 +49,12 @@ if "import androidx.compose.ui.platform.LocalContext" not in content:
     content = content.replace("import android.content.Intent\n", "import android.content.Intent\nimport androidx.compose.ui.platform.LocalContext\nimport androidx.compose.ui.res.stringResource\n")
     print("✅ LocalContext/stringResource import 已添加")
 
-if "LxSourceSettingsActivity" not in content or "import com.github.tvbox.osc.ui.activity.LxSourceSettingsActivity" not in content:
-    content = content.replace("import androidx.compose.ui.res.stringResource\n", "import androidx.compose.ui.res.stringResource\nimport com.github.tvbox.osc.ui.activity.LxSourceSettingsActivity\n")
+if "LxSourceSettingsActivity" not in content or "import com.github.avbox.osc.ui.LxSourceSettingsActivity" not in content:
+    content = content.replace("import androidx.compose.ui.res.stringResource\n", "import androidx.compose.ui.res.stringResource\nimport com.github.avbox.osc.ui.LxSourceSettingsActivity\n")
     print("✅ LxSourceSettingsActivity import 已添加")
 
-if "import com.github.tvbox.osc.ui.activity.MusicHomeActivity" not in content:
-    content = content.replace("import com.github.tvbox.osc.ui.activity.LxSourceSettingsActivity\n", "import com.github.tvbox.osc.ui.activity.LxSourceSettingsActivity\nimport com.github.tvbox.osc.ui.activity.MusicHomeActivity\n")
+if "import com.github.avbox.osc.ui.MusicHomeActivity" not in content:
+    content = content.replace("import com.github.avbox.osc.ui.LxSourceSettingsActivity\n", "import com.github.avbox.osc.ui.LxSourceSettingsActivity\nimport com.github.avbox.osc.ui.MusicHomeActivity\n")
     print("✅ MusicHomeActivity import 已添加")
 
 # Box, Alignment, Button, Text - 使用完全限定名，已在代码中写全路径，无需 import
@@ -61,7 +62,7 @@ if "import com.github.tvbox.osc.ui.activity.MusicHomeActivity" not in content:
 for imp, _ in imports[3:]:
     if imp not in content:
         # 加到 LxSourceSettingsActivity 之后
-        content = content.replace("import com.github.tvbox.osc.ui.activity.LxSourceSettingsActivity\n", f"import com.github.tvbox.osc.ui.activity.LxSourceSettingsActivity\n{imp}\n")
+        content = content.replace("import com.github.avbox.osc.ui.LxSourceSettingsActivity\n", f"import com.github.avbox.osc.ui.LxSourceSettingsActivity\n{imp}\n")
         print(f"✅ {imp} 已添加")
 
 with open(MS, 'w', encoding='utf-8') as f:

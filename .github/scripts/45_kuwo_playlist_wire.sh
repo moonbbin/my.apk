@@ -1,9 +1,11 @@
 #!/bin/bash
+# [base-a6da734e] round1 tvbox->avbox
+# [base-a6da734e] round2 bridge: 载荷+目标文件已 grep 核实，无 LOG/HawkConfig/RefreshEvent/OkGoHelper/PlayerHelper/MyVideoView 引用（只调 LxMusicSearchApi 酷我歌单接口），无重接项
 # 45_kuwo_playlist_wire.sh
 # 歌单页放行酷我（35 后补丁无关，改的是歌单页 MusicHomeActivity）：列表/分类/详情三处接线
 set -e
 cd "$(dirname "$0")/../.." 2>/dev/null || true
-PA="avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+PA="avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 
 if grep -q "LxMusicSearchApi.getKuwoPlaylist" "$PA" 2>/dev/null; then
   echo "跳过（45v1 酷我歌单接线已写入）"
@@ -13,7 +15,7 @@ fi
 python3 << 'PYEOF'
 import sys
 
-path = "avbox/app/src/main/java/com/github/tvbox/osc/ui/activity/MusicHomeActivity.kt"
+path = "avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"
 with open(path, encoding="utf-8") as f:
     src = f.read()
 

@@ -1,4 +1,5 @@
 #!/bin/bash
+# [base-a6da734e] round1 tvbox->avbox
 # 33_search_page_polish.sh - 搜索页视觉微调（方案A全量覆盖）
 # 本脚本为 SearchScreen.kt 的唯一最终控制权，后续所有搜索页修改均在此进行。
 # 注意：25_music_pages_wire.sh 也会写 SearchScreen.kt，但本脚本编号更大（33 > 25），
@@ -10,7 +11,7 @@ cd avbox
 
 echo "=== 33 v5: 搜索页视觉微调 ==="
 
-TARGET="app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchScreen.kt"
+TARGET="app/src/main/java/com/github/avbox/osc/ui/music/search/SearchScreen.kt"
 
 if [ ! -f "$TARGET" ]; then
     echo "✗ 文件不存在: $TARGET（25 未生成？）"
@@ -18,7 +19,7 @@ if [ ! -f "$TARGET" ]; then
 fi
 
 cat << 'KOTLIN_EOF' > "$TARGET"
-package com.github.tvbox.osc.ui.music.search
+package com.github.avbox.osc.ui.music.search
 
 // 本脚本为 SearchScreen.kt 的唯一最终控制权，后续所有搜索页修改均在此进行。
 // [33v1] [33v5]
@@ -54,7 +55,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.ui.graphics.Color
-import com.github.tvbox.osc.ui.activity.musicColors
+import com.github.avbox.osc.ui.musicColors
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -297,8 +298,8 @@ echo "=== 33 v5 完成 ==="
 # === 33 pill: 搜索落地页列表底部避让悬浮胶囊 ===
 python3 << 'PYEOF33PILL'
 import os
-cand = ["avbox/app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchScreen.kt",
-        "app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchScreen.kt"]
+cand = ["avbox/app/src/main/java/com/github/avbox/osc/ui/music/search/SearchScreen.kt",
+        "app/src/main/java/com/github/avbox/osc/ui/music/search/SearchScreen.kt"]
 p = None
 for c in cand:
     q = c
@@ -329,8 +330,8 @@ echo "=== 33 pill 完成 ==="
 # 注意：本节必须在 33 全量覆盖之后跑（附在脚本末尾），32 改 SearchScreen 会被 33 全量覆盖。
 python3 << 'PYEOF33RANK'
 import os
-cand = ["avbox/app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchScreen.kt",
-        "app/src/main/java/com/github/tvbox/osc/ui/music/search/SearchScreen.kt"]
+cand = ["avbox/app/src/main/java/com/github/avbox/osc/ui/music/search/SearchScreen.kt",
+        "app/src/main/java/com/github/avbox/osc/ui/music/search/SearchScreen.kt"]
 p = None
 for c in cand:
     q = c

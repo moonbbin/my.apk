@@ -1,4 +1,5 @@
 #!/bin/bash
+# [base-a6da734e] round1 tvbox->avbox
 # 19_pyramid_pip_retry.sh
 # 给 pyramid 模块 chaquopy pip 安装加重试+备用镜像，缓解 installDebugPythonRequirements 间歇性失败（网络抖动）
 #

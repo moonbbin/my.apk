@@ -1,7 +1,8 @@
 #!/bin/bash
+# [base-a6da734e] round1 tvbox->avbox
 set -e
 cd avbox
-F='app/src/main/java/com/github/tvbox/osc/ui/page/SettingsAppInfoCard.kt'
+F='app/src/main/java/com/github/avbox/osc/ui/page/SettingsAppInfoCard.kt'
 # 加 import
 sed -i '/import androidx.compose.foundation.background/a import androidx.compose.foundation.Image' "$F"
 sed -i '/import androidx.compose.foundation.shape.RoundedCornerShape/a import androidx.compose.foundation.shape.CircleShape' "$F"

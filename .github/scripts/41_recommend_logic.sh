@@ -1,11 +1,12 @@
 #!/bin/bash
+# [base-a6da734e] round1 tvbox->avbox
 # 41 - 推荐页逻辑一期：长期+近期口味 3:1、打分排序、同歌手不相邻（post-40 补丁）
 # 新脚本，build.yml 调用行由用户手动加（40 之后执行）。
 set -e
 
 python3 << 'PYEOF41V1'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend/RecommendScreen.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 if not os.path.exists(P):
@@ -135,7 +136,7 @@ echo "=== 41 v1 完成 ==="
 # === 41 v2: 负反馈两档（不感兴趣降权 14 天 + 不要再推荐全局屏蔽可撤销）===
 python3 << 'PYEOF41V2A'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend/RecommendScreen.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 if not os.path.exists(P):
@@ -343,7 +344,7 @@ PYEOF41V2A
 
 python3 << 'PYEOF41V2B'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/FeedCard.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend/FeedCard.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 if not os.path.exists(P):
@@ -419,7 +420,7 @@ echo "=== 41 v2 完成 ==="
 # === 41 v3: 构建红修复（v2 漏了 onTogglePlay 参数后的逗号）===
 python3 << 'PYEOF41V3'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend/RecommendScreen.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 if not os.path.exists(P):
@@ -442,7 +443,7 @@ echo "=== 41 v3 完成 ==="
 # === 41 v4: 分区排布 + 换一批 ===
 python3 << 'PYEOF41V4'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend/RecommendScreen.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 if not os.path.exists(P):
@@ -637,7 +638,7 @@ echo "=== 41 v4 完成 ==="
 # === 41 v5: 构建红修复（stickyHeader 在本工程 foundation 里不存在，改固定顶行）===
 python3 << 'PYEOF41V5'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend/RecommendScreen.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 if not os.path.exists(P):
@@ -701,7 +702,7 @@ echo "=== 41 v5 完成 ==="
 # === 41 v6: 换一批黑条修复（去实底色，改小胶囊，壁纸透出）===
 python3 << 'PYEOF41V6'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend/RecommendScreen.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 if not os.path.exists(P):
@@ -758,7 +759,7 @@ echo "=== 41 v6 完成 ==="
 # === 41 v7: 三段式布局（锚点主角卡 + 大卡流 + 大家都在听横滑货架）===
 python3 << 'PYEOF41V7A'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend/RecommendScreen.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 if not os.path.exists(P):
@@ -878,7 +879,7 @@ PYEOF41V7A
 
 python3 << 'PYEOF41V7B'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/FeedCard.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend/FeedCard.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 if not os.path.exists(P):
@@ -1047,7 +1048,7 @@ echo "=== 41 v7 完成 ==="
 # === 41 v8: 构建红修复（定键 when 三分支挤在一行被编译器粘成一个分支，改每分支独立行）===
 python3 << 'PYEOF41V8'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend/RecommendScreen.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 if not os.path.exists(P):
@@ -1073,7 +1074,7 @@ echo "=== 41 v8 完成 ==="
 # === 41 v9: 排版二期（字阶/段标题/主角出血/主角两行/实心钮/胶囊缩短/顶部渐变）===
 python3 << 'PYEOF41V9A'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend/RecommendScreen.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 if not os.path.exists(P):
@@ -1107,7 +1108,7 @@ PYEOF41V9A
 
 python3 << 'PYEOF41V9B'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/FeedCard.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend/FeedCard.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 if not os.path.exists(P):
@@ -1263,7 +1264,7 @@ echo "=== 41 v9 完成 ==="
 # === 41 v10: 段标题绿线换白点 ===
 python3 << 'PYEOF41V10'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend/RecommendScreen.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 if not os.path.exists(P):
@@ -1295,7 +1296,7 @@ echo "=== 41 v10 完成 ==="
 # 前置：39pool22 已把 launchBackgroundIdSearch 由 private 改为公开（39 在 40/41 之前跑，编译在全部脚本跑完后）。
 python3 << 'PYEOF41V11'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend/RecommendScreen.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 if not os.path.exists(P):
@@ -1310,8 +1311,8 @@ def rep(old, new, tag):
     s = s.replace(old, new, 1)
 
 # 1) import LxEngineHolder（推荐页调后台搜 ID 入口）
-rep("import com.github.tvbox.osc.ui.activity.LxMusicSearchApi\n",
-    "import com.github.tvbox.osc.ui.activity.LxMusicSearchApi\nimport com.github.tvbox.osc.ui.activity.LxEngineHolder // [41v11] 推荐预取调后台搜 ID\n", "LxEngineHolder import")
+rep("import com.github.avbox.osc.ui.LxMusicSearchApi\n",
+    "import com.github.avbox.osc.ui.LxMusicSearchApi\nimport com.github.avbox.osc.ui.LxEngineHolder // [41v11] 推荐预取调后台搜 ID\n", "LxEngineHolder import")
 
 # 2) 预取 helper：放在 buildRecommendPool 之后
 helper = """// [41v11] 推荐预取：建池完成后对前 5 首静默搜 ID 填 pool19 缓存，只搜 ID、不取址、不探活
@@ -1340,7 +1341,7 @@ s2 = open(P, encoding="utf-8").read()
 assert "[41v11]" in s2, "写盘复核失败"
 assert s2.count("prefetchTop5(pool)") == 3, "调用点数量异常"
 assert s2.count("fun prefetchTop5(pool: List<RecommendItem>)") == 1, "helper 数量异常"
-assert s2.count("import com.github.tvbox.osc.ui.activity.LxEngineHolder") == 1, "import 数量异常"
+assert s2.count("import com.github.avbox.osc.ui.LxEngineHolder") == 1, "import 数量异常"
 assert s2.count("val pool = buildRecommendPool(context, force = false)") == 1, "首进锚点残留异常"
 print("OK 41 v11 推荐预取已加")
 PYEOF41V11
@@ -1351,7 +1352,7 @@ echo "=== 41 v11 完成 ==="
 # 修法：签名加参 playerIsLoading（MH 状态段由 32 v170 订阅、40 [40refresh] 传参），主卡与货架公式改为 playing && (playerIsPlaying || playerIsLoading)；起播后 isPlaying 接力、失败时 loading 复位自动回落，不撒谎。
 python3 << 'PYEOF41V12'
 import sys, os
-P = "avbox/app/src/main/java/com/github/tvbox/osc/ui/music/recommend/RecommendScreen.kt"
+P = "avbox/app/src/main/java/com/github/avbox/osc/ui/music/recommend/RecommendScreen.kt"
 while not os.path.exists(P) and os.getcwd() != "/":
     os.chdir("..")
 if not os.path.exists(P):
