@@ -1133,3 +1133,58 @@ print("OK 14v16")
 PYEOF
 
 echo "=== 14 v16 done ==="
+# === 14 v17: 歌手页点歌只取本歌手版 + 队列保持歌手页列表 ===
+# 用户 21:03 两图实证：v16 搜“逍遥叹”回 159 条全是同名不同歌手（胡歌/七元/沈以诚/徐薇/枯青/安北辰…），队列被整段换成 159 条搜索结果，播的也不是当前歌手（顶栏显示 毒药）。
+# 两处错：① 匹配只按标题不卡歌手，取到别的歌手版；② queueSongs = results，把歌手页列表整段换成搜索结果，切歌会串到别的歌手。
+# 修法：① 匹配必须同名+同歌手（取歌手字段首个艺人，contains 宽松匹配），找不到同歌手版时回落原歌（不取别歌手版，池子原生直出能兜底）；② 队列恒为 allSongs（歌手页列表），只把被点的那首换成匹配版，其余不动。
+echo "=== 14 v17 ==="
+
+python3 << 'PYEOF'
+import sys
+path = "app/src/main/java/com/github/avbox/osc/ui/LxArtistDetailActivity.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "[14v17]"
+if MARK in src:
+    print("skip: 14v17 already present")
+    sys.exit(0)
+
+def rep(old, new, cnt=1):
+    global src
+    assert src.count(old) == cnt, f"anchor count {src.count(old)}: {old[:70]!r}"
+    src = src.replace(old, new, cnt)
+
+# 1) 匹配改回同名+同歌手（首个艺人 contains），找不到回落原歌；队列恒为 allSongs，只换被点那首
+old_match = """            // [14v15][14v16] 匹配只按标题（不卡歌手，歌手页本身就是该歌手；v15 的标题+歌手双重匹配过严致回落网易）；平台优先级 tx(QQ) > kw(酷我) > mg(咪咕) > kg(酷狗) > wy(网易)
+            val platformRank = mapOf("tx" to 0, "kw" to 1, "mg" to 2, "kg" to 3, "wy" to 4)
+            val matched = results.filter { it.title.trim().lowercase() == normTitle }
+            val match = matched.minByOrNull { platformRank[it.platform] ?: 99 }
+                ?: song
+            try { com.github.avbox.osc.util.LxRuntimeLog.add("歌手页搜歌: " + song.title + " -> " + results.size + " 条，取 " + match.platform) } catch (_: Exception) { }"""
+new_match = """            // [14v15][14v16][14v17] 匹配必须同名+同歌手（取歌手字段首个艺人 contains；v16 只按标题取到别歌手版，队列还被整段换成搜索结果）；找不到同歌手版回落原歌（不取别歌手版，池子原生直出兜底）；平台优先级 tx(QQ) > kw(酷我) > mg(咪咕) > kg(酷狗) > wy(网易)
+            val platformRank = mapOf("tx" to 0, "kw" to 1, "mg" to 2, "kg" to 3, "wy" to 4)
+            val normArtist = song.artist.trim().lowercase().split("/", "、", ",", ";").firstOrNull()?.trim() ?: song.artist.trim().lowercase()
+            val matched = results.filter { it.title.trim().lowercase() == normTitle && it.artist.trim().lowercase().contains(normArtist) }
+            val match = matched.minByOrNull { platformRank[it.platform] ?: 99 }
+                ?: song
+            try { com.github.avbox.osc.util.LxRuntimeLog.add("歌手页搜歌: " + song.title + " -> " + results.size + " 条，同歌手 " + matched.size + " 条，取 " + match.platform + "/" + match.artist) } catch (_: Exception) { }"""
+rep(old_match, new_match)
+
+# 2) 队列恒为 allSongs，只把被点那首换成匹配版
+old_q = """            val queueSongs = if (results.isNotEmpty()) results else allSongs"""
+new_q = """            val queueSongs = allSongs.map { if (it.id == song.id) match else it } // [14v17] 队列恒为歌手页列表，只换被点那首（v16 把队列整段换成搜索结果，切歌串歌手）"""
+rep(old_q, new_q)
+
+assert "[14v17]" in src, "v17 标记未落"
+assert src.count("歌手页搜歌") == 1, "搜歌日志应唯一"
+assert src.count("(") == src.count(")"), "括号不平衡"
+assert src.count("{") == src.count("}"), "花括号不平衡"
+assert src.count("[") == src.count("]"), "方括号不平衡"
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("OK 14v17")
+
+PYEOF
+
+echo "=== 14 v17 done ==="
