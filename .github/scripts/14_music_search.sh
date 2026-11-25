@@ -940,3 +940,98 @@ print("OK 14v13")
 PYEOF
 
 echo "=== 14 v13 done ==="
+# === 14 v14: 歌手页点歌走搜索逻辑（用户确认：歌手页歌还是有毛病，改成搜索逻辑一样） ===
+# 痛点：歌手页歌锁死单平台（周杰伦页为网易），点歌拿网易 ID 去解析，原生地址回 302 被探活拦、池只剩 1 源兜底慢；搜歌名能出是池源直接给自家 ID、多平台并行。
+# 修法：LxArtistDetailActivity.playSong 不再直用歌手页平台+ID，后台按歌名调 LxMusicSearchApi.search 跨平台搜，优先取同名同歌手且非原平台的版本，搜不到回落原歌；队列改用搜索结果（多平台），切歌也有多平台候选。
+echo "=== 14 v14 ==="
+
+python3 << 'PYEOF'
+import sys
+path = "app/src/main/java/com/github/avbox/osc/ui/LxArtistDetailActivity.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [14v14]"
+if MARK in src:
+    print("skip: 14v14 already present")
+    sys.exit(0)
+
+def rep(old, new, cnt=1):
+    global src
+    assert src.count(old) == cnt, f"anchor count {src.count(old)}: {old[:70]!r}"
+    src = src.replace(old, new, cnt)
+
+# 1) 加 runBlocking import（后台线程调 suspend 的 search 用）
+rep("import kotlinx.coroutines.launch",
+    "import kotlinx.coroutines.launch\nimport kotlinx.coroutines.runBlocking")
+
+# 2) 整段替换 playSong：花括号配对定位，禁子串 find
+sig = "private fun playSong(song: LxMusicSearchApi.SongInfo, allSongs: List<LxMusicSearchApi.SongInfo>) {"
+start = src.find(sig)
+assert start != -1, "v14 锚点：playSong 签名未找到"
+brace_start = src.find("{", start)
+assert brace_start != -1, "v14 锚点：函数左括号未找到"
+depth = 0
+i = brace_start
+while i < len(src):
+    if src[i] == "{":
+        depth += 1
+    elif src[i] == "}":
+        depth -= 1
+        if depth == 0:
+            break
+    i += 1
+assert depth == 0, "v14 锚点：括号不平衡"
+func_end = i + 1
+new_func = """    private fun playSong(song: LxMusicSearchApi.SongInfo, allSongs: List<LxMusicSearchApi.SongInfo>) {
+        // [14v14] 歌手页点歌走搜索逻辑：不锁死歌手页单平台（网易 ID 常 302），后台按歌名跨平台搜，取能播的版本；搜不到回落原歌
+        Thread {
+            val results = try {
+                kotlinx.coroutines.runBlocking { LxMusicSearchApi.search(song.title) }
+            } catch (e: Exception) { emptyList<LxMusicSearchApi.SongInfo>() }
+            val normTitle = song.title.trim().lowercase()
+            val normArtist = song.artist.trim().lowercase()
+            val match = results.firstOrNull { it.title.trim().lowercase() == normTitle && it.artist.trim().lowercase().contains(normArtist) && it.platform != song.platform }
+                ?: results.firstOrNull { it.title.trim().lowercase() == normTitle && it.artist.trim().lowercase().contains(normArtist) }
+                ?: results.firstOrNull { it.title.trim().lowercase() == normTitle }
+                ?: song
+            val queueSongs = if (results.isNotEmpty()) results else allSongs
+            runOnUiThread {
+                try {
+                    val idx = queueSongs.indexOfFirst { it.id == match.id }.takeIf { it >= 0 } ?: 0
+                    LxPlayerManager.setQueue(queueSongs.map { s ->
+                        mapOf(
+                            "songId" to s.id, "title" to s.title, "artist" to s.artist,
+                            "platform" to s.platform, "hash" to s.hash, "albumAudioId" to s.albumAudioId,
+                            "picUrl" to s.picUrl, "quality" to s.quality
+                        )
+                    }, idx)
+                } catch (e: Exception) { }
+                val intent = Intent(this@LxArtistDetailActivity, LxPlayerActivity::class.java).apply {
+                    putExtra("title", match.title)
+                    putExtra("artist", match.artist)
+                    putExtra("songId", match.id)
+                    putExtra("platform", match.platform)
+                    putExtra("hash", match.hash)
+                    putExtra("albumAudioId", match.albumAudioId)
+                    putExtra("picUrl", match.picUrl)
+                    putExtra("quality", match.quality)
+                    putExtra("url", "")
+                }
+                startActivity(intent)
+            }
+        }.start()
+    }"""
+src = src[:start] + new_func + src[func_end:]
+assert "[14v14]" in src, "v14 标记未落"
+assert src.count("private fun playSong") == 1, "playSong 应唯一"
+assert src.count("(") == src.count(")"), "括号不平衡"
+assert src.count("{") == src.count("}"), "花括号不平衡"
+assert src.count("[") == src.count("]"), "方括号不平衡"
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("OK 14v14")
+
+PYEOF
+
+echo "=== 14 v14 done ==="
