@@ -1081,3 +1081,55 @@ print("OK 14v15")
 PYEOF
 
 echo "=== 14 v15 done ==="
+# === 14 v16: 歌手页点歌搜歌诊断+放宽匹配（用户实测：搜索酷狗能播，歌手页仍不行） ===
+# 痛点：v15 按标题+歌手匹配取平台优先级，但 10:20 日志仍走网易（wy）全灭；疑似 v15 的 search 在后台线程返回空或标题+歌手双重匹配过严，导致回落原歌（网易）再失败。用户已证实装的是最新版、搜索酷狗能播，说明酷狗本身可用，问题在歌手页的取版本逻辑。
+# 修法：匹配只按标题（不卡歌手，歌手页本身就是该歌手），同标题里按平台优先级 tx>kw>mg>kg>wy 取；加一行运行日志“歌手页搜歌：标题 -> N 条，取平台”，装机后从日志直接看到 search 回了几条、取了哪个平台，便于定位是 search 空还是匹配错。
+echo "=== 14 v16 ==="
+
+python3 << 'PYEOF'
+import sys
+path = "app/src/main/java/com/github/avbox/osc/ui/LxArtistDetailActivity.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "[14v16]"
+if MARK in src:
+    print("skip: 14v16 already present")
+    sys.exit(0)
+
+def rep(old, new, cnt=1):
+    global src
+    assert src.count(old) == cnt, f"anchor count {src.count(old)}: {old[:70]!r}"
+    src = src.replace(old, new, cnt)
+
+# 1) 匹配放宽：只按标题，不卡歌手；加日志
+old_match = """            // [14v15] 平台优先级：tx(QQ) > kw(酷我) > mg(咪咕) > kg(酷狗) > wy(网易)；酷狗源脚本已实测全灭（所有音源均获取失败），排在后
+            val platformRank = mapOf("tx" to 0, "kw" to 1, "mg" to 2, "kg" to 3, "wy" to 4)
+            val matched = results.filter { it.title.trim().lowercase() == normTitle && it.artist.trim().lowercase().contains(normArtist) }
+            val match = matched.minByOrNull { platformRank[it.platform] ?: 99 }
+                ?: results.firstOrNull { it.title.trim().lowercase() == normTitle }
+                ?: song"""
+new_match = """            // [14v15][14v16] 匹配只按标题（不卡歌手，歌手页本身就是该歌手；v15 的标题+歌手双重匹配过严致回落网易）；平台优先级 tx(QQ) > kw(酷我) > mg(咪咕) > kg(酷狗) > wy(网易)
+            val platformRank = mapOf("tx" to 0, "kw" to 1, "mg" to 2, "kg" to 3, "wy" to 4)
+            val matched = results.filter { it.title.trim().lowercase() == normTitle }
+            val match = matched.minByOrNull { platformRank[it.platform] ?: 99 }
+                ?: song
+            try { com.github.avbox.osc.util.LxRuntimeLog.add("歌手页搜歌: " + song.title + " -> " + results.size + " 条，取 " + match.platform) } catch (_: Exception) { }"""
+rep(old_match, new_match)
+
+# 2) normArtist 不再使用，删掉以免未用变量警告（保留 normTitle）
+rep("            val normTitle = song.title.trim().lowercase()\n            val normArtist = song.artist.trim().lowercase()",
+    "            val normTitle = song.title.trim().lowercase()")
+
+assert "[14v16]" in src, "v16 标记未落"
+assert src.count("歌手页搜歌") == 1, "搜歌日志应唯一"
+assert src.count("(") == src.count(")"), "括号不平衡"
+assert src.count("{") == src.count("}"), "花括号不平衡"
+assert src.count("[") == src.count("]"), "方括号不平衡"
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("OK 14v16")
+
+PYEOF
+
+echo "=== 14 v16 done ==="
