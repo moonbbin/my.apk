@@ -12947,3 +12947,44 @@ else:
     print("OK 32 v170 推荐页点歌瞬时刷新状态订阅完成")
 PYEOF170
 echo "=== 32 v170 完成 ==="
+# === 32 v171: 探活放行 301/302 重定向（用户确认：歌手页不出、搜索能出）===
+# 痛点：歌手页歌带网易 ID，原生地址 music.163.com/song/media/outer/url 回 302，isStreamUrlAlive 用 ExoPlayer DefaultHttpDataSource open() 抛 InvalidResponseCodeException，探活判死；池只剩 1 源、兜底慢 14 秒。搜歌名能出是池源直接给自家 ID。
+# 修法：catch 到 InvalidResponseCodeException 且 responseCode 为 301/302/303/307/308 时当成活（重定向不是死链，播放时 ExoPlayer 跟随跳转到真文件）；其它码与异常仍判死。日志记“验活放行重定向”。
+python3 << 'PYEOF171'
+import os
+
+def find_root():
+    while not os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt") and os.getcwd() != "/":
+        os.chdir("..")
+    assert os.path.exists("avbox/app/src/main/java/com/github/avbox/osc/ui/MusicHomeActivity.kt"), "find_root 失败"
+
+def rep(src, old, new, name):
+    assert src.count(old) == 1, "v171 锚点 %s: %d" % (name, src.count(old))
+    return src.replace(old, new, 1)
+
+find_root()
+M = "avbox/app/src/main/java/com/github/avbox/osc/ui/LxPlayerManager.kt"
+s = open(M, encoding="utf-8").read()
+if "[32v171]" in s:
+    print("跳过（32 v171 已应用）")
+else:
+    old = """        } catch (e: Exception) {
+            try { com.github.avbox.osc.util.LxRuntimeLog.add("验活异常(ExoPlayer): " + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
+            false
+        }"""
+    new = """        } catch (e: Exception) {
+            // [32v171] 放行 301/302：重定向不是死链（网易 outer URL 回 302 跳真文件，ExoPlayer 播放时跟随跳转）；其它码仍判死
+            val rc = (e as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode ?: -1
+            if (rc == 301 || rc == 302 || rc == 303 || rc == 307 || rc == 308) {
+                try { com.github.avbox.osc.util.LxRuntimeLog.add("验活放行重定向: " + rc + " " + url.take(80)) } catch (_: Exception) { }
+                return true
+            }
+            try { com.github.avbox.osc.util.LxRuntimeLog.add("验活异常(ExoPlayer): " + e.javaClass.simpleName + " " + (e.message ?: "").take(100) + " " + url.take(80)) } catch (_: Exception) { }
+            false
+        }"""
+    s = rep(s, old, new, "探活放行重定向")
+    assert "[32v171]" in s, "v171 标记未落"
+    open(M, "w", encoding="utf-8").write(s)
+    print("OK 32 v171 探活放行重定向完成")
+PYEOF171
+echo "=== 32 v171 完成 ==="
