@@ -1035,3 +1035,49 @@ print("OK 14v14")
 PYEOF
 
 echo "=== 14 v14 done ==="
+# === 14 v15: 歌手页点歌跳过酷狗（用户实测：酷狗所有音源均获取失败，搜索能播） ===
+# 痛点：v14 按歌名搜后取首个非网易版本，搜结果里酷狗排在前，取到 kg；但酷狗源脚本回“酷狗所有音源均获取失败”（320k/128k/flac24bit 全灭），池只剩 1 源、无兜底；搜索能播是因用户点的是 QQ 等可用平台的结果。
+# 修法：playSong 的 match 改按平台优先级取——tx(QQ) > kw(酷我) > mg(咪咕) > kg(酷狗) > wy(网易)，同名同歌手里取优先级最高的；搜不到回落原歌。队列仍用全部搜索结果（多平台），切歌也有多平台候选。
+echo "=== 14 v15 ==="
+
+python3 << 'PYEOF'
+import sys
+path = "app/src/main/java/com/github/avbox/osc/ui/LxArtistDetailActivity.kt"
+with open(path, encoding="utf-8") as f:
+    src = f.read()
+
+MARK = "// [14v15]"
+if MARK in src:
+    print("skip: 14v15 already present")
+    sys.exit(0)
+
+def rep(old, new, cnt=1):
+    global src
+    assert src.count(old) == cnt, f"anchor count {src.count(old)}: {old[:70]!r}"
+    src = src.replace(old, new, cnt)
+
+# 替换 match 选取逻辑：v14 的首个非原平台 -> 按平台优先级取最优
+old_match = """            val match = results.firstOrNull { it.title.trim().lowercase() == normTitle && it.artist.trim().lowercase().contains(normArtist) && it.platform != song.platform }
+                ?: results.firstOrNull { it.title.trim().lowercase() == normTitle && it.artist.trim().lowercase().contains(normArtist) }
+                ?: results.firstOrNull { it.title.trim().lowercase() == normTitle }
+                ?: song"""
+new_match = """            // [14v15] 平台优先级：tx(QQ) > kw(酷我) > mg(咪咕) > kg(酷狗) > wy(网易)；酷狗源脚本已实测全灭（所有音源均获取失败），排在后
+            val platformRank = mapOf("tx" to 0, "kw" to 1, "mg" to 2, "kg" to 3, "wy" to 4)
+            val matched = results.filter { it.title.trim().lowercase() == normTitle && it.artist.trim().lowercase().contains(normArtist) }
+            val match = matched.minByOrNull { platformRank[it.platform] ?: 99 }
+                ?: results.firstOrNull { it.title.trim().lowercase() == normTitle }
+                ?: song"""
+rep(old_match, new_match)
+
+assert "[14v15]" in src, "v15 标记未落"
+assert src.count("platformRank") == 2, "platformRank 应出现 2 次（定义+使用）"
+assert src.count("(") == src.count(")"), "括号不平衡"
+assert src.count("{") == src.count("}"), "花括号不平衡"
+assert src.count("[") == src.count("]"), "方括号不平衡"
+with open(path, "w", encoding="utf-8") as f:
+    f.write(src)
+print("OK 14v15")
+
+PYEOF
+
+echo "=== 14 v15 done ==="
