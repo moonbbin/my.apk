@@ -100,6 +100,8 @@ jobs:
         run: bash .github/scripts/45_kuwo_playlist_wire.sh
       - name: 46_sub_music_bridge
         run: bash .github/scripts/46_sub_music_bridge.sh
+      - name: 48_mymusic_implant
+        run: bash .github/scripts/48_mymusic_implant.sh
 
       - name: 设置 JDK
         uses: actions/setup-java@v4
