@@ -837,6 +837,53 @@ print("[48v4] 黑胶挂件已移植：MiniPlayer 已废，VinylHost/VinylWidget/
 PYEOF
 fi
 
+# 3i. 液态控制台显示歌名/歌手（2026-11-27 用户定“显示歌名”）
+#     （3h 的控制台只有“正在播放”+ 封面，不显示歌名/歌手。改法：在封面与进度条之间
+#     加两行居中文字：歌名 titleMedium SemiBold、歌手 bodyMedium onSurfaceVariant，
+#     各单行省略；song 已是 VinylConsole 入参（song: Song），直接取 song.title/song.artist。）
+PBAR="app/src/main/java/com/mytv/mymusic/ui/adaptive/PhoneBottomBar.kt"
+if grep -F -q "text = song.title" "${PBAR}"; then
+  info "控制台已显示歌名，跳过"
+else
+  python3 - "${PBAR}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = (
+    "            Spacer(modifier = Modifier.height(8.dp))\n"
+    "            Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(MaterialTheme.colorScheme.outlineVariant)) {"
+)
+assert s.count(old) == 1, "[48v5] 控制台封面-进度锚点出现次数 != 1"
+new = (
+    "            Spacer(modifier = Modifier.height(12.dp))\n"
+    "            Text(\n"
+    "                text = song.title,\n"
+    "                style = MaterialTheme.typography.titleMedium,\n"
+    "                fontWeight = FontWeight.SemiBold,\n"
+    "                color = MaterialTheme.colorScheme.onSurface,\n"
+    "                maxLines = 1,\n"
+    "                overflow = TextOverflow.Ellipsis,\n"
+    "                textAlign = TextAlign.Center,\n"
+    "                modifier = Modifier.fillMaxWidth(),\n"
+    "            )\n"
+    "            Text(\n"
+    "                text = song.artist,\n"
+    "                style = MaterialTheme.typography.bodyMedium,\n"
+    "                color = MaterialTheme.colorScheme.onSurfaceVariant,\n"
+    "                maxLines = 1,\n"
+    "                overflow = TextOverflow.Ellipsis,\n"
+    "                textAlign = TextAlign.Center,\n"
+    "                modifier = Modifier.fillMaxWidth(),\n"
+    "            )\n"
+    "            Spacer(modifier = Modifier.height(8.dp))\n"
+    "            Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(MaterialTheme.colorScheme.outlineVariant)) {"
+)
+s = s.replace(old, new)
+open(path, "w", encoding="utf-8").write(s)
+print("[48v5] 控制台已显示歌名/歌手")
+PYEOF
+fi
+
 info "== 4. Application 合并 =="
 # 4a. MyMusicApp 加 open（myMusic 侧，[已核实]：本地同提交 clone 直读 MyMusicApp.kt:50，
 #     类声明为 class MyMusicApp : Application()，上方有 @OptIn(UnstableApi::class)）
