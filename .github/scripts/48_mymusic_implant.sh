@@ -584,7 +584,10 @@ assert_count "${MANIFEST}" 'android.permission.WAKE_LOCK' 1 "Manifest WAKE_LOCK"
 assert_count "${MANIFEST}" 'android.permission.RECORD_AUDIO' 1 "Manifest RECORD_AUDIO"
 assert_count "${MANIFEST}" 'android.software.leanback' 1 "Manifest leanback"
 assert_count "${MANIFEST}" 'android.hardware.microphone' 1 "Manifest microphone"
-assert_count "${MANIFEST}" 'lyricon_module' 1 "Manifest lyricon_module"
+# 注意：锚点必须带 android:name="..." 的闭合引号——4 条 lyricon meta-data
+# （lyricon_module / _author / _description / _tags）都含 lyricon_module 前缀，
+# 裸串会数出 4 行（2026-11-27 第二轮 CI 红根因）；带闭合引号只命中第一条。
+assert_count "${MANIFEST}" 'android:name="lyricon_module"' 1 "Manifest lyricon_module"
 assert_count "${MANIFEST}" 'com.mytv.mymusic.MainActivity' 1 "Manifest MainActivity"
 assert_count "${MANIFEST}" 'com.mytv.mymusic.playback.PlaybackService' 1 "Manifest PlaybackService"
 assert_count "${MANIFEST}" 'androidx.startup.InitializationProvider' 1 "Manifest InitializationProvider"
