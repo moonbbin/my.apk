@@ -1014,6 +1014,40 @@ print("[48v9] TextAlign import 包名已纠正为 style")
 PYEOF
 fi
 
+# 3n. 音乐专区 tab 默认隐藏、myMusic tab 改名“音乐”（2026-11-28 用户定）
+#     （方案说明：不删 MUSIC 枚举/分支。05 已实现 visibleTabs 过滤
+#     （insert_music_filter.py：pagerState、tabLabels、GlassTabItem、forEachIndexed、
+#     when 分发、NavMetrics 六处统一走 visibleTabs，AppTab.entries 只剩定义里一处），
+#     过滤条件是 it != AppTab.MUSIC || !navMusicHidden——删 MUSIC 枚举会把这行
+#     编译弄红，且 pager/tab/内容下标同步全靠它。本步只把 navMusicHidden 的默认
+#     从 false 翻成 true（KVKeySpec 注册默认＋UiSettingsState KV.get 默认两处），
+#     音乐专区代码与数据一字不动，设置页“导航栏隐藏音乐”开关仍可手动改回来。
+#     tab_mymusic 改名在第 5 节 [48v2] 的 sed 里改（myMusic→音乐），本步不碰。）
+USS="app/src/main/java/com/github/avbox/osc/ui/settings/UiSettingsState.kt"
+KKS="app/src/main/java/com/github/avbox/osc/util/kv/KVKeySpec.kt"
+if grep -F -q "register(KVKeys.NAV_MUSIC_HIDDEN, true)" "${KKS}" && grep -F -q "navMusicHidden = KV.get(KVKeys.NAV_MUSIC_HIDDEN, true)" "${USS}"; then
+  info "音乐专区 tab 默认已隐藏，跳过"
+else
+  python3 - "${KKS}" "${USS}" <<'PYEOF'
+import sys
+kks_path, uss_path = sys.argv[1], sys.argv[2]
+# KVKeySpec：注册默认 false→true
+c = open(kks_path, encoding="utf-8").read()
+old = "register(KVKeys.NAV_MUSIC_HIDDEN, false)"
+assert c.count(old) == 1, "[48v10] KVKeySpec NAV_MUSIC_HIDDEN 注册锚点出现次数 != 1"
+c = c.replace(old, "register(KVKeys.NAV_MUSIC_HIDDEN, true)")
+open(kks_path, "w", encoding="utf-8").write(c)
+print("[48v10] KVKeySpec NAV_MUSIC_HIDDEN 默认已改 true")
+# UiSettingsState：KV.get 默认 false→true
+c = open(uss_path, encoding="utf-8").read()
+old = "navMusicHidden = KV.get(KVKeys.NAV_MUSIC_HIDDEN, false),"
+assert c.count(old) == 1, "[48v10] UiSettingsState navMusicHidden KV.get 锚点出现次数 != 1"
+c = c.replace(old, "navMusicHidden = KV.get(KVKeys.NAV_MUSIC_HIDDEN, true),")
+open(uss_path, "w", encoding="utf-8").write(c)
+print("[48v10] UiSettingsState navMusicHidden 默认已改 true")
+PYEOF
+fi
+
 info "== 4. Application 合并 =="
 # 4a. MyMusicApp 加 open（myMusic 侧，[已核实]：本地同提交 clone 直读 MyMusicApp.kt:50，
 #     类声明为 class MyMusicApp : Application()，上方有 @OptIn(UnstableApi::class)）
@@ -1193,7 +1227,7 @@ PYEOF
 if grep -q 'name="tab_mymusic"' "$SX"; then
     echo "[48v2] 字符串 tab_mymusic 已存在，跳过"
 else
-    sed -i 's|<string name="tab_mine">我的</string>|<string name="tab_mine">我的</string>\n    <string name="tab_mymusic">myMusic</string> <!-- [48v2] -->|' "$SX"
+    sed -i 's|<string name="tab_mine">我的</string>|<string name="tab_mine">我的</string>\n    <string name="tab_mymusic">音乐</string> <!-- [48v2][48v10] -->|' "$SX"
     grep -q 'name="tab_mymusic"' "$SX" || { echo "[48v2] tab_mymusic 写入失败" >&2; exit 1; }
     echo "[48v2] 字符串 tab_mymusic 已添加"
 fi
