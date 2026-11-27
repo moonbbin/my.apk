@@ -706,8 +706,12 @@ new_libs = [
     ("androidx-datastore-preferences", "androidx.datastore:datastore-preferences", "datastore"),
     ("androidx-work-runtime-ktx", "androidx.work:work-runtime-ktx", "work"),
     ("androidx-glance-appwidget", "androidx.glance:glance-appwidget", "glance"),
-    ("haze", "dev.chrisbanes.haze:haze", "haze"),
-    ("haze-blur", "dev.chrisbanes.haze:haze-blur", "haze"),
+    # 注意：别名不能叫 haze / haze-blur——Gradle 里别名若是另一别名的前缀，libs.haze 会
+    # 生成成组访问器（HazeLibraryAccessors）而非依赖，implementation(libs.haze) 报
+    # "Cannot convert ... HazeLibraryAccessors"（2026-11-27 第四轮 CI 红根因，app
+    # build.gradle.kts:119）。改叫 haze-core / haze-blur-core，三个别名互不为前缀。
+    ("haze-core", "dev.chrisbanes.haze:haze", "haze"),
+    ("haze-blur-core", "dev.chrisbanes.haze:haze-blur", "haze"),
     ("haze-blur-materials", "dev.chrisbanes.haze:haze-blur-materials", "haze"),
     ("lyricon-provider", "io.github.proify.lyricon:provider", "lyricon"),
     ("lyricon-subscriber", "io.github.proify.lyricon:subscriber", "lyricon"),
@@ -806,8 +810,8 @@ deps = [
     'implementation(libs.androidx.datastore.preferences)',
     'implementation(libs.androidx.work.runtime.ktx)',
     'implementation(libs.androidx.glance.appwidget)',
-    'implementation(libs.haze)',
-    'implementation(libs.haze.blur)',
+    'implementation(libs.haze.core)',
+    'implementation(libs.haze.blur.core)',
     'implementation(libs.haze.blur.materials)',
     'implementation(libs.lyricon.provider)',
     'implementation(libs.lyricon.subscriber)',
