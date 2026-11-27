@@ -337,6 +337,10 @@ for title, old_idx, new_idx in reindex:
     block = block.replace("count = 9,", "count = 6,")
     s = s[:st] + block + s[en:]
 # 更新卡片改成移植说明静态卡片：调用点去条件化常显，新增 TransplantCard
+# （注意：锚点必须含 UpdateCard 上方的 KDoc/@OptIn/@Composable 三行——2026-11-27
+#  首推红的根因：只锚函数签名行，卡片插进了 @Composable 与函数签名之间，
+#  致 TransplantCard 叠了两个 @Composable（"not repeatable"），UpdateCard 反而
+#  丢了 @Composable，级联 6 错；只含 @OptIn/@Composable 时 KDoc 会错挂到新卡片上。）
 old_call = (
     '        if (showCard && info != null) {\n'
     '            item(key = "update", contentType = "updateCard") {\n'
@@ -351,8 +355,8 @@ new_call = (
     '        }\n'
 )
 s = s.replace(old_call, new_call)
-anchor = "private fun UpdateCard(update: UpdateUiState, actions: MusicActions, progress: () -> Float) {"
-assert s.count(anchor) == 1, "[48v2] AboutScreen UpdateCard 签名出现次数 != 1"
+anchor = "/** 新版本卡片：更新说明、下载进度、校验和安装都在这里；下载和安装自动进行，系统对话框确认无法省略。 */\n@OptIn(ExperimentalLayoutApi::class)\n@Composable\nprivate fun UpdateCard(update: UpdateUiState, actions: MusicActions, progress: () -> Float) {"
+assert s.count(anchor) == 1, "[48v2] AboutScreen UpdateCard 锚点（含 KDoc/@OptIn/@Composable）出现次数 != 1"
 card = '''/** [48v2] 移植说明静态卡片：更新已关闭，此卡不再显示更新内容；文案用户 19:58 定稿。 */
 @Composable
 private fun TransplantCard() {
