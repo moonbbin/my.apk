@@ -884,6 +884,38 @@ print("[48v5] 控制台已显示歌名/歌手")
 PYEOF
 fi
 
+# 3j. 控制台封面点击跟随“点按迷你播放器打开”设置（2026-11-27 用户问“迷你播放器和这些没通吗”）
+#     （3h 的 onCoverClick 写死 actions.openPlayer()，绕过了 miniPlayerTarget 设置；
+#     用户选了海报墙，点封面仍进播放页。改法：改调 actions.openNowPlaying()，
+#     它按设置分流（Player→openPlayer，PosterWall→openPosterWall），与原 MiniPlayer
+#     点按行为一致；上滑黑胶仍直通播放页，不动。）
+PBAR="app/src/main/java/com/mytv/mymusic/ui/adaptive/PhoneBottomBar.kt"
+if grep -F -q "actions.openNowPlaying()" "${PBAR}"; then
+  info "控制台封面点击已跟随设置，跳过"
+else
+  python3 - "${PBAR}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = (
+    "                    onCoverClick = {\n"
+    "                        showVinylConsole = false\n"
+    "                        actions.openPlayer()\n"
+    "                    },"
+)
+assert s.count(old) == 1, "[48v6] onCoverClick 锚点出现次数 != 1"
+new = (
+    "                    onCoverClick = {\n"
+    "                        showVinylConsole = false\n"
+    "                        actions.openNowPlaying()\n"
+    "                    },"
+)
+s = s.replace(old, new)
+open(path, "w", encoding="utf-8").write(s)
+print("[48v6] 控制台封面点击已跟随“点按迷你播放器打开”设置")
+PYEOF
+fi
+
 info "== 4. Application 合并 =="
 # 4a. MyMusicApp 加 open（myMusic 侧，[已核实]：本地同提交 clone 直读 MyMusicApp.kt:50，
 #     类声明为 class MyMusicApp : Application()，上方有 @OptIn(UnstableApi::class)）
