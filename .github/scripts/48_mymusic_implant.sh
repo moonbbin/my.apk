@@ -693,8 +693,12 @@ info "Manifest 合并完成"
 #       AVBox 侧以本地旧检出为准，[未核实]）。catalog 锚点用特征字符串 grep + fail-fast。
 # 路线（已定，见 STAGE48_WRITE.md）：
 #   - material3 不加 strictly，按 AVBox 的 alpha29 编（AVBox 现有代码按 alpha29 写）；
-#   - MaterialKolor 用新别名 material-kolor-material3/material-kolor-palette 加 6.0.0
-#     （与 AVBox 的 5.0.1 不同坐标，可共存，catalog 另起版本键 materialKolor6 避重）；
+#   - MaterialKolor 统一到 6.0.0（2026-11-27 第十轮 CI 红根因：5.0.1 的 material-kolor
+#     与 6.0.0 的 material-kolor-core-android 同含 Contrast/MaterialKolors，
+#     checkDebugDuplicateClasses 报错。不同坐标不能共存，必须统一版本。
+#     改法：AVBox 现有 materialKolor 版本键 5.0.1 -> 6.0.0，materialkolor 别名
+#     模块 material-kolor -> material-kolor-material3；myMusic 的两个别名改指
+#     同一版本键 materialKolor，不再另起 materialKolor6）；
 #   - QuickJS 不另加 2.4.0 依赖，沿用 AVBox 现有 :quickjs 模块（导出 wrapper-android 3.2.3）；
 #   - Room 按 dependencies.md §3 双版本共存（roomLegacy 2.8.5 + 双 KSP，sqlite 默认解析 2.7.1 不强制）。
 info "== 7. 依赖 =="
@@ -769,7 +773,6 @@ new_versions = [
     ("kotlinxCoroutines", '"1.10.2"'),
     ("coreKtx", '"1.19.1"'),
     ("checkerQual", '"3.42.0"'),
-    ("materialKolor6", '"6.0.0"'),
     ("buildTools", '"37.0.0"'),
 ]
 added_v = []
@@ -822,8 +825,8 @@ new_libs = [
     ("kotlinx-coroutines-android", "org.jetbrains.kotlinx:kotlinx-coroutines-android", "kotlinxCoroutines"),
     ("androidx-core-ktx", "androidx.core:core-ktx", "coreKtx"),
     ("checker-qual", "org.checkerframework:checker-qual", "checkerQual"),
-    ("material-kolor-material3", "com.materialkolor:material-kolor-material3", "materialKolor6"),
-    ("material-kolor-palette", "com.materialkolor:material-kolor-palette", "materialKolor6"),
+    ("material-kolor-material3", "com.materialkolor:material-kolor-material3", "materialKolor"),
+    ("material-kolor-palette", "com.materialkolor:material-kolor-palette", "materialKolor"),
 ]
 added_l = []
 for alias, module, ref in new_libs:
@@ -1042,6 +1045,55 @@ PYEOF
   fi
 else
   echo "[48] 警告：AppThemeState.kt 不在 ${ATS}，未修 valueOf（[未核实]路径）" >&2
+fi
+
+# 7.8 MaterialKolor 统一到 6.0.0（2026-11-27 第十轮 CI 红根因）
+#     :app:checkDebugDuplicateClasses 报 Duplicate class Contrast/MaterialKolors——
+#     5.0.1 的 material-kolor 与 6.0.0 的 material-kolor-core-android 同含这些类。
+#     改法：AVBox 现有 materialKolor 版本键 5.0.1 -> 6.0.0；materialkolor 别名模块
+#     material-kolor -> material-kolor-material3（6.0.0 已拆包，旧坐标不存在）；
+#     AppThemeState.kt 的 dynamicColorScheme 导入改到 material3 子包（6.0.0 的
+#     material3.dynamicColorScheme(seedColor/isDark/style) 签名与 5.0.1 顶层函数
+#     一致，其余参数均有默认值，调用点不用改；PaletteStyle 仍在顶层包，不动）。
+python3 - "${CATALOG}" <<'PYEOF'
+import sys, re
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+# 版本键：materialKolor = "5.0.1" -> "6.0.0"（已是 6.0.0 则跳过）
+if re.search(r'^materialKolor\s*=\s*"6\.0\.0"\s*$', s, re.M):
+    print("[48v1] materialKolor 已是 6.0.0，跳过")
+else:
+    assert len(re.findall(r'^materialKolor\s*=\s*"5\.0\.1"\s*$', s, re.M)) == 1, "[48v1] catalog materialKolor 5.0.1 不是唯一"
+    s = re.sub(r'^materialKolor\s*=\s*"5\.0\.1"\s*$', 'materialKolor = "6.0.0"', s, count=1, flags=re.M)
+    print("[48v1] materialKolor 5.0.1 已升 6.0.0")
+# 别名：materialkolor 的 name "material-kolor" -> "material-kolor-material3"（已改则跳过）
+if re.search(r'^materialkolor\s*=\s*\{[^}]*name\s*=\s*"material-kolor-material3"', s, re.M):
+    print("[48v1] materialkolor 别名已指 material-kolor-material3，跳过")
+else:
+    m = re.findall(r'^materialkolor\s*=\s*\{[^}]*name\s*=\s*"material-kolor"', s, re.M)
+    assert len(m) == 1, "[48v1] catalog materialkolor 别名（material-kolor）不是唯一"
+    s = re.sub(r'(^materialkolor\s*=\s*\{[^}]*name\s*=\s*)"material-kolor"', r'\1"material-kolor-material3"', s, count=1, flags=re.M)
+    print("[48v1] materialkolor 别名已改指 material-kolor-material3")
+open(path, "w", encoding="utf-8").write(s)
+PYEOF
+if [ -f "${ATS}" ]; then
+  if grep -F -q "import com.materialkolor.material3.dynamicColorScheme" "${ATS}"; then
+    info "AppThemeState.kt 已用 material3.dynamicColorScheme，跳过"
+  else
+    assert_count "${ATS}" "import com.materialkolor.dynamicColorScheme" 1 "AppThemeState.kt 顶层 dynamicColorScheme 导入"
+    python3 - "${ATS}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = "import com.materialkolor.dynamicColorScheme"
+assert s.count(old) == 1, "[48v1] AppThemeState.kt 顶层 dynamicColorScheme 导入出现次数 != 1"
+s = s.replace(old, "import com.materialkolor.material3.dynamicColorScheme")
+open(path, "w", encoding="utf-8").write(s)
+print("[48v1] AppThemeState.kt dynamicColorScheme 已改 material3 子包")
+PYEOF
+  fi
+else
+  echo "[48] 警告：AppThemeState.kt 不在 ${ATS}，未修 dynamicColorScheme 导入（[未核实]路径）" >&2
 fi
 
 # ============ 8. 资源 ============
@@ -1368,6 +1420,9 @@ grep -F -q "import com.github.avbox.osc.R" "app/src/main/java/com/mytv/mymusic/u
 grep -F -q "DefaultTogglePadding" "app/src/main/java/com/mytv/mymusic/ui/components/Buttons.kt" || die "收尾：Buttons.kt 无 DefaultTogglePadding"
 grep -F -q "import androidx.compose.material3.SplitButtonLayout" "app/src/main/java/com/mytv/mymusic/ui/library/LibraryScreen.kt" || die "收尾：LibraryScreen.kt 无 SplitButtonLayout 导入"
 if grep -q '^import androidx.compose.material3.SplitButton$' "app/src/main/java/com/mytv/mymusic/ui/library/LibraryScreen.kt"; then die "收尾：LibraryScreen.kt 仍有 SplitButton 导入"; fi
+grep -q '^materialKolor = "6.0.0"$' "gradle/libs.versions.toml" || die "收尾：catalog materialKolor 不是 6.0.0"
+if grep -q 'name = "material-kolor"' "gradle/libs.versions.toml"; then die "收尾：catalog 仍有旧 material-kolor 坐标"; fi
+grep -F -q "import com.materialkolor.material3.dynamicColorScheme" "app/src/main/java/com/github/avbox/osc/ui/theme/AppThemeState.kt" || die "收尾：AppThemeState.kt 未用 material3.dynamicColorScheme"
 if grep -F -q "PaletteStyle.valueOf(" "app/src/main/java/com/github/avbox/osc/ui/theme/AppThemeState.kt"; then die "收尾：AppThemeState.kt 仍有 PaletteStyle.valueOf"; fi
 grep -F -q 'ExperimentalMaterial3Api' "${APPBG}" || die "收尾：app 无 material3 opt-in"
 grep -F -q 'alias(libs.plugins.kotlin.android)' "${AVBOX_DIR}/lib-runtime-lx/build.gradle.kts" || die "收尾：lib-runtime-lx 无 kotlin.android 插件"
