@@ -235,7 +235,31 @@ print("[48v1] Buttons.kt ContentPadding 已换 DefaultTogglePadding")
 PYEOF
 fi
 
-# ============ 4. Application 合并 ============
+# 3e. LibraryScreen.kt：SplitButton 在 AVBox 的 Material3 alpha29 里已被改名/移除
+#     （2026-11-27 第八轮 CI 红根因：LibraryScreen.kt:78 import 与 :1225 调用报
+#     Unresolved reference 'SplitButton'，其余 3 错是级联的 @Composable 上下文错。
+#     myMusic 的 alpha25 有 SplitButton，alpha29 只剩 SplitButtonLayout——Buttons.kt
+#     的 PlayAllSplitButton 已用 SplitButtonLayout 且能编过，参数名完全一致，
+#     故此处改 SplitButton -> SplitButtonLayout，纯改名。）
+LIB="app/src/main/java/com/mytv/mymusic/ui/library/LibraryScreen.kt"
+if grep -F -q "import androidx.compose.material3.SplitButtonLayout" "${LIB}"; then
+  info "LibraryScreen.kt 已用 SplitButtonLayout，跳过"
+else
+  assert_count "${LIB}" "import androidx.compose.material3.SplitButton" 1 "LibraryScreen SplitButton import"
+  python3 - "${LIB}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old_imp = "import androidx.compose.material3.SplitButton"
+assert s.count(old_imp) == 1, "SplitButton import 出现次数 != 1"
+s = s.replace(old_imp, "import androidx.compose.material3.SplitButtonLayout")
+# 调用点：仅 NewPlaylistSplitButton 一处用 SplitButton(（其余 SplitButton( 均为自定义 PlayAllSplitButton）
+assert s.count("    SplitButton(\n") == 1, "SplitButton( 调用点出现次数 != 1"
+s = s.replace("    SplitButton(\n", "    SplitButtonLayout(\n")
+open(path, "w", encoding="utf-8").write(s)
+print("[48v1] LibraryScreen.kt SplitButton 已换 SplitButtonLayout")
+PYEOF
+fi
 info "== 4. Application 合并 =="
 # 4a. MyMusicApp 加 open（myMusic 侧，[已核实]：本地同提交 clone 直读 MyMusicApp.kt:50，
 #     类声明为 class MyMusicApp : Application()，上方有 @OptIn(UnstableApi::class)）
@@ -1340,6 +1364,8 @@ grep -F -q 'include(":lib-decoder-flac")' "${SETTINGS}" || die "收尾：setting
 grep -F -q "import com.github.avbox.osc.R" "app/src/main/java/com/mytv/mymusic/ui/components/ProviderIcon.kt" || grep -F -q "import com.github.tvbox.osc.R" "app/src/main/java/com/mytv/mymusic/ui/components/ProviderIcon.kt" || die "收尾：ProviderIcon.kt 无 app R 直接导入"
 [ ! -f "app/src/main/java/com/mytv/mymusic/R.kt" ] || die "收尾：旧 R.kt typealias 文件仍在"
 grep -F -q "DefaultTogglePadding" "app/src/main/java/com/mytv/mymusic/ui/components/Buttons.kt" || die "收尾：Buttons.kt 无 DefaultTogglePadding"
+grep -F -q "import androidx.compose.material3.SplitButtonLayout" "app/src/main/java/com/mytv/mymusic/ui/library/LibraryScreen.kt" || die "收尾：LibraryScreen.kt 无 SplitButtonLayout 导入"
+if grep -F -q "import androidx.compose.material3.SplitButton" "app/src/main/java/com/mytv/mymusic/ui/library/LibraryScreen.kt"; then die "收尾：LibraryScreen.kt 仍有 SplitButton 导入"; fi
 if grep -F -q "PaletteStyle.valueOf(" "app/src/main/java/com/github/avbox/osc/ui/theme/AppThemeState.kt"; then die "收尾：AppThemeState.kt 仍有 PaletteStyle.valueOf"; fi
 grep -F -q 'ExperimentalMaterial3Api' "${APPBG}" || die "收尾：app 无 material3 opt-in"
 grep -F -q 'alias(libs.plugins.kotlin.android)' "${AVBOX_DIR}/lib-runtime-lx/build.gradle.kts" || die "收尾：lib-runtime-lx 无 kotlin.android 插件"
