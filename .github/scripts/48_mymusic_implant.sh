@@ -84,7 +84,9 @@ if [ -f "${MYMUSIC_SRC}/app/src/main/java/com/mytv/mymusic/MyMusicApp.kt" ]; the
   info "myMusic 源码已存在，跳过下载：${MYMUSIC_SRC}"
 else
   info "下载 tarball：${MYMUSIC_TARBALL}"
-  mkdir -p "${MYMUSIC_SRC}"
+  # 注意：此处不要 mkdir -p mymusic-src——目标目录若已存在，mv 会把 myMusic-<sha> 移进它里面，
+  # 变成 mymusic-src/myMusic-<sha>/，导致后续关键文件校验失败（2026-11-27 首轮 CI 红根因）。
+  # 不建目录时，mv 直接把 myMusic-<sha> 重命名为 mymusic-src。
   curl -fsSL --retry 3 -o "${REPO_ROOT}/mymusic.tar.gz" "${MYMUSIC_TARBALL}" \
     || die "下载 myMusic tarball 失败：${MYMUSIC_TARBALL}（网络或该提交已被 force-push？）"
   tar -xzf "${REPO_ROOT}/mymusic.tar.gz" -C "${REPO_ROOT}" \
