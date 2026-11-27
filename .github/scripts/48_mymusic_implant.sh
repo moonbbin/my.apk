@@ -167,24 +167,73 @@ cp -r "${MYMUSIC_SRC}/app/src/main/assets/." "app/src/main/assets/" \
   || die "拷贝 myMusic assets 失败"
 info "已拷贝 assets（零碰撞）"
 
-# 3c. R 别名：植入后 R 类随 app 模块生成（包名 = AVBox 的 namespace），myMusic 源码里的
-#     裸 R 与 `import com.mytv.mymusic.R` 都靠这个别名解析。
-#     （2026-11-27 第五轮 CI 红根因之一：44 个编译错里大半是 Unresolved reference 'R'——
-#     myMusic 源码在 com.mytv.mymusic.* 包里，裸 R 解析不到 app 模块的 R 类。资源已在
-#     第 8 节并进 app 的 res/，故 app 的 R 类含 myMusic 全部资源，别名即可解析。）
+# 3c. R 直接导入：植入后 R 类随 app 模块生成（包名 = AVBox 的 namespace），myMusic 源码里
+#     的 R 引用一律改成直接 import 该 R 类，不再用 typealias。
+#     （2026-11-27 第五轮 CI 红根因之一：44 个编译错里大半是 Unresolved reference 'R'；
+#     第七轮 CI 红：typealias 写法下 R 本身解析了，但 R.drawable/R.string 在 myMusic 文件里
+#     仍报 Unresolved reference——typealias 到生成 R 类的嵌套类访问不可靠，改直接导入。
+#     资源已在第 8 节并进 app 的 res/，故 app 的 R 类含 myMusic 全部资源。）
 NS="$(sed -n 's/^[[:space:]]*namespace[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
-[ -n "$NS" ] || die "app/build.gradle.kts 无 namespace，无法生成 R 别名"
+[ -n "$NS" ] || die "app/build.gradle.kts 无 namespace，无法生成 R 导入"
 RKT="app/src/main/java/com/mytv/mymusic/R.kt"
-cat > "${RKT}" <<EOF
-package com.mytv.mymusic
+rm -f "${RKT}"  # 旧版 typealias 文件若在，删掉（直接导入后不再需要）
+python3 - "${NS}" <<'PYEOF'
+import sys, os, re
+ns = sys.argv[1]
+root = "app/src/main/java/com/mytv/mymusic"
+# 匹配 app R 引用（R.drawable/R.string/...），排除 android.R.*（框架 R，不用改）
+r_pat = re.compile(r"(?<!android\.)\bR\.(drawable|string|color|layout|id|mipmap|raw|anim|font|style|dimen|bool|integer|array|attr|plurals)\b")
+changed = 0
+for dirpath, _, files in os.walk(root):
+    for fn in sorted(files):
+        if not fn.endswith(".kt"):
+            continue
+        p = os.path.join(dirpath, fn)
+        s = open(p, encoding="utf-8").read()
+        if not r_pat.search(s):
+            continue
+        if "import com.mytv.mymusic.R" in s:
+            assert s.count("import com.mytv.mymusic.R") == 1, f"[48v1] {p} import com.mytv.mymusic.R 出现次数 != 1"
+            s = s.replace("import com.mytv.mymusic.R", f"import {ns}.R")
+            print(f"[48v1] {p}: import 已改 -> {ns}.R")
+            changed += 1
+        elif f"import {ns}.R" not in s:
+            lines = s.split("\n")
+            pkg_idx = [i for i, ln in enumerate(lines) if ln.startswith("package ")]
+            assert len(pkg_idx) == 1, f"[48v1] {p} package 行不是唯一"
+            lines.insert(pkg_idx[0] + 1, f"import {ns}.R")
+            s = "\n".join(lines)
+            print(f"[48v1] {p}: import 已加 -> {ns}.R")
+            changed += 1
+        open(p, "w", encoding="utf-8").write(s)
+print(f"[48v1] R 直接导入完成，共改 {changed} 个文件")
+PYEOF
+info "R 直接导入已完成（namespace=${NS}）"
 
-// [48v1] myMusic 植入：R 类随 app 模块生成（包名 ${NS}），myMusic 源码里的裸 R 与
-// import com.mytv.mymusic.R 都靠这个别名解析。资源已在第 8 节并进 app 的 res/，故 ${NS}.R
-// 含 myMusic 全部资源。
-typealias R = ${NS}.R
-EOF
-grep -F -q "typealias R = ${NS}.R" "${RKT}" || die "R 别名文件写入失败"
-info "R 别名已写：${RKT} -> ${NS}.R"
+# 3d. Buttons.kt：ToggleButtonDefaults.ContentPadding 在 AVBox 的 Material3 alpha29 里是
+#     private（myMusic 的 alpha25 里可访问），改成本地 PaddingValues。
+#     （2026-11-27 第七轮 CI 红根因之二：Buttons.kt:155/240 各 1 处。）
+BTN="app/src/main/java/com/mytv/mymusic/ui/components/Buttons.kt"
+if grep -F -q "DefaultTogglePadding" "${BTN}"; then
+  info "Buttons.kt 已用 DefaultTogglePadding，跳过"
+else
+  assert_count "${BTN}" "ToggleButtonDefaults.ContentPadding" 2 "Buttons.kt ContentPadding 引用"
+  python3 - "${BTN}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = "ToggleButtonDefaults.ContentPadding"
+assert s.count(old) == 2, "ToggleButtonDefaults.ContentPadding 出现次数 != 2"
+s = s.replace(old, "DefaultTogglePadding")
+# 在 CompactTogglePadding 旁加本地默认值（Material3 ToggleButton 默认内边距近似值；
+# 水平 16.dp、垂直 8.dp，与 Compact 的垂直 8.dp 一致）
+anchor = "private val CompactTogglePadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)"
+assert s.count(anchor) == 1, "CompactTogglePadding 定义行不是唯一"
+s = s.replace(anchor, anchor + "\n\n// [48v1] myMusic 植入：Material3 alpha29 里该默认值已为 private，改本地值\nprivate val DefaultTogglePadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)")
+open(path, "w", encoding="utf-8").write(s)
+print("[48v1] Buttons.kt ContentPadding 已换 DefaultTogglePadding")
+PYEOF
+fi
 
 # ============ 4. Application 合并 ============
 info "== 4. Application 合并 =="
@@ -919,6 +968,56 @@ assert_count "${APPBG}" 'project(":lib-runtime-lx")' 1 "app lib-runtime-lx"
 assert_count "${APPBG}" 'project(":lib-decoder-flac")' 1 "app lib-decoder-flac"
 info "依赖合并完成"
 
+# 7.7 AppThemeState.kt：PaletteStyle.valueOf 在 MaterialKolor 6.0.0 解析下不可用
+#     （2026-11-27 第七轮 CI 红根因之三：AppThemeState.kt:34 两错——Cannot infer 'R' 与
+#     Unresolved reference 'valueOf'。48 脚本引入的 material-kolor 6.0.0 与 AVBox 自带
+#     的 5.0.1 同含 com.materialkolor.PaletteStyle，解析到的 6.0.0 版无 valueOf。
+#     改法：把 valueOf(<arg>) 换成按名字查表的 when 表达式（枚举与密封类都适用），
+#     不依赖 valueOf。括号平衡扫描处理嵌套括号。）
+ATS="app/src/main/java/com/github/avbox/osc/ui/theme/AppThemeState.kt"
+if [ -f "${ATS}" ]; then
+  if grep -F -q "PaletteStyle.valueOf(" "${ATS}"; then
+    python3 - "${ATS}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+key = "PaletteStyle.valueOf("
+assert s.count(key) == 1, "[48v1] AppThemeState.kt PaletteStyle.valueOf 出现次数 != 1"
+idx = s.find(key)
+start = idx + len(key)
+depth = 1
+i = start
+while i < len(s) and depth > 0:
+    if s[i] == "(":
+        depth += 1
+    elif s[i] == ")":
+        depth -= 1
+    i += 1
+assert depth == 0, "[48v1] AppThemeState.kt valueOf 括号不平衡"
+arg = s[start:i-1]
+when_expr = (
+    "when (" + arg + ") {\n"
+    '        "TonalSpot" -> PaletteStyle.TonalSpot\n'
+    '        "Vibrant" -> PaletteStyle.Vibrant\n'
+    '        "Expressive" -> PaletteStyle.Expressive\n'
+    '        "Fidelity" -> PaletteStyle.Fidelity\n'
+    '        "Content" -> PaletteStyle.Content\n'
+    '        "Rainbow" -> PaletteStyle.Rainbow\n'
+    '        "FruitSalad" -> PaletteStyle.FruitSalad\n'
+    "        else -> DefaultPaletteStyle\n"
+    "    }"
+)
+s = s[:idx] + when_expr + s[i:]
+open(path, "w", encoding="utf-8").write(s)
+print("[48v1] AppThemeState.kt PaletteStyle.valueOf 已换 when 查表")
+PYEOF
+  else
+    info "AppThemeState.kt 无 PaletteStyle.valueOf 调用，跳过"
+  fi
+else
+  echo "[48] 警告：AppThemeState.kt 不在 ${ATS}，未修 valueOf（[未核实]路径）" >&2
+fi
+
 # ============ 8. 资源 ============
 # 依据：stage0/resource_conflicts.md（myMusic 侧本地同提交 clone 直读；AVBox 侧本地旧检出，[未核实]）。
 # 策略：res 选择性拷贝（排除 values/values-night/mipmap-*/冲突文件），values 合并进新文件，
@@ -1238,7 +1337,10 @@ grep -F -q 'libs.androidx.room.legacy.compiler' "${APPBG}" || die "收尾：app 
 grep -F -q 'include(":lib-runtime-lx")' "${SETTINGS}" || die "收尾：settings 无 lib-runtime-lx"
 grep -F -q 'include(":lib-decoder-flac")' "${SETTINGS}" || die "收尾：settings 无 lib-decoder-flac"
 # 第五轮 CI 红修：R 别名 / material3 opt-in / lib-runtime-lx Kotlin 插件
-grep -F -q "typealias R = " "app/src/main/java/com/mytv/mymusic/R.kt" || die "收尾：R 别名文件缺失"
+grep -F -q "import com.github.avbox.osc.R" "app/src/main/java/com/mytv/mymusic/ui/components/ProviderIcon.kt" || grep -F -q "import com.github.tvbox.osc.R" "app/src/main/java/com/mytv/mymusic/ui/components/ProviderIcon.kt" || die "收尾：ProviderIcon.kt 无 app R 直接导入"
+[ ! -f "app/src/main/java/com/mytv/mymusic/R.kt" ] || die "收尾：旧 R.kt typealias 文件仍在"
+grep -F -q "DefaultTogglePadding" "app/src/main/java/com/mytv/mymusic/ui/components/Buttons.kt" || die "收尾：Buttons.kt 无 DefaultTogglePadding"
+if grep -F -q "PaletteStyle.valueOf(" "app/src/main/java/com/github/avbox/osc/ui/theme/AppThemeState.kt"; then die "收尾：AppThemeState.kt 仍有 PaletteStyle.valueOf"; fi
 grep -F -q 'ExperimentalMaterial3Api' "${APPBG}" || die "收尾：app 无 material3 opt-in"
 grep -F -q 'alias(libs.plugins.kotlin.android)' "${AVBOX_DIR}/lib-runtime-lx/build.gradle.kts" || die "收尾：lib-runtime-lx 无 kotlin.android 插件"
 grep -F -q 'jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)' "${AVBOX_DIR}/lib-runtime-lx/build.gradle.kts" || die "收尾：lib-runtime-lx 无 jvmTarget JVM_21"
