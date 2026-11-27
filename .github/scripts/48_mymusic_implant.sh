@@ -1367,7 +1367,7 @@ grep -F -q "import com.github.avbox.osc.R" "app/src/main/java/com/mytv/mymusic/u
 [ ! -f "app/src/main/java/com/mytv/mymusic/R.kt" ] || die "收尾：旧 R.kt typealias 文件仍在"
 grep -F -q "DefaultTogglePadding" "app/src/main/java/com/mytv/mymusic/ui/components/Buttons.kt" || die "收尾：Buttons.kt 无 DefaultTogglePadding"
 grep -F -q "import androidx.compose.material3.SplitButtonLayout" "app/src/main/java/com/mytv/mymusic/ui/library/LibraryScreen.kt" || die "收尾：LibraryScreen.kt 无 SplitButtonLayout 导入"
-if grep -F -q "import androidx.compose.material3.SplitButton" "app/src/main/java/com/mytv/mymusic/ui/library/LibraryScreen.kt"; then die "收尾：LibraryScreen.kt 仍有 SplitButton 导入"; fi
+if grep -q '^import androidx.compose.material3.SplitButton$' "app/src/main/java/com/mytv/mymusic/ui/library/LibraryScreen.kt"; then die "收尾：LibraryScreen.kt 仍有 SplitButton 导入"; fi
 if grep -F -q "PaletteStyle.valueOf(" "app/src/main/java/com/github/avbox/osc/ui/theme/AppThemeState.kt"; then die "收尾：AppThemeState.kt 仍有 PaletteStyle.valueOf"; fi
 grep -F -q 'ExperimentalMaterial3Api' "${APPBG}" || die "收尾：app 无 material3 opt-in"
 grep -F -q 'alias(libs.plugins.kotlin.android)' "${AVBOX_DIR}/lib-runtime-lx/build.gradle.kts" || die "收尾：lib-runtime-lx 无 kotlin.android 插件"
