@@ -916,6 +916,53 @@ print("[48v6] 控制台封面点击已跟随“点按迷你播放器打开”设
 PYEOF
 fi
 
+# 3k. 车载蓝牙歌词默认开（2026-11-27 用户定“借”）
+#     （实测：v89 已有完整机制——MusicViewModel.syncNotificationLyrics 每 100ms 进度 tick
+#     取当前歌词行，setMediaArtist 用 player.replaceMediaItem 只换 artist（歌名/专辑/封面
+#     不动、HLS/DASH 跳过、切歌与无歌词时恢复真歌手），唯一缺口是开关 notificationLyrics
+#     默认 false。改法：三处默认值 false→true（AppStore DataStore 读默认、AppStore
+#     Settings 数据类默认、MusicViewModel UI state 默认），注释“默认关”→“默认开”；
+#     设置页开关保留，用户可手动关；已明确关过的用户 DataStore 存 false，不受默认值影响。）
+STORE="app/src/main/java/com/mytv/mymusic/data/AppStore.kt"
+if grep -F -q "notificationLyrics = values[notificationLyricsKey] ?: true" "${STORE}"; then
+  info "通知歌词默认已开，跳过"
+else
+  python3 - "${STORE}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old1 = "            notificationLyrics = values[notificationLyricsKey] ?: false,"
+assert s.count(old1) == 1, "[48v7] AppStore DataStore 读默认锚点出现次数 != 1"
+s = s.replace(old1, "            notificationLyrics = values[notificationLyricsKey] ?: true,")
+old2 = (
+    "    /** 系统媒体播放条第二行显示当前歌词（顶掉歌手名）；默认关。 */\n"
+    "    val notificationLyrics: Boolean = false,"
+)
+assert s.count(old2) == 1, "[48v7] AppStore 数据类默认锚点出现次数 != 1"
+s = s.replace(old2, (
+    "    /** 系统媒体播放条第二行显示当前歌词（顶掉歌手名）；默认开。 */\n"
+    "    val notificationLyrics: Boolean = true,"
+))
+open(path, "w", encoding="utf-8").write(s)
+print("[48v7] AppStore 通知歌词默认已开")
+PYEOF
+fi
+MVM="app/src/main/java/com/mytv/mymusic/ui/MusicViewModel.kt"
+if grep -F -q "val notificationLyrics: Boolean = true" "${MVM}"; then
+  info "MusicViewModel 通知歌词默认已开，跳过"
+else
+  python3 - "${MVM}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = "    val notificationLyrics: Boolean = false,"
+assert s.count(old) == 1, "[48v7] MusicViewModel UI state 默认锚点出现次数 != 1"
+s = s.replace(old, "    val notificationLyrics: Boolean = true,")
+open(path, "w", encoding="utf-8").write(s)
+print("[48v7] MusicViewModel 通知歌词默认已开")
+PYEOF
+fi
+
 info "== 4. Application 合并 =="
 # 4a. MyMusicApp 加 open（myMusic 侧，[已核实]：本地同提交 clone 直读 MyMusicApp.kt:50，
 #     类声明为 class MyMusicApp : Application()，上方有 @OptIn(UnstableApi::class)）
