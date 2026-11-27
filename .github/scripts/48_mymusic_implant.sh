@@ -991,6 +991,29 @@ print("[48v8] 已补 FontWeight / TextAlign import")
 PYEOF
 fi
 
+# 3m. 纠正 3l 补错的 TextAlign import 包名（2026-11-27 23:55 构建红根因）
+#     （3l 把 TextAlign 写成 androidx.compose.ui.text.TextAlign，该包不存在——
+#     TextAlign 在 androidx.compose.ui.text.style，与 TextOverflow 同包；
+#     v89 源码 5 处均为 style.TextAlign。FontWeight 的包写对了，已解析。
+#     本步只改这一行 import，不动其他。）
+PBAR="app/src/main/java/com/mytv/mymusic/ui/adaptive/PhoneBottomBar.kt"
+if grep -F -q "import androidx.compose.ui.text.style.TextAlign" "${PBAR}"; then
+  info "TextAlign import 包名已纠正，跳过"
+else
+  python3 - "${PBAR}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = "import androidx.compose.ui.text.TextAlign\n"
+assert s.count(old) == 1, "[48v9] 错包名 TextAlign import 锚点出现次数 != 1"
+assert "import androidx.compose.ui.text.style.TextAlign" not in s, "[48v9] 正确包名 TextAlign import 已存在"
+new = "import androidx.compose.ui.text.style.TextAlign\n"
+s = s.replace(old, new)
+open(path, "w", encoding="utf-8").write(s)
+print("[48v9] TextAlign import 包名已纠正为 style")
+PYEOF
+fi
+
 info "== 4. Application 合并 =="
 # 4a. MyMusicApp 加 open（myMusic 侧，[已核实]：本地同提交 clone 直读 MyMusicApp.kt:50，
 #     类声明为 class MyMusicApp : Application()，上方有 @OptIn(UnstableApi::class)）
