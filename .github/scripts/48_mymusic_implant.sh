@@ -963,6 +963,34 @@ print("[48v7] MusicViewModel 通知歌词默认已开")
 PYEOF
 fi
 
+# 3l. 补控制台歌名/歌手缺失的两个 import（2026-11-27 23:29 构建红根因）
+#     （3h 删 import 列表里删了 FontWeight（旧长条在用）；3i 加了 fontWeight =
+#     FontWeight.SemiBold 与 textAlign = TextAlign.Center 却没补 import；v89 原文件
+#     本来就没有 TextAlign import。CI 报错 PhoneBottomBar.kt:391 FontWeight、
+#     :395/:404 TextAlign 未解析。补两行 import 即可。）
+PBAR="app/src/main/java/com/mytv/mymusic/ui/adaptive/PhoneBottomBar.kt"
+if grep -F -q "import androidx.compose.ui.text.TextAlign" "${PBAR}" && grep -F -q "import androidx.compose.ui.text.font.FontWeight" "${PBAR}"; then
+  info "控制台歌名 import 已补，跳过"
+else
+  python3 - "${PBAR}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = "import androidx.compose.ui.text.style.TextOverflow\n"
+assert s.count(old) == 1, "[48v8] TextOverflow import 锚点出现次数 != 1"
+assert "import androidx.compose.ui.text.TextAlign" not in s, "[48v8] TextAlign import 已存在"
+assert "import androidx.compose.ui.text.font.FontWeight" not in s, "[48v8] FontWeight import 已存在"
+new = (
+    "import androidx.compose.ui.text.TextAlign\n"
+    "import androidx.compose.ui.text.font.FontWeight\n"
+    + old
+)
+s = s.replace(old, new)
+open(path, "w", encoding="utf-8").write(s)
+print("[48v8] 已补 FontWeight / TextAlign import")
+PYEOF
+fi
+
 info "== 4. Application 合并 =="
 # 4a. MyMusicApp 加 open（myMusic 侧，[已核实]：本地同提交 clone 直读 MyMusicApp.kt:50，
 #     类声明为 class MyMusicApp : Application()，上方有 @OptIn(UnstableApi::class)）
