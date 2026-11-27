@@ -451,6 +451,392 @@ print("[48v3] TransplantCard 版本号已改动态读取")
 PYEOF
 fi
 
+# 3h. 黑胶挂件移植（2026-11-27 用户定“把迷你播放条改成音乐专区旋转黑胶”）
+#     （32 v124-v134 最终态 → myMusic PhoneBottomBar.kt：废长条 MiniPlayer，
+#      只剩 48dp 可拖动旋转黑胶 + 液态控制台；状态走 MusicUiState/actions.transport，
+#      不引 LxPlayerManager；颜色走 MaterialTheme.colorScheme，不写死 Hex；
+#      图标用 myMusic 现成 PlayPauseButton + Material SkipPrevious/SkipNext/Close，
+#      不抄 32 的手搓 Canvas 图标——myMusic 已有带按压动画的 PlayPauseButton 且全 App
+#      都用 Material 图标，手搓是 32 为“禁 Unicode、100% tint”立的特例，此处不适用；
+#      三态同 32：点 X 隐藏至下一首、切歌关控制台、无歌隐藏；控制台 Box 内居中（v130，
+#      不用 Popup）、吸附用 positionInRoot 相减（v131/v132）、封面点按进播放页（v133）。
+#      注意：PhoneBottomBar 根改全尺寸 Box——父级 AnimatedVisibility 为 wrap content，
+#      全尺寸根会撑满内容区，导航栏贴底，黑胶宿主覆满整层；covered 时整层随之隐藏。
+#      MiniPlayer 的 sharedNowPlayingCover 共享元素随之废弃（黑胶/控制台不参与共享过渡，
+#      播放页正常打开、无动画而已）；phoneOverlayHeight 去掉迷你条 64dp（黑胶悬浮不占位）。）
+PBB="app/src/main/java/com/mytv/mymusic/ui/adaptive/PhoneBottomBar.kt"
+if grep -F -q "[48v4]" "${PBB}"; then
+  info "黑胶挂件已移植，跳过"
+else
+  python3 - "${PBB}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+
+def rep(old, new, tag, cnt=1):
+    global s
+    assert s.count(old) == cnt, "[48v4] 锚点: " + tag + " 数=" + str(s.count(old))
+    s = s.replace(old, new, cnt)
+
+# 1) imports：加黑胶要的（锚 import border 行，整行匹配）
+rep("import androidx.compose.foundation.border",
+"""import androidx.compose.foundation.border
+import androidx.compose.animation.core.Animatable // [48v4]
+import androidx.compose.animation.core.LinearEasing // [48v4]
+import androidx.compose.animation.core.animateOffsetAsState // [48v4]
+import androidx.compose.animation.core.tween // [48v4]
+import androidx.compose.foundation.BorderStroke // [48v4]
+import androidx.compose.foundation.clickable // [48v4]
+import androidx.compose.foundation.gestures.detectDragGestures // [48v4]
+import androidx.compose.foundation.interaction.MutableInteractionSource // [48v4]
+import androidx.compose.foundation.layout.BoxWithConstraints // [48v4]
+import androidx.compose.foundation.layout.Spacer // [48v4]
+import androidx.compose.foundation.layout.aspectRatio // [48v4]
+import androidx.compose.foundation.shape.CircleShape // [48v4]
+import androidx.compose.material.icons.filled.Close // [48v4]
+import androidx.compose.material.icons.filled.SkipPrevious // [48v4]
+import androidx.compose.material3.Surface // [48v4]
+import androidx.compose.runtime.LaunchedEffect // [48v4]
+import androidx.compose.runtime.mutableStateOf // [48v4]
+import androidx.compose.runtime.setValue // [48v4]
+import androidx.compose.ui.graphics.graphicsLayer // [48v4]
+import androidx.compose.ui.layout.onGloballyPositioned // [48v4]
+import androidx.compose.ui.layout.positionInRoot // [48v4]
+import androidx.compose.ui.platform.LocalConfiguration // [48v4]
+import androidx.compose.ui.zIndex // [48v4]
+import com.mytv.mymusic.data.Song // [48v4]
+import com.mytv.mymusic.ui.CoverBox // [48v4]""",
+    "黑胶 imports")
+
+# 2) imports：删迷你条独占的（逐行整行匹配，未用 import 只报 warning，但随函数一并清）
+for line, tag in [
+    ("import androidx.compose.ui.semantics.clearAndSetSemantics\n", "clearAndSetSemantics"),
+    ("import androidx.compose.animation.slideInVertically\n", "slideInVertically"),
+    ("import androidx.compose.animation.slideOutVertically\n", "slideOutVertically"),
+    ("import androidx.compose.foundation.ExperimentalFoundationApi\n", "ExperimentalFoundationApi"),
+    ("import androidx.compose.foundation.combinedClickable\n", "combinedClickable"),
+    ("import androidx.compose.foundation.gestures.detectHorizontalDragGestures\n", "detectHorizontalDragGestures"),
+    ("import androidx.compose.foundation.gestures.detectVerticalDragGestures\n", "detectVerticalDragGestures"),
+    ("import androidx.compose.material.icons.filled.MyLocation\n", "MyLocation"),
+    ("import androidx.compose.runtime.rememberUpdatedState\n", "rememberUpdatedState"),
+    ("import androidx.compose.ui.draw.drawBehind\n", "drawBehind"),
+    ("import androidx.compose.ui.geometry.Size\n", "Size"),
+    ("import androidx.compose.ui.semantics.CustomAccessibilityAction\n", "CustomAccessibilityAction"),
+    ("import androidx.compose.ui.semantics.contentDescription\n", "contentDescription"),
+    ("import androidx.compose.ui.semantics.customActions\n", "customActions"),
+    ("import androidx.compose.ui.semantics.semantics\n", "semantics"),
+    ("import androidx.compose.ui.text.font.FontWeight\n", "FontWeight"),
+    ("import com.mytv.mymusic.data.MiniPlayerTarget\n", "MiniPlayerTarget"),
+    ("import com.mytv.mymusic.ui.openLabel\n", "openLabel"),
+    ("import com.mytv.mymusic.ui.components.PlayButtonSize\n", "PlayButtonSize"),
+    ("import com.mytv.mymusic.ui.components.rememberSettlingOffsetState\n", "rememberSettlingOffsetState"),
+    ("import com.mytv.mymusic.ui.components.sharedNowPlayingCover\n", "sharedNowPlayingCover"),
+    ("import kotlin.math.abs\n", "abs"),
+]:
+    assert s.count(line) == 1, "[48v4] 删 import 锚点: " + tag + " 数=" + str(s.count(line))
+    s = s.replace(line, "")
+
+# 3) 常量：MiniHeight/MiniGap 随迷你条废弃（只在本文件用）
+rep("private val MiniHeight = 64.dp\nprivate val MiniGap = 8.dp\n", "", "删 MiniHeight/MiniGap")
+
+# 4) phoneOverlayHeight：迷你条 64dp 去掉（黑胶悬浮不占位）
+rep(""" * 浮层总高度（不含系统导航栏），列表底部要让出这么多。
+ * 有歌在播时是迷你播放器 + 短导航栏；没歌在播时只有浮动导航条，它离底边还有 16dp。
+ */
+fun phoneOverlayHeight(hasMini: Boolean): Dp =
+    if (hasMini) NavBarHeight + MiniHeight + MiniGap * 2 else NavBarHeight + FloatingMargin""",
+""" * 浮层总高度（不含系统导航栏），列表底部要让出这么多。
+ * [48v4] 长条迷你播放器已废，黑胶悬浮不占位：有歌时只剩短导航栏；
+ * 没歌时只有浮动导航条，它离底边还有 16dp。
+ */
+fun phoneOverlayHeight(hasMini: Boolean): Dp =
+    if (hasMini) NavBarHeight else NavBarHeight + FloatingMargin""",
+    "phoneOverlayHeight 去迷你条高度")
+
+# 5) PhoneBottomBar 体：Column + 迷你条 AnimatedVisibility → 全尺寸 Box + 黑胶宿主 + 贴底导航栏
+rep("""    Column(modifier.fillMaxWidth()) {
+        AnimatedVisibility(
+            visible = state.current != null,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+        ) {
+            MiniPlayer(state, position, actions, onOpenQueue, Modifier.padding(horizontal = 12.dp, vertical = MiniGap))
+        }
+""",
+"""    // [48v4] 黑胶挂件要全屏浮层：根改全尺寸 Box，导航栏贴底，黑胶宿主覆满整层
+    Box(modifier.fillMaxSize()) {
+        VinylHost(state, position, actions, Modifier.fillMaxSize())
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+""",
+    "PhoneBottomBar 根改 Box + 黑胶宿主")
+
+# 6) PhoneBottomBar 尾：补内层 Column 的闭合（锚点含浮动导航条 KDoc，整行匹配）
+rep("""        }
+    }
+}
+
+/** 浮动导航条一项的宽""",
+"""        }
+        }
+    }
+}
+
+/** 浮动导航条一项的宽""",
+    "PhoneBottomBar 尾补闭合")
+
+# 6b) 缩进修正：第 5 步只换了头，内层 Column 里的 if/导航栏仍是旧缩进（少 4 空格，
+#     编译不报错但难读）。按花括号配对找到内层 Column 的起止，把中间行统一 +4 空格。
+col_open = "        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {"
+assert s.count(col_open) == 1, "[48v4] 内层 Column 锚点数=" + str(s.count(col_open))
+lines = s.split("\n")
+ci = next(i for i, l in enumerate(lines) if l == col_open)
+depth = 0
+cj = None
+for j in range(ci, len(lines)):
+    depth += lines[j].count("{") - lines[j].count("}")
+    if j > ci and depth == 0:
+        cj = j
+        break
+assert cj is not None, "[48v4] 内层 Column 闭合未找到"
+for k in range(ci + 1, cj):
+    if lines[k].strip():
+        lines[k] = "    " + lines[k]
+s = "\n".join(lines)
+
+# 7) MiniPlayer + miniPlayerProgress（文件尾）整体换黑胶三件套
+start_mark = """/**
+ * 悬浮胶囊迷你播放器。点按按设置打开播放页或海报墙，左滑下一首、右滑打开来源歌单并定位当前歌曲，
+ * 上滑总是展开播放页，长按打开队列；手势都有对应的按钮或读屏自定义操作，读屏用户不需要手势。
+ */"""
+assert s.count(start_mark) == 1, "[48v4] MiniPlayer 起始锚点数=" + str(s.count(start_mark))
+si = s.index(start_mark)
+old_tail = s[si:]
+assert "fun MiniPlayer(" in old_tail and "miniPlayerProgress" in old_tail, "[48v4] MiniPlayer 范围校验失败"
+new_code = '''// [48v4] 黑胶宿主：全屏 BoxWithConstraints + 三态（点 X 隐藏至下一首、切歌关控制台、无歌隐藏，
+// 同 32 v124）；控制台 Box 内居中（v130，不用 Popup）；吸附用 positionInRoot 相减（v131/v132）。
+@Composable
+private fun VinylHost(
+    state: MusicUiState,
+    position: State<Long>,
+    actions: MusicActions,
+    modifier: Modifier = Modifier,
+) {
+    val song = state.current
+    val progress = if (song != null && state.duration > 0) (position.value.toFloat() / state.duration.toFloat()).coerceIn(0f, 1f) else 0f
+    var vinylDismissed by remember { mutableStateOf(false) }
+    var showVinylConsole by remember { mutableStateOf(false) }
+    var cardPosInBox by remember { mutableStateOf<Offset?>(null) }
+    var boxRootPos by remember { mutableStateOf(Offset.Zero) }
+    LaunchedEffect(song?.key) {
+        if (song != null) vinylDismissed = false
+        if (song == null) showVinylConsole = false
+    }
+    BoxWithConstraints(
+        modifier = modifier.fillMaxSize()
+            .onGloballyPositioned { boxRootPos = it.positionInRoot() }
+    ) {
+        val density = LocalDensity.current
+        val maxWpx = with(density) { maxWidth.toPx() }
+        val maxHpx = with(density) { maxHeight.toPx() }
+        val sizePx = with(density) { 48.dp.toPx() }
+        var vinylOffset by remember { mutableStateOf<Offset?>(null) }
+        val vinylPos = vinylOffset ?: Offset(
+            maxWpx - sizePx - with(density) { 16.dp.toPx() },
+            maxHpx - sizePx - with(density) { 80.dp.toPx() }
+        )
+        var isDragging by remember { mutableStateOf(false) }
+        val snapInset = with(density) { 12.dp.toPx() }
+        val snapTarget: Offset? = if (showVinylConsole) {
+            cardPosInBox?.let { pos ->
+                Offset(
+                    (pos.x - snapInset).coerceIn(0f, maxWpx - sizePx),
+                    (pos.y - snapInset).coerceIn(0f, maxHpx - sizePx)
+                )
+            }
+        } else null
+        val animatedPos by animateOffsetAsState(
+            targetValue = snapTarget ?: vinylPos,
+            animationSpec = tween(durationMillis = 300), label = "vinylSnap"
+        )
+        val displayPos = if (isDragging) vinylPos else animatedPos
+        if (showVinylConsole) {
+            Box(
+                modifier = Modifier.fillMaxSize()
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) { showVinylConsole = false }
+            )
+        }
+        AnimatedVisibility(
+            visible = showVinylConsole,
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(200)),
+            modifier = Modifier.align(Alignment.Center)
+                .onGloballyPositioned { cardPosInBox = it.positionInRoot() - boxRootPos }
+        ) {
+            if (song != null) {
+                VinylConsole(
+                    song = song,
+                    isPlaying = state.playing,
+                    progress = progress,
+                    onPrev = { actions.transport("previous") },
+                    onNext = { actions.transport("next") },
+                    onTogglePlay = { actions.transport("play") },
+                    onClose = {
+                        showVinylConsole = false
+                        vinylDismissed = true
+                        if (state.playing) actions.transport("play")
+                    },
+                    onCoverClick = {
+                        showVinylConsole = false
+                        actions.openPlayer()
+                    },
+                )
+            }
+        }
+        if (song != null && !vinylDismissed) {
+            VinylWidget(
+                song = song,
+                isPlaying = state.playing,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset { IntOffset(displayPos.x.roundToInt(), displayPos.y.roundToInt()) }
+                    .zIndex(1f)
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = { isDragging = true; showVinylConsole = false },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                vinylOffset = Offset(
+                                    (vinylPos.x + dragAmount.x).coerceIn(0f, maxWpx - sizePx),
+                                    (vinylPos.y + dragAmount.y).coerceIn(0f, maxHpx - sizePx)
+                                )
+                            },
+                            onDragEnd = { isDragging = false }
+                        )
+                    },
+                onClick = { showVinylConsole = true }
+            )
+        }
+    }
+}
+
+// [48v4] 悬浮黑胶挂件：48dp 圆形封面 + 匀速旋转（Animatable，暂停留角）
+@Composable
+private fun VinylWidget(
+    song: Song,
+    isPlaying: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val rotation = remember { Animatable(0f) }
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) {
+            while (true) {
+                rotation.animateTo(
+                    rotation.value + 360f,
+                    tween(durationMillis = 15000, easing = LinearEasing)
+                )
+            }
+        }
+    }
+    Box(
+        modifier = modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Cover(
+            url = song.cover,
+            key = song.title,
+            size = 48.dp,
+            modifier = Modifier.graphicsLayer { rotationZ = rotation.value },
+            shape = CircleShape,
+        )
+    }
+}
+
+// [48v4] 液态控制台：surfaceContainer 0.85 + extraLarge + 描边 + shadow 16；
+// 顶行“正在播放”+ X，封面 0.7f 居中可点进播放页，进度条紧贴封面，底行上一首/播放/下一曲 40/56/40 对称。
+@Composable
+private fun VinylConsole(
+    song: Song,
+    isPlaying: Boolean,
+    progress: Float,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    onTogglePlay: () -> Unit,
+    onClose: () -> Unit,
+    onCoverClick: () -> Unit,
+) {
+    val screenW = LocalConfiguration.current.screenWidthDp.dp
+    val cardW = screenW - 72.dp
+    Surface(
+        modifier = Modifier.width(cardW).shadow(16.dp, MaterialTheme.shapes.extraLarge),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "正在播放",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Filled.Close, "关闭", tint = MaterialTheme.colorScheme.onSurface)
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            CoverBox(
+                url = song.cover,
+                key = song.title,
+                modifier = Modifier.fillMaxWidth(0.7f).align(Alignment.CenterHorizontally).aspectRatio(1f).clickable(onClick = onCoverClick),
+                shape = RoundedCornerShape(16.dp),
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(MaterialTheme.colorScheme.outlineVariant)) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(2.dp)
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onPrev, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Filled.SkipPrevious, "上一首", tint = MaterialTheme.colorScheme.onSurface)
+                }
+                PlayPauseButton(isPlaying, onTogglePlay)
+                IconButton(onClick = onNext, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Filled.SkipNext, "下一首", tint = MaterialTheme.colorScheme.onSurface)
+                }
+            }
+        }
+    }
+}
+'''
+s = s[:si] + new_code
+# 括号平衡校验
+assert s.count("(") == s.count(")"), "[48v4] 括号不平衡 ( " + str(s.count("(")) + "/" + str(s.count(")")) + ")"
+assert s.count("{") == s.count("}"), "[48v4] 花括号不平衡 { " + str(s.count("{")) + "/" + str(s.count("}")) + "}"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v4] 黑胶挂件已移植：MiniPlayer 已废，VinylHost/VinylWidget/VinylConsole 已接")
+PYEOF
+fi
+
 info "== 4. Application 合并 =="
 # 4a. MyMusicApp 加 open（myMusic 侧，[已核实]：本地同提交 clone 直读 MyMusicApp.kt:50，
 #     类声明为 class MyMusicApp : Application()，上方有 @OptIn(UnstableApi::class)）
