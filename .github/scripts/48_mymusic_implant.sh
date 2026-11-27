@@ -245,14 +245,16 @@ LIB="app/src/main/java/com/mytv/mymusic/ui/library/LibraryScreen.kt"
 if grep -F -q "import androidx.compose.material3.SplitButtonLayout" "${LIB}"; then
   info "LibraryScreen.kt 已用 SplitButtonLayout，跳过"
 else
-  assert_count "${LIB}" "import androidx.compose.material3.SplitButton" 1 "LibraryScreen SplitButton import"
+  # 注意：SplitButtonDefaults 行含 SplitButton 子串，须按整行匹配（^...$），禁子串计数
+  [ "$(grep -c '^import androidx.compose.material3.SplitButton$' "${LIB}")" = "1" ] || die "LibraryScreen SplitButton import 不是 1 行"
   python3 - "${LIB}" <<'PYEOF'
 import sys
 path = sys.argv[1]
 s = open(path, encoding="utf-8").read()
-old_imp = "import androidx.compose.material3.SplitButton"
-assert s.count(old_imp) == 1, "SplitButton import 出现次数 != 1"
-s = s.replace(old_imp, "import androidx.compose.material3.SplitButtonLayout")
+# 整行匹配（含换行），避免误伤 SplitButtonDefaults 行
+old_imp = "import androidx.compose.material3.SplitButton\n"
+assert s.count(old_imp) == 1, "SplitButton import 整行出现次数 != 1"
+s = s.replace(old_imp, "import androidx.compose.material3.SplitButtonLayout\n")
 # 调用点：仅 NewPlaylistSplitButton 一处用 SplitButton(（其余 SplitButton( 均为自定义 PlayAllSplitButton）
 assert s.count("    SplitButton(\n") == 1, "SplitButton( 调用点出现次数 != 1"
 s = s.replace("    SplitButton(\n", "    SplitButtonLayout(\n")
