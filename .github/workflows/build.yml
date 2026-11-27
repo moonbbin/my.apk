@@ -104,7 +104,7 @@ jobs:
         run: bash .github/scripts/48_mymusic_implant.sh
 
       - name: 设置 JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: '17'
