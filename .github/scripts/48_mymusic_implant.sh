@@ -39,7 +39,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 AVBOX_DIR="${REPO_ROOT}/avbox"
 MYMUSIC_SRC="${REPO_ROOT}/mymusic-src"
-MYMUSIC_SHA="1c14ca286acbab5be6048ddbba3bbdfa2b29e943"
+MYMUSIC_SHA="3cb7b0615e40f084ef2dbbc8b60a792b3629e6aa"
 MYMUSIC_TARBALL="https://github.com/mytv-android/myMusic/archive/${MYMUSIC_SHA}.tar.gz"
 
 die() { echo "[48] ERROR: $*" >&2; exit 1; }
@@ -418,6 +418,36 @@ new = (
 s = s.replace(old, new)
 open(path, "w", encoding="utf-8").write(s)
 print("[48v2] MusicViewModel 自动更新检查已关闭")
+PYEOF
+fi
+
+# 3g. TransplantCard 版本号改动态读取（2026-11-27 用户定“改”）
+#     （3f 的卡片里版本号是写死的“1.2.3-alpha001”，而宿主实际已是 alpha002，
+#     对不上。改法：TransplantCard 签名加 versionName/versionCode 两个参数，
+#     第三句用 $versionName/$versionCode 插值，调用点传
+#     update.currentVersionName.ifBlank { "1.0" } 与 update.currentVersionCode，
+#     与页眉副标题同一来源；以后宿主再升版，卡片自己跟着变。）
+ABOUT="app/src/main/java/com/mytv/mymusic/ui/settings/AboutScreen.kt"
+if grep -F -q "private fun TransplantCard(versionName" "${ABOUT}"; then
+  info "TransplantCard 版本号已动态，跳过"
+else
+  python3 - "${ABOUT}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old_sig = "private fun TransplantCard() {"
+assert s.count(old_sig) == 1, "[48v3] TransplantCard 签名出现次数 != 1"
+s = s.replace(old_sig, "private fun TransplantCard(versionName: String, versionCode: Long) {")
+old_line = 'Text("· 上方版本号 1.2.3-alpha001（构建 35）是宿主 AVBox 的版本，不是 myMusic 的版本。", style = MaterialTheme.typography.bodyMedium, color = content)'
+assert s.count(old_line) == 1, "[48v3] TransplantCard 版本行出现次数 != 1"
+new_line = 'Text("· 上方版本号 $versionName（构建 $versionCode）是宿主 AVBox 的版本，不是 myMusic 的版本。", style = MaterialTheme.typography.bodyMedium, color = content)'
+s = s.replace(old_line, new_line)
+old_call = "            TransplantCard()"
+assert s.count(old_call) == 1, "[48v3] TransplantCard 调用点出现次数 != 1"
+new_call = '            TransplantCard(update.currentVersionName.ifBlank { "1.0" }, update.currentVersionCode)'
+s = s.replace(old_call, new_call)
+open(path, "w", encoding="utf-8").write(s)
+print("[48v3] TransplantCard 版本号已改动态读取")
 PYEOF
 fi
 
