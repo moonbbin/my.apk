@@ -1120,6 +1120,48 @@ else:
     open(path, "w", encoding="utf-8").write("\n".join(lines))
     print("[48v1] lib-runtime-lx kotlin.android 插件已加")
 PYEOF
+# 9.1c lib-runtime-lx 的 Java/Kotlin JVM 目标对齐到 21（与 AVBox app 一致）：
+#      9.1b 补了 kotlin.android 插件后，Kotlin 编译任务默认 jvmTarget=21（跟随 JDK 21），
+#      而模块无 compileOptions、Java 编译任务默认 11——Gradle 报 Inconsistent JVM Target
+#      Compatibility（2026-11-27 第六轮 CI 红根因，:lib-runtime-lx:compileDebugKotlin）。
+#      AVBox app 为 Java 21 / JVM_21，此处对齐到 21（不用 myMusic 的 17，以宿主工程为准）。
+python3 - "${AVBOX_DIR}/lib-runtime-lx/build.gradle.kts" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+lines = s.split("\n")
+if "sourceCompatibility = JavaVersion.VERSION_21" in s:
+    print("[48v1] lib-runtime-lx compileOptions 已存在，跳过")
+else:
+    idx = [i for i, ln in enumerate(lines) if ln.strip() == "android {"]
+    assert len(idx) == 1, "[48v1] lib-runtime-lx android { 不是唯一"
+    ai = idx[0]
+    co = [
+        "    compileOptions {",
+        "        sourceCompatibility = JavaVersion.VERSION_21",
+        "        targetCompatibility = JavaVersion.VERSION_21",
+        "    }",
+    ]
+    lines[ai+1:ai+1] = co
+    s = "\n".join(lines)
+    lines = s.split("\n")
+    print("[48v1] lib-runtime-lx compileOptions 已加：Java 21")
+if "jvmTarget" in s:
+    print("[48v1] lib-runtime-lx jvmTarget 已存在，跳过")
+else:
+    kb = [
+        "",
+        "kotlin {",
+        "    compilerOptions {",
+        "        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)",
+        "    }",
+        "}",
+    ]
+    lines.extend(kb)
+    s = "\n".join(lines)
+    print("[48v1] lib-runtime-lx kotlin jvmTarget 已加：JVM_21")
+open(path, "w", encoding="utf-8").write(s)
+PYEOF
 # 9.2 settings.gradle.kts 加两行 include（追加到文件末尾；已存在则跳过）
 SETTINGS="settings.gradle.kts"
 [ -f "${SETTINGS}" ] || die "settings.gradle.kts 不在 ${SETTINGS}"
@@ -1199,6 +1241,8 @@ grep -F -q 'include(":lib-decoder-flac")' "${SETTINGS}" || die "收尾：setting
 grep -F -q "typealias R = " "app/src/main/java/com/mytv/mymusic/R.kt" || die "收尾：R 别名文件缺失"
 grep -F -q 'ExperimentalMaterial3Api' "${APPBG}" || die "收尾：app 无 material3 opt-in"
 grep -F -q 'alias(libs.plugins.kotlin.android)' "${AVBOX_DIR}/lib-runtime-lx/build.gradle.kts" || die "收尾：lib-runtime-lx 无 kotlin.android 插件"
+grep -F -q 'jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)' "${AVBOX_DIR}/lib-runtime-lx/build.gradle.kts" || die "收尾：lib-runtime-lx 无 jvmTarget JVM_21"
+grep -F -q 'sourceCompatibility = JavaVersion.VERSION_21' "${AVBOX_DIR}/lib-runtime-lx/build.gradle.kts" || die "收尾：lib-runtime-lx 无 Java 21 compileOptions"
 # 资源
 [ -f "${AVRES}/values/mymusic_values.xml" ] || die "收尾：mymusic_values.xml 缺失"
 [ -f "${AVRES}/values-night/mymusic_values.xml" ] || die "收尾：values-night/mymusic_values.xml 缺失"
