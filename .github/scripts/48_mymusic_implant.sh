@@ -262,6 +262,161 @@ open(path, "w", encoding="utf-8").write(s)
 print("[48v1] LibraryScreen.kt SplitButton 已换 SplitButtonLayout")
 PYEOF
 fi
+
+# 3f. AboutScreen.kt：隐藏检查更新/问题反馈/Telegram群组/扫码访问，并关掉更新；
+#     更新卡片保留，改成移植说明静态卡片
+#     （2026-11-27 用户定：关于页里这 4 项不要，且更新要彻底关掉。
+#     原因：检查更新下的是独立 myMusic App 安装包（会另装一个 App，不更新 my.apk
+#     里植入的版本），留着误导。改法：删 3 个 ListRow（检查更新/问题反馈/Telegram
+#     群组）＋删 LinksCard 项（扫码访问段）；剩余 6 行重编号（count 9→6，index 按
+#     剩余顺序重排，否则 segmentShape 圆角错位）；MusicViewModel 的
+#     checkUpdatesInBackground() 改空实现，启动时与回到前台的自动检查都不再跑，
+#     故“新”徽标/更新弹窗都不会再出现；手动检查入口随检查更新行一起删，
+#     checkUpdatesNow() 只剩 AboutScreen 内部调用，已无界面可达。
+#     卡片：用户 19:52 截图定保留蓝色卡片，文字换成移植说明（文案用户 19:58 定稿，
+#     “想升版须改48脚本重新构建”改成“正版须去项目主页”）；调用点去条件化常显，
+#     新增 TransplantCard 静态卡片（同 tertiaryContainer 蓝底、同 28dp 圆角），
+#     “立即下载”按钮随旧 UpdateCard 一起不再使用。）
+ABOUT="app/src/main/java/com/mytv/mymusic/ui/settings/AboutScreen.kt"
+# 注意：守卫必须按 ListRow 标题行匹配（title = "检查更新"），不能只 grep "检查更新"——
+# 文件里注释与 ErrorBlock 也含“检查更新”，裸 grep 首跑后仍命中，二跑会误跑进 Python 断言失败
+if grep -F -q 'title = "检查更新"' "${ABOUT}"; then
+  python3 - "${ABOUT}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+
+def find_listrow_block(text, title):
+    key = 'title = "' + title + '"'
+    idx = text.find(key)
+    assert idx != -1, f"[48v2] AboutScreen 无标题 {title}"
+    start = text.rfind("ListRow(", 0, idx)
+    assert start != -1, f"[48v2] AboutScreen 找不到 {title} 的 ListRow("
+    paren = text.find("(", start)
+    depth = 1
+    i = paren + 1
+    while i < len(text) and depth > 0:
+        c = text[i]
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+        i += 1
+    assert depth == 0, f"[48v2] AboutScreen {title} 括号不平衡"
+    end = i
+    while end < len(text) and text[end] in " \t":
+        end += 1
+    if end < len(text) and text[end] == "\n":
+        end += 1
+    return start, end
+
+# 删 3 行
+for title in ["检查更新", "问题反馈", "Telegram 群组"]:
+    st, en = find_listrow_block(s, title)
+    s = s[:st] + s[en:]
+# 删扫码访问段（LinksCard 项，单行）
+links_key = 'item(key = "links", contentType = "linksCard") { LinksCard(openUri) }'
+assert s.count(links_key) == 1, "[48v2] AboutScreen links 项出现次数 != 1"
+s = s.replace(links_key + "\n", "")
+# 剩余 6 行重编号（count 9→6）
+reindex = [
+    ("GitHub 镜像源", 2, 0),
+    ("隐私说明", 3, 1),
+    ("开源许可", 4, 2),
+    ("项目主页", 5, 3),
+    ("复制诊断信息", 7, 4),
+    ("导出日志文件", 8, 5),
+]
+for title, old_idx, new_idx in reindex:
+    st, en = find_listrow_block(s, title)
+    block = s[st:en]
+    old_index = f"index = {old_idx},"
+    assert block.count(old_index) == 1, f"[48v2] AboutScreen {title} index {old_idx} 在块内出现次数 != 1"
+    block = block.replace(old_index, f"index = {new_idx},")
+    assert block.count("count = 9,") == 1, f"[48v2] AboutScreen {title} count 9 在块内出现次数 != 1"
+    block = block.replace("count = 9,", "count = 6,")
+    s = s[:st] + block + s[en:]
+# 更新卡片改成移植说明静态卡片：调用点去条件化常显，新增 TransplantCard
+old_call = (
+    '        if (showCard && info != null) {\n'
+    '            item(key = "update", contentType = "updateCard") {\n'
+    '                UpdateCard(update, actions, progress)\n'
+    '            }\n'
+    '        }\n'
+)
+assert s.count(old_call) == 1, "[48v2] AboutScreen 更新卡片调用点出现次数 != 1"
+new_call = (
+    '        item(key = "update", contentType = "updateCard") {\n'
+    '            TransplantCard()\n'
+    '        }\n'
+)
+s = s.replace(old_call, new_call)
+anchor = "private fun UpdateCard(update: UpdateUiState, actions: MusicActions, progress: () -> Float) {"
+assert s.count(anchor) == 1, "[48v2] AboutScreen UpdateCard 签名出现次数 != 1"
+card = '''/** [48v2] 移植说明静态卡片：更新已关闭，此卡不再显示更新内容；文案用户 19:58 定稿。 */
+@Composable
+private fun TransplantCard() {
+    val scheme = MaterialTheme.colorScheme
+    val content = scheme.onTertiaryContainer
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .clip(RoundedCornerShape(28.dp))
+            .background(scheme.tertiaryContainer)
+            .padding(20.dp),
+    ) {
+        Text("移植说明", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = content)
+        Text(
+            "myMusic @ 1c14ca28 · 植入 my.apk",
+            style = MaterialTheme.typography.bodyMedium,
+            color = content.copy(alpha = 0.85f),
+        )
+        Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("· 本页 myMusic 由 AVBox 主体植入（源码 mytv-android/myMusic @ 1c14ca28），与原有音乐专区并存，互不影响。", style = MaterialTheme.typography.bodyMedium, color = content)
+            Text("· 本版不跟随上游自动更新；正版须去项目主页。", style = MaterialTheme.typography.bodyMedium, color = content)
+            Text("· 上方版本号 1.2.3-alpha001（构建 35）是宿主 AVBox 的版本，不是 myMusic 的版本。", style = MaterialTheme.typography.bodyMedium, color = content)
+            Text("· AGPL-3.0 开源。", style = MaterialTheme.typography.bodyMedium, color = content)
+        }
+    }
+}
+
+'''
+s = s.replace(anchor, card + anchor)
+open(path, "w", encoding="utf-8").write(s)
+print("[48v2] AboutScreen 已隐藏检查更新/问题反馈/Telegram群组/扫码访问，剩余 6 行已重编号，更新卡片已改移植说明")
+PYEOF
+else
+  info "AboutScreen.kt 无检查更新行，跳过"
+fi
+MVM="app/src/main/java/com/mytv/mymusic/ui/MusicViewModel.kt"
+if grep -F -q "[48v2] 更新已关闭" "${MVM}"; then
+  info "MusicViewModel 更新检查已关闭，跳过"
+else
+  python3 - "${MVM}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = (
+    "    private fun checkUpdatesInBackground() {\n"
+    "        lastUpdateAttemptAt = SystemClock.elapsedRealtime()\n"
+    "        viewModelScope.launch {\n"
+    "            app.update.check(manual = false)\n"
+    "        }\n"
+    "    }\n"
+)
+assert s.count(old) == 1, "[48v2] MusicViewModel checkUpdatesInBackground 出现次数 != 1"
+new = (
+    "    private fun checkUpdatesInBackground() {\n"
+    "        // [48v2] 更新已关闭：不再自动检查更新\n"
+    "    }\n"
+)
+s = s.replace(old, new)
+open(path, "w", encoding="utf-8").write(s)
+print("[48v2] MusicViewModel 自动更新检查已关闭")
+PYEOF
+fi
+
 info "== 4. Application 合并 =="
 # 4a. MyMusicApp 加 open（myMusic 侧，[已核实]：本地同提交 clone 直读 MyMusicApp.kt:50，
 #     类声明为 class MyMusicApp : Application()，上方有 @OptIn(UnstableApi::class)）
