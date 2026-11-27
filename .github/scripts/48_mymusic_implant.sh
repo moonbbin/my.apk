@@ -1064,8 +1064,10 @@ for alias in androidx-media3-exoplayer androidx-media3-decoder androidx-annotati
 done
 assert_at_least "${CATALOG}" 'compileSdk = ' 1 "catalog compileSdk（模块必需）"
 assert_at_least "${CATALOG}" 'minSdk = ' 1 "catalog minSdk（模块必需）"
-# NDK / CMake：两模块 ndkVersion 27.0.12077973、cmake 3.22.1；AVBox NDK 为 27.2.12479018。
-# 若 SDK 目录可定位且 27.0/CMake 3.22.1 未装，exit 1 报明两种修法（不静默改模块版本）。
+# NDK / CMake 版本对齐：两模块原声明 ndkVersion 27.0.12077973、cmake 3.22.1；CI 只装了
+# AVBox 的 NDK 27.2.12479018（27.0 未装，2026-11-27 第三轮 CI 红根因）。此处按 SDK 已装
+# 版本对齐两模块：优先 AVBox 的 27.2.12479018 / 原声明的 3.22.1，否则取已装最新版；
+# SDK 下一个都没装才 exit 1（须 build.yml 加 sdkmanager 装）。
 SDK_DIR=""
 for cand in "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}" "$HOME/Android/Sdk" "/opt/android-sdk" "/usr/lib/android-sdk"; do
   if [ -n "$cand" ] && [ -d "$cand" ]; then SDK_DIR="$cand"; break; fi
@@ -1074,13 +1076,35 @@ if [ -z "$SDK_DIR" ]; then
   echo "[48] 提示：未找到 Android SDK 目录（ANDROID_HOME/ANDROID_SDK_ROOT 未设），NDK/CMake 版本无法核查，交由 Gradle 构建时报错定位" >&2
 else
   info "Android SDK 目录：${SDK_DIR}"
-  if [ ! -d "${SDK_DIR}/ndk/27.0.12077973" ]; then
-    die "NDK 27.0.12077973 未安装（SDK：${SDK_DIR}；两模块 lib-runtime-lx/lib-decoder-flac 的 ndkVersion 为 27.0.12077973）。二选一：① build.yml 加 sdkmanager 装 27.0.12077973；② 把两模块 build.gradle.kts 的 ndkVersion 改成 AVBox 的 27.2.12479018 再试编译"
+  NDK_VER=""
+  if [ -d "${SDK_DIR}/ndk/27.2.12479018" ]; then
+    NDK_VER="27.2.12479018"
+  else
+    NDK_VER="$(ls "${SDK_DIR}/ndk/" 2>/dev/null | sort -V | tail -n 1)"
   fi
-  if [ ! -d "${SDK_DIR}/cmake/3.22.1" ]; then
-    die "CMake 3.22.1 未安装（SDK：${SDK_DIR}；两模块的 cmake 版本为 3.22.1）。二选一：① build.yml 加 sdkmanager 装 cmake 3.22.1；② 把两模块 build.gradle.kts 的 cmake 版本改成 CI 已装的版本再试编译"
+  [ -n "$NDK_VER" ] || die "SDK 下未装任何 NDK（SDK：${SDK_DIR}）。修法：build.yml 加 sdkmanager 装 ndk;27.2.12479018"
+  CMAKE_VER=""
+  if [ -d "${SDK_DIR}/cmake/3.22.1" ]; then
+    CMAKE_VER="3.22.1"
+  else
+    CMAKE_VER="$(ls "${SDK_DIR}/cmake/" 2>/dev/null | sort -V | tail -n 1)"
   fi
-  info "NDK 27.0.12077973 与 CMake 3.22.1 均已安装"
+  [ -n "$CMAKE_VER" ] || die "SDK 下未装任何 CMake（SDK：${SDK_DIR}）。修法：build.yml 加 sdkmanager 装 cmake;3.22.1"
+  info "NDK 对齐到 ${NDK_VER}，CMake 对齐到 ${CMAKE_VER}"
+  for mod in lib-runtime-lx lib-decoder-flac; do
+    f="${AVBOX_DIR}/${mod}/build.gradle.kts"
+    if grep -F -q 'ndkVersion = "27.0.12077973"' "$f"; then
+      assert_count "$f" 'ndkVersion = "27.0.12077973"' 1 "模块 ${mod} ndkVersion 原值"
+      sed -i "s/ndkVersion = \"27.0.12077973\"/ndkVersion = \"${NDK_VER}\"/" "$f"
+    fi
+    assert_count "$f" "ndkVersion = \"${NDK_VER}\"" 1 "模块 ${mod} ndkVersion"
+    if grep -F -q 'version = "3.22.1"' "$f"; then
+      assert_count "$f" 'version = "3.22.1"' 1 "模块 ${mod} cmake 原值"
+      sed -i "s/version = \"3.22.1\"/version = \"${CMAKE_VER}\"/" "$f"
+    fi
+    assert_count "$f" "version = \"${CMAKE_VER}\"" 1 "模块 ${mod} cmake"
+    info "模块 ${mod} 已对齐：ndkVersion=${NDK_VER}，cmake=${CMAKE_VER}"
+  done
 fi
 info "原生库合并完成"
 
