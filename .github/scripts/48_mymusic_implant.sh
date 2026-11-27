@@ -167,6 +167,25 @@ cp -r "${MYMUSIC_SRC}/app/src/main/assets/." "app/src/main/assets/" \
   || die "拷贝 myMusic assets 失败"
 info "已拷贝 assets（零碰撞）"
 
+# 3c. R 别名：植入后 R 类随 app 模块生成（包名 = AVBox 的 namespace），myMusic 源码里的
+#     裸 R 与 `import com.mytv.mymusic.R` 都靠这个别名解析。
+#     （2026-11-27 第五轮 CI 红根因之一：44 个编译错里大半是 Unresolved reference 'R'——
+#     myMusic 源码在 com.mytv.mymusic.* 包里，裸 R 解析不到 app 模块的 R 类。资源已在
+#     第 8 节并进 app 的 res/，故 app 的 R 类含 myMusic 全部资源，别名即可解析。）
+NS="$(sed -n 's/^[[:space:]]*namespace[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+[ -n "$NS" ] || die "app/build.gradle.kts 无 namespace，无法生成 R 别名"
+RKT="app/src/main/java/com/mytv/mymusic/R.kt"
+cat > "${RKT}" <<EOF
+package com.mytv.mymusic
+
+// [48v1] myMusic 植入：R 类随 app 模块生成（包名 ${NS}），myMusic 源码里的裸 R 与
+// import com.mytv.mymusic.R 都靠这个别名解析。资源已在第 8 节并进 app 的 res/，故 ${NS}.R
+// 含 myMusic 全部资源。
+typealias R = ${NS}.R
+EOF
+grep -F -q "typealias R = ${NS}.R" "${RKT}" || die "R 别名文件写入失败"
+info "R 别名已写：${RKT} -> ${NS}.R"
+
 # ============ 4. Application 合并 ============
 info "== 4. Application 合并 =="
 # 4a. MyMusicApp 加 open（myMusic 侧，[已核实]：本地同提交 clone 直读 MyMusicApp.kt:50，
@@ -851,6 +870,33 @@ else:
     print("[48v1] app/build.gradle.kts 无改动（全部已在位）")
 PYEOF
 
+# 7.4b app/build.gradle.kts：material3 实验 API opt-in（myMusic app build.gradle.kts:84-87
+#      模块层 opt-in；AVBox app build 无此 opt-in，myMusic 源码里 ExperimentalMaterial3Api /
+#      Expressive 用法全报 e: "This material3 API is experimental..."。
+#      2026-11-27 第五轮 CI 红根因之一。）
+python3 - "${APPBG}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+lines = s.split("\n")
+if "ExperimentalMaterial3Api" in s:
+    print("[48v1] material3 opt-in 已存在，跳过")
+else:
+    idx = [i for i, ln in enumerate(lines) if "compilerOptions {" in ln]
+    assert len(idx) == 1, "[48v1] compilerOptions { 不是唯一"
+    ci = idx[0]
+    optin = [
+        '        // [48v1] myMusic 植入：opt-in 实验性 Material3 API（myMusic 模块层同款）',
+        '        freeCompilerArgs.addAll(',
+        '            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",',
+        '            "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi",',
+        '        )',
+    ]
+    lines[ci+1:ci+1] = optin
+    open(path, "w", encoding="utf-8").write("\n".join(lines))
+    print("[48v1] material3 opt-in 已加：ExperimentalMaterial3Api + ExpressiveApi")
+PYEOF
+
 # 7.5 gradle.properties：保留 android.uniquePackageNames=false 豁免
 # [未核实]：dependencies.md C5 称 AVBox 已有该行（本地旧检出），理由是本地 :quickjs 模块与
 # wrapper-android 同包名 com.whl.quickjs.wrapper；myMusic 的 LxSources 同样走此包，豁免仍需保留。
@@ -1053,6 +1099,27 @@ for mod in lib-runtime-lx lib-decoder-flac; do
   fi
   [ -f "${AVBOX_DIR}/${mod}/build.gradle.kts" ] || die "模块 ${mod} 缺 build.gradle.kts"
 done
+# 9.1b lib-runtime-lx 加 kotlin.android 插件：该模块唯一 Kotlin 源码 LxQuickJsInterrupt.kt，
+#      但 build.gradle.kts 只 apply 了 android.library，未 apply Kotlin 插件——Kotlin 源码
+#      不编译，app 侧 import com.mytv.mymusic.lxruntime.LxQuickJsInterrupt 报 Unresolved
+#      reference（2026-11-27 第五轮 CI 红根因之一）。lib-decoder-flac 无 Kotlin 源码，不用加。
+#      AVBox catalog 有 kotlin-android 别名（app 模块即用它）。
+assert_count "${CATALOG}" 'kotlin-android = ' 1 "catalog kotlin-android 插件别名（lib-runtime-lx 必需）"
+python3 - "${AVBOX_DIR}/lib-runtime-lx/build.gradle.kts" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+lines = s.split("\n")
+alias = "alias(libs.plugins.kotlin.android)"
+if alias in s:
+    print("[48v1] lib-runtime-lx kotlin.android 插件已存在，跳过")
+else:
+    idx = [i for i, ln in enumerate(lines) if ln.strip() == "alias(libs.plugins.android.library)"]
+    assert len(idx) == 1, "[48v1] lib-runtime-lx plugins 块里 android.library 不是唯一"
+    lines.insert(idx[0] + 1, "    " + alias + " // [48v1] myMusic 植入：模块含 Kotlin 源码，须 apply Kotlin 插件才编译")
+    open(path, "w", encoding="utf-8").write("\n".join(lines))
+    print("[48v1] lib-runtime-lx kotlin.android 插件已加")
+PYEOF
 # 9.2 settings.gradle.kts 加两行 include（追加到文件末尾；已存在则跳过）
 SETTINGS="settings.gradle.kts"
 [ -f "${SETTINGS}" ] || die "settings.gradle.kts 不在 ${SETTINGS}"
@@ -1128,6 +1195,10 @@ grep -F -q 'com.mytv.mymusic.playback.PlaybackService' "${MANIFEST}" || die "收
 grep -F -q 'libs.androidx.room.legacy.compiler' "${APPBG}" || die "收尾：app 无 room legacy compiler"
 grep -F -q 'include(":lib-runtime-lx")' "${SETTINGS}" || die "收尾：settings 无 lib-runtime-lx"
 grep -F -q 'include(":lib-decoder-flac")' "${SETTINGS}" || die "收尾：settings 无 lib-decoder-flac"
+# 第五轮 CI 红修：R 别名 / material3 opt-in / lib-runtime-lx Kotlin 插件
+grep -F -q "typealias R = " "app/src/main/java/com/mytv/mymusic/R.kt" || die "收尾：R 别名文件缺失"
+grep -F -q 'ExperimentalMaterial3Api' "${APPBG}" || die "收尾：app 无 material3 opt-in"
+grep -F -q 'alias(libs.plugins.kotlin.android)' "${AVBOX_DIR}/lib-runtime-lx/build.gradle.kts" || die "收尾：lib-runtime-lx 无 kotlin.android 插件"
 # 资源
 [ -f "${AVRES}/values/mymusic_values.xml" ] || die "收尾：mymusic_values.xml 缺失"
 [ -f "${AVRES}/values-night/mymusic_values.xml" ] || die "收尾：values-night/mymusic_values.xml 缺失"
