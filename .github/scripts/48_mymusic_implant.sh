@@ -1938,6 +1938,160 @@ grep -F -q "background(if (LocalWallpaperOn.current) Color.Transparent else Mate
 grep -F -q "background(if (LocalWallpaperOn.current) Color.Transparent else MaterialTheme.colorScheme.surface)" "${WP_SRCH}" || die "3r 收尾：SearchScreen 根背景未跟壁纸走"
 info "[48v14] 设置页/我的/搜索根背景已跟壁纸走（3r 完成）"
 
+# 3s. 当前壁纸看得见（2026-11-28 用户问“选中壁纸，当前壁纸能看到吗”，定“像音乐专区一样”）
+#     （音乐专区做法已核实（39 脚本 HEAD 解码实测）：
+#      ① LxWallpaperSettingsActivity.kt:398-438 “历史壁纸” LazyRow：84.dp 缩略图，
+#      当前项 isCurrent = u == wpState.url，描边 Modifier.border(2.dp, musicColors().accent,
+#      RoundedCornerShape(12.dp))；② 同文件 :258-278 渐变预设行同款描边；③ URL 文本框预填当前
+#      wpState.url。④ 在线壁纸库 WallpaperLibraryActivity.kt 网格本身无任何选中标记（全文件
+#      无 isCurrent/border），当前可见全靠设置页那一行。
+#      myMusic 现状缺口（48v11/v12 实测）：设置页 WallpaperSettings 只有“已选图片”文字，
+#      无当前壁纸预览图；在线库 Dialog 网格里与当前 wallpaperUrl 相同的那张无任何标记。
+#      本步照搬音乐专区：① 设置段加当前壁纸预览——音乐专区历史行同款 84.dp 缩略图 +
+#      2.dp primary 描边（myMusic 无 history 存储，故只画当前这一张，不新开历史键）；
+#      ② 库网格加 isCurrent = item.large == currentUrl，同款 2.dp primary 描边（比对 large，
+#      因 onApply 存的就是 large；本地 content:// 图永不命中，正确无标记）。渐变模式 myMusic
+#      没有，不做。颜色一律走主题；仿真只验代码改得对，不验真机显示；编译由 CI 验。）
+WP_SETT="app/src/main/java/com/mytv/mymusic/ui/settings/SettingsSubScreens.kt"
+WP_LIB="app/src/main/java/com/mytv/mymusic/ui/settings/WallpaperLibrary.kt"
+if grep -F -q "[48v15] 当前壁纸预览" "${WP_SETT}" 2>/dev/null; then
+  info "设置页当前壁纸预览已加，跳过"
+else
+  python3 - "${WP_SETT}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = """                if (appearance.wallpaperUrl.isNotBlank()) {
+                    TextButton(onClick = { actions.setWallpaperUrl("") }) { Text("清除图片") }
+                }
+            }"""
+assert s.count(old) == 1, "[48v15] Settings 清除图片行锚点出现次数 != 1"
+new = old + """
+            // [48v15] 当前壁纸预览（音乐专区 39 历史壁纸行同款：84.dp 缩略图，当前项 2.dp accent 描边）
+            if (appearance.wallpaperUrl.isNotBlank()) {
+                Box(
+                    modifier = Modifier
+                        .size(84.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp)),
+                ) {
+                    AsyncImage(
+                        model = appearance.wallpaperUrl,
+                        contentDescription = "当前壁纸",
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }"""
+s = s.replace(old, new)
+assert s.count('contentDescription = "当前壁纸"') == 1, "[48v15] Settings 当前壁纸预览出现次数 != 1"
+assert s.count("(") == s.count(")"), "[48v15] Settings 括号不平衡"
+assert s.count("{") == s.count("}"), "[48v15] Settings 花括号不平衡"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v15] 设置页当前壁纸预览已加")
+PYEOF
+fi
+if grep -F -q "currentUrl = appearance.wallpaperUrl" "${WP_SETT}" 2>/dev/null; then
+  info "在线壁纸库调用点已传当前壁纸，跳过"
+else
+  python3 - "${WP_SETT}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = """            if (showLibrary) {
+                WallpaperLibraryDialog(
+                    onApply = { url ->"""
+assert s.count(old) == 1, "[48v15] Settings 库调用点锚点出现次数 != 1"
+new = """            if (showLibrary) {
+                WallpaperLibraryDialog(
+                    currentUrl = appearance.wallpaperUrl, // [48v15] 传当前壁纸供网格标出当前项
+                    onApply = { url ->"""
+s = s.replace(old, new)
+assert s.count("currentUrl = appearance.wallpaperUrl") == 1, "[48v15] Settings 库调用点传参出现次数 != 1"
+assert s.count("(") == s.count(")"), "[48v15] Settings 括号不平衡"
+assert s.count("{") == s.count("}"), "[48v15] Settings 花括号不平衡"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v15] 在线壁纸库调用点已传当前壁纸")
+PYEOF
+fi
+if grep -F -q 'currentUrl: String = ""' "${WP_LIB}" 2>/dev/null; then
+  info "在线壁纸库 Dialog 已有 currentUrl 参数，跳过"
+else
+  python3 - "${WP_LIB}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = """fun WallpaperLibraryDialog(
+    onApply: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {"""
+assert s.count(old) == 1, "[48v15] Library Dialog 签名锚点出现次数 != 1"
+new = """fun WallpaperLibraryDialog(
+    onApply: (String) -> Unit,
+    onDismiss: () -> Unit,
+    currentUrl: String = "", // [48v15] 当前壁纸 URL，供网格标出当前项（音乐专区 39 历史行同款）
+) {"""
+s = s.replace(old, new)
+assert s.count('currentUrl: String = ""') == 1, "[48v15] Library currentUrl 参数出现次数 != 1"
+assert s.count("(") == s.count(")"), "[48v15] Library 括号不平衡"
+assert s.count("{") == s.count("}"), "[48v15] Library 花括号不平衡"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v15] 在线壁纸库 Dialog 已加 currentUrl 参数")
+PYEOF
+fi
+if grep -F -q "import androidx.compose.foundation.border" "${WP_LIB}" 2>/dev/null; then
+  info "在线壁纸库 border import 已加，跳过"
+else
+  python3 - "${WP_LIB}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = """import androidx.compose.foundation.background"""
+assert s.count(old) == 1, "[48v15] Library background import 锚点出现次数 != 1"
+new = """import androidx.compose.foundation.background
+import androidx.compose.foundation.border"""
+s = s.replace(old, new)
+assert s.count("import androidx.compose.foundation.border") == 1, "[48v15] Library border import 出现次数 != 1"
+assert s.count("(") == s.count(")"), "[48v15] Library 括号不平衡"
+assert s.count("{") == s.count("}"), "[48v15] Library 花括号不平衡"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v15] 在线壁纸库 border import 已加")
+PYEOF
+fi
+if grep -F -q "val isCurrent = item.large == currentUrl" "${WP_LIB}" 2>/dev/null; then
+  info "在线壁纸库网格当前项描边已加，跳过"
+else
+  python3 - "${WP_LIB}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = """                            items(items, key = { it.id }) { item ->
+                                Card(shape = RoundedCornerShape(14.dp)) {"""
+assert s.count(old) == 1, "[48v15] Library 网格卡片锚点出现次数 != 1"
+new = """                            items(items, key = { it.id }) { item ->
+                                val isCurrent = item.large == currentUrl // [48v15] 当前壁纸：与已存 wallpaperUrl 相同即当前项
+                                Card(
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.then(if (isCurrent) Modifier.border(2.dp, scheme.primary, RoundedCornerShape(14.dp)) else Modifier),
+                                ) {"""
+s = s.replace(old, new)
+assert s.count("val isCurrent = item.large == currentUrl") == 1, "[48v15] Library isCurrent 出现次数 != 1"
+assert s.count("Modifier.then(if (isCurrent) Modifier.border(2.dp, scheme.primary, RoundedCornerShape(14.dp)) else Modifier)") == 1, "[48v15] Library 当前项描边出现次数 != 1"
+assert s.count("(") == s.count(")"), "[48v15] Library 括号不平衡"
+assert s.count("{") == s.count("}"), "[48v15] Library 花括号不平衡"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v15] 在线壁纸库网格当前项描边已加")
+PYEOF
+fi
+# 3s 收尾断言：两文件各标记在位
+grep -F -q 'contentDescription = "当前壁纸"' "${WP_SETT}" || die "3s 收尾：设置页无当前壁纸预览"
+grep -F -q "currentUrl = appearance.wallpaperUrl" "${WP_SETT}" || die "3s 收尾：库调用点未传当前壁纸"
+grep -F -q 'currentUrl: String = ""' "${WP_LIB}" || die "3s 收尾：Dialog 无 currentUrl 参数"
+grep -F -q "import androidx.compose.foundation.border" "${WP_LIB}" || die "3s 收尾：Library 无 border import"
+grep -F -q "val isCurrent = item.large == currentUrl" "${WP_LIB}" || die "3s 收尾：网格无当前项判定"
+info "[48v15] 当前壁纸已看得见（3s 完成）"
+
 info "== 4. Application 合并 =="
 # 4a. MyMusicApp 加 open（myMusic 侧，[已核实]：本地同提交 clone 直读 MyMusicApp.kt:50，
 #     类声明为 class MyMusicApp : Application()，上方有 @OptIn(UnstableApi::class)）
