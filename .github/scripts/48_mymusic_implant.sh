@@ -2092,6 +2092,109 @@ grep -F -q "import androidx.compose.foundation.border" "${WP_LIB}" || die "3s �
 grep -F -q "val isCurrent = item.large == currentUrl" "${WP_LIB}" || die "3s 收尾：网格无当前项判定"
 info "[48v15] 当前壁纸已看得见（3s 完成）"
 
+# 3t. 榜单页壁纸效果修（2026-11-28 用户定“效果不行”，附榜单页截图）
+#     （截图问题：① PageScaffold 的 TopAppBar 还是不透明 surface，标题区与壁纸之间一条硬边
+#     （3r 只改了 Scaffold containerColor、顶栏特意没动）；② 未选中的来源 pill 是透明底＋深字，
+#     压在深色壁纸上看不清；③ 壁纸偏暗偏花，文字无罩纱。
+#     做法：① 顶栏 containerColor 与 scrolledContainerColor 壁纸开着时都改透明（跟 Scaffold
+#     容器同条件 LocalWallpaperOn.current），关着回 surface / surfaceContainer；② 在
+#     Scaffold 内容区顶部加一道 surface 底色的竖向渐变罩纱（0.85→0.45→0，320dp），盖住顶栏＋
+#     来源 pill 那一段，深字浅字都能读；罩纱只在壁纸开着时画，关壁纸时完全不画。颜色全走
+#     MaterialTheme.colorScheme，不写死 Hex；不动榜单页业务逻辑与 MusicChip。
+#     注意：罩纱是 Box 内先画的底层，content 后画在上层；高度 320dp 盖顶栏（展开约 150dp）＋
+#     pill 行（约 48dp）＋余量。）
+WP_SCAFF="app/src/main/java/com/mytv/mymusic/ui/components/Scaffolds.kt"
+if grep -F -q "scrolledContainerColor = if (LocalWallpaperOn.current) Color.Transparent" "${WP_SCAFF}"; then
+  info "PageScaffold 顶栏与罩纱已跟壁纸走，跳过"
+else
+  python3 - "${WP_SCAFF}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+# 前置：依赖 3r（Color import 与 LocalWallpaperOn 须已在，3r 未跑时大声失败）
+assert "import androidx.compose.ui.graphics.Color" in s, "[48v16] 依赖 3r：Scaffolds 缺 Color import（3r 未跑？）"
+assert "LocalWallpaperOn.current" in s, "[48v16] 依赖 3r：Scaffolds 未见 LocalWallpaperOn（3r 未跑？）"
+# 1) import：background / height / Brush（Color 与 LocalWallpaperOn 由 3r 已在）
+for imp in [
+    "import androidx.compose.foundation.background\n",
+    "import androidx.compose.foundation.layout.height\n",
+    "import androidx.compose.ui.graphics.Brush\n",
+]:
+    assert imp not in s, "[48v16] Scaffolds 已有 import: " + imp.strip()
+    anchor = "import androidx.compose.foundation.layout.fillMaxWidth\n"
+    assert s.count(anchor) == 1, "[48v16] Scaffolds fillMaxWidth import 锚点出现次数 != 1"
+    s = s.replace(anchor, anchor + imp)
+# 2) 顶栏颜色：两色壁纸开着都透明，关着回原值
+old = """    val colors = TopAppBarDefaults.topAppBarColors(
+        containerColor = MaterialTheme.colorScheme.surface,
+        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+    )"""
+assert s.count(old) == 1, "[48v16] Scaffolds 顶栏颜色锚点出现次数 != 1"
+new = """    val colors = TopAppBarDefaults.topAppBarColors(
+        containerColor = if (LocalWallpaperOn.current) Color.Transparent else MaterialTheme.colorScheme.surface, // [48v16] 壁纸开着时顶栏透明，关着回主题底色
+        scrolledContainerColor = if (LocalWallpaperOn.current) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer, // [48v16] 滚动时同上，别只改一个
+    )"""
+s = s.replace(old, new)
+# 3) 内容区顶部渐变罩纱：Box 包 content，罩纱先画在底层
+old = """    ) { inner ->
+        val direction = LocalLayoutDirection.current
+        content(
+            PaddingValues(
+                start = inner.calculateStartPadding(direction),
+                end = inner.calculateEndPadding(direction),
+                top = inner.calculateTopPadding(),
+                bottom = inner.calculateBottomPadding() + overlay.calculateBottomPadding() + 24.dp,
+            ),
+        )
+    }"""
+assert s.count(old) == 1, "[48v16] Scaffolds 内容区锚点出现次数 != 1"
+new = """    ) { inner ->
+        val direction = LocalLayoutDirection.current
+        Box(Modifier.fillMaxSize()) {
+            // [48v16] 壁纸开着时顶部渐变罩纱（surface 底色 0.85→0.45→0，320dp）：盖顶栏＋来源 pill，
+            // 深字在深图上能读；关壁纸时不画。罩纱先画在底层，content 后画在上层。
+            if (LocalWallpaperOn.current) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(320.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                0f to MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                0.7f to MaterialTheme.colorScheme.surface.copy(alpha = 0.45f),
+                                1f to MaterialTheme.colorScheme.surface.copy(alpha = 0f),
+                            ),
+                        ),
+                )
+            }
+            content(
+                PaddingValues(
+                    start = inner.calculateStartPadding(direction),
+                    end = inner.calculateEndPadding(direction),
+                    top = inner.calculateTopPadding(),
+                    bottom = inner.calculateBottomPadding() + overlay.calculateBottomPadding() + 24.dp,
+                ),
+            )
+        }
+    }"""
+s = s.replace(old, new)
+assert s.count("containerColor = if (LocalWallpaperOn.current) Color.Transparent else MaterialTheme.colorScheme.surface, // [48v16]") == 1, "[48v16] 顶栏 containerColor 出现次数 != 1"
+assert s.count("scrolledContainerColor = if (LocalWallpaperOn.current) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer, // [48v16]") == 1, "[48v16] 顶栏 scrolledContainerColor 出现次数 != 1"
+assert s.count("Brush.verticalGradient(") == 1, "[48v16] 渐变罩纱出现次数 != 1"
+assert s.count("import androidx.compose.foundation.background") == 1, "[48v16] background import 出现次数 != 1"
+assert s.count("import androidx.compose.foundation.layout.height") == 1, "[48v16] height import 出现次数 != 1"
+assert s.count("import androidx.compose.ui.graphics.Brush") == 1, "[48v16] Brush import 出现次数 != 1"
+assert s.count("(") == s.count(")"), "[48v16] Scaffolds 括号不平衡"
+assert s.count("{") == s.count("}"), "[48v16] Scaffolds 花括号不平衡"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v16] PageScaffold 顶栏透明＋顶部渐变罩纱已加")
+PYEOF
+fi
+# 3t 收尾断言
+grep -F -q "scrolledContainerColor = if (LocalWallpaperOn.current) Color.Transparent" "${WP_SCAFF}" || die "3t 收尾：顶栏 scrolledContainerColor 未跟壁纸走"
+grep -F -q "Brush.verticalGradient(" "${WP_SCAFF}" || die "3t 收尾：顶部渐变罩纱未加"
+info "[48v16] 榜单页壁纸效果已修（3t 完成）"
+
 info "== 4. Application 合并 =="
 # 4a. MyMusicApp 加 open（myMusic 侧，[已核实]：本地同提交 clone 直读 MyMusicApp.kt:50，
 #     类声明为 class MyMusicApp : Application()，上方有 @OptIn(UnstableApi::class)）
