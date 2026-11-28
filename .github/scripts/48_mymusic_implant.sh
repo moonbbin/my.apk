@@ -2244,6 +2244,98 @@ grep -F -q "qq login missing p_skey \$hint" "${QQP}" || die "3u 收尾：p_skey 
 grep -F -q "cookies: none" "${QQP}" || die "3u 收尾：无 cookie 的 hint 未加"
 info "[48v17] QQ 扫码登录容错已加固（3u 完成）"
 
+# 3v. QQ 扫码登录绕过 p_skey（2026-11-28 13:11 用户截图诊断，[48v18]）
+#     （48v17 的诊断已生效：报错里 18 个 cookie 有 pt_oauth_token（链已走到 graph.qq.com 的
+#     OAuth 环节）与 superuin/supertoken/superkey/pt2gguin（ptlogin 认证本身成功），但 p_skey
+#     与 skey 都没有。根因假说：OAuth 的 code 其实已经在跳转链的终点 URL 里了，但代码没去取——
+#     QQ_OAUTH_REDIRECT_URI 是 y.qq.com/portal/wx_redirect.html（静态页，OkHttp 不执行 JS），
+#     authorize 成功后 302 回跳到它并在 query 里带 code，链会在这里停住，finalUrl 里应保留 code；
+#     但 finishQqLogin 把 followQQRedirects 的返回值直接丢了，只拿 cookie 去调 authorizeQQMusicLogin，
+#     后者又要拿 p_skey 算 g_tk 再调一次 authorize 拿 code——p_skey 没有就死在这里。
+#     而 code 换 qm_keyst 那段（musicu.fcg，QQConnectLogin.LoginServer.QQLogin）本身不需要 p_skey。
+#     本步只改 QQProvider.kt：① finishQqLogin 接住 finalUrl 取 code 传给 authorizeQQMusicLogin
+#     （新可选参数 preCode，默认空）；② 有 preCode 时跳过 p_skey 检查与 authorize POST，直接用
+#     preCode 走 musicu.fcg 换 key；无 preCode 时走原有流程一字不动。若终点 URL 里没 code，
+#     流程原样回落到 p_skey 路径，不会更坏。注意：QQ 扫码无法本地复现，只能等用户装机实测。）
+QQP="app/src/main/java/com/mytv/mymusic/data/native/QQProvider.kt"
+if grep -F -q 'preCode: String = ""' "${QQP}"; then
+  info "QQ 扫码登录绕过 p_skey 已加，跳过"
+else
+  python3 - "${QQP}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+# 注意：QQProvider.kt 原文本身花括号 naive 计数就不平衡（597/596，字符串模板所致），
+# 故不用绝对平衡断言，改用差值断言：本次改动只加成对括号，{ 与 } 的差值、( 与 ) 的差值必须不变
+brace_diff = s.count("{") - s.count("}")
+paren_diff = s.count("(") - s.count(")")
+# 依赖 3u：p_skey 报错已是多行块形式（3u 未跑时下面锚点为 0，直接大声失败）
+assert s.count("            if (pSkey.isEmpty()) {\n") == 1, "[48v18] 依赖 3u：p_skey 检查行不是 3u 之后的多行块形式"
+# 1. finishQqLogin：接住 finalUrl，取 code 传给 authorizeQQMusicLogin
+old = "            followQQRedirects(redirectUrl, cookies, \"https://xui.ptlogin2.qq.com/\")\n            authorizeQQMusicLogin(cookies, message)\n"
+assert s.count(old) == 1, "[48v18] finishQqLogin 锚点出现次数 != 1"
+new = (
+    "            val finalUrl = followQQRedirects(redirectUrl, cookies, \"https://xui.ptlogin2.qq.com/\")\n"
+    "            // [48v18] 绕过 p_skey：OAuth authorize 成功后 302 回跳到 wx_redirect.html 并在 query 里带 code，\n"
+    "            // 终点 URL 里就可能已有 code；先取它，取到就不用再走 p_skey → authorize 拿 code 那段\n"
+    "            val preCode = uriQueryValue(runCatching { URI(finalUrl) }.getOrNull() ?: URI(QQ_OAUTH_AUTHORIZE), \"code\")\n"
+    "                .ifEmpty {\n"
+    "                    Regex(\"[?&]code=([^&\\\"'\\\\s]+)\").find(finalUrl)?.groupValues?.get(1).orEmpty()\n"
+    "                }\n"
+    "            authorizeQQMusicLogin(cookies, message, preCode)\n"
+)
+s = s.replace(old, new)
+# 2. authorizeQQMusicLogin 签名加可选参数 preCode
+old = "    private suspend fun authorizeQQMusicLogin(\n        cookies: MutableMap<String, String>,\n        message: String,\n    ): QRCheckResult {\n"
+assert s.count(old) == 1, "[48v18] authorizeQQMusicLogin 签名锚点出现次数 != 1"
+new = "    private suspend fun authorizeQQMusicLogin(\n        cookies: MutableMap<String, String>,\n        message: String,\n        preCode: String = \"\",\n    ): QRCheckResult {\n"
+s = s.replace(old, new)
+# 3. p_skey 检查：有 preCode 时不报缺失，直接往下走 preCode 分支
+old = "            if (pSkey.isEmpty()) {\n"
+assert s.count(old) == 1, "[48v18] p_skey 检查行锚点出现次数 != 1"
+new = "            if (pSkey.isEmpty() && preCode.isBlank()) {\n"
+s = s.replace(old, new)
+# 4. 有 preCode 时跳过 authorize POST：把 form→code 提取整段包进 else（按行缩进，不重打正文）
+lines = s.splitlines(keepends=True)
+assert sum(1 for l in lines if "val code = uriQueryValue" in l) == 1, "[48v18] val code 提取行不是 1 处"
+start = next(i for i, l in enumerate(lines) if l == "            val form = linkedMapOf(\n")
+assert lines[start + 1] == "                \"response_type\" to \"code\",\n", "[48v18] form 下一行不是 response_type"
+code_idx = next(i for i, l in enumerate(lines) if "val code = uriQueryValue(runCatching { URI(landing) }" in l)
+assert lines[code_idx + 1].strip() == ".ifEmpty {", "[48v18] code 提取下一行不是 .ifEmpty"
+assert "Regex(" in lines[code_idx + 2] and "authorize.body" in lines[code_idx + 2], "[48v18] code 提取正则行不对"
+assert lines[code_idx + 3] == "                }\n", "[48v18] code 提取收尾行不对"
+header = [
+    "            // [48v18] 有 preCode 时跳过 authorize POST，直接用 preCode 换 key；没有时走原有流程\n",
+    "            val code = if (preCode.isNotBlank()) {\n",
+    "                preCode.trim()\n",
+    "            } else {\n",
+]
+for i in range(start, code_idx + 4):
+    lines[i] = "    " + lines[i]
+lines[code_idx] = lines[code_idx].replace("val code = uriQueryValue", "uriQueryValue", 1)
+lines = lines[:start] + header + lines[start:code_idx + 4] + ["            }\n"] + lines[code_idx + 4:]
+s = "".join(lines)
+assert s.count("val finalUrl = followQQRedirects") == 1, "[48v18] finalUrl 出现次数 != 1"
+assert s.count("preCode: String = \"\"") == 1, "[48v18] preCode 参数出现次数 != 1"
+assert s.count("if (pSkey.isEmpty() && preCode.isBlank()) {") == 1, "[48v18] p_skey 检查新行出现次数 != 1"
+assert s.count("val code = if (preCode.isNotBlank()) {") == 1, "[48v18] preCode 分支出现次数 != 1"
+assert s.count("authorizeQQMusicLogin(cookies, message, preCode)") == 1, "[48v18] 新调用出现次数 != 1"
+assert s.count("authorizeQQMusicLogin(cookies, message)") == 0, "[48v18] 旧调用仍在"
+assert s.count("val code = uriQueryValue(runCatching { URI(landing) }") == 0, "[48v18] 旧 val code 行仍在"
+assert s.count("qq login missing p_skey $hint") == 1, "[48v18] 3u 的 p_skey 报错被动了"
+assert s.count("{") - s.count("}") == brace_diff, "[48v18] QQProvider 花括号差值变了"
+assert s.count("(") - s.count(")") == paren_diff, "[48v18] QQProvider 圆括号差值变了"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v18] QQ 扫码登录绕过 p_skey 已加")
+PYEOF
+fi
+# 3v 收尾断言
+grep -F -q "val finalUrl = followQQRedirects" "${QQP}" || die "3v 收尾：finishQqLogin 未接 finalUrl"
+grep -F -q 'preCode: String = ""' "${QQP}" || die "3v 收尾：authorizeQQMusicLogin 未加 preCode 参数"
+grep -F -q "val code = if (preCode.isNotBlank())" "${QQP}" || die "3v 收尾：preCode 分支未加"
+grep -F -q "authorizeQQMusicLogin(cookies, message, preCode)" "${QQP}" || die "3v 收尾：finishQqLogin 未传 preCode"
+info "[48v18] QQ 扫码登录绕过 p_skey 已加（3v 完成）"
+
 info "== 4. Application 合并 =="
 # 4a. MyMusicApp 加 open（myMusic 侧，[已核实]：本地同提交 clone 直读 MyMusicApp.kt:50，
 #     类声明为 class MyMusicApp : Application()，上方有 @OptIn(UnstableApi::class)）
