@@ -1736,6 +1736,43 @@ fi
 grep -F -q "object WpApi" "${WP_LIB}" || die "3p 收尾：无 WallpaperLibrary.kt"
 grep -F -q "在线壁纸库" "${WP_SETT}" || die "3p 收尾：设置页无在线壁纸库入口"
 info "[48v12] 在线壁纸库已搬进 myMusic（3p 完成）"
+
+# 3q. 补 MusicActions 的 4 个壁纸 setter 委托（2026-11-28 09:10 构建红根因）
+#     （3o 只把 setter 加到了 MusicViewModel，Settings 调的是 actions（MusicActions，
+#     AppUi.kt:121 的包装类，方法全是 fun setX = model.setX 委托），漏了这层，
+#     故 SettingsSubScreens.kt:325/333/344/350/366/381 全报 Unresolved reference。
+#     本步在 setBlurMode 之后补 4 行委托，与 3o 在 MusicViewModel 里的锚点同模式。）
+AUI="app/src/main/java/com/mytv/mymusic/ui/AppUi.kt"
+if grep -F -q "fun setWallpaperEnabled(value: Boolean) = model.setWallpaperEnabled(value)" "${AUI}"; then
+  info "MusicActions 壁纸 setter 已补，跳过"
+else
+  python3 - "${AUI}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = "    fun setBlurMode(value: com.mytv.mymusic.ui.theme.BlurMode) = model.setBlurMode(value)\n"
+assert s.count(old) == 1, "[48v13] AppUi setBlurMode 锚点出现次数 != 1"
+assert "setWallpaperEnabled" not in s, "[48v13] setWallpaperEnabled 已存在"
+new = (
+    old
+    + "    // [48v13] 自定义背景 setter（委托给 MusicViewModel，与 setBlurMode 同模式）\n"
+    + "    fun setWallpaperEnabled(value: Boolean) = model.setWallpaperEnabled(value)\n"
+    + "    fun setWallpaperUrl(value: String) = model.setWallpaperUrl(value)\n"
+    + "    fun setWallpaperOpacity(value: Int) = model.setWallpaperOpacity(value)\n"
+    + "    fun setWallpaperBlur(value: Int) = model.setWallpaperBlur(value)\n"
+)
+s = s.replace(old, new)
+assert s.count("fun setWallpaperEnabled(value: Boolean) = model.setWallpaperEnabled(value)") == 1, "[48v13] setWallpaperEnabled 委托行出现次数 != 1"
+assert s.count("fun setWallpaperUrl(value: String) = model.setWallpaperUrl(value)") == 1, "[48v13] setWallpaperUrl 委托行出现次数 != 1"
+assert s.count("fun setWallpaperOpacity(value: Int) = model.setWallpaperOpacity(value)") == 1, "[48v13] setWallpaperOpacity 委托行出现次数 != 1"
+assert s.count("fun setWallpaperBlur(value: Int) = model.setWallpaperBlur(value)") == 1, "[48v13] setWallpaperBlur 委托行出现次数 != 1"
+assert s.count("(") == s.count(")"), "[48v13] AppUi 括号不平衡"
+assert s.count("{") == s.count("}"), "[48v13] AppUi 花括号不平衡"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v13] MusicActions 壁纸 setter 已补")
+PYEOF
+fi
+
 info "== 4. Application 合并 =="
 # 4a. MyMusicApp 加 open（myMusic 侧，[已核实]：本地同提交 clone 直读 MyMusicApp.kt:50，
 #     类声明为 class MyMusicApp : Application()，上方有 @OptIn(UnstableApi::class)）
