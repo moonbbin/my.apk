@@ -2195,6 +2195,55 @@ grep -F -q "scrolledContainerColor = if (LocalWallpaperOn.current) Color.Transpa
 grep -F -q "Brush.verticalGradient(" "${WP_SCAFF}" || die "3t 收尾：顶部渐变罩纱未加"
 info "[48v16] 榜单页壁纸效果已修（3t 完成）"
 
+# 3u. QQ 扫码登录容错加固（2026-11-28 11:14 用户定“修”，[48v17]）
+#     （用户报“qq login missing p_skey”：扫码轮询已成功、拿到跳转地址，但跟完跳转链后
+#     cookie 里没有 p_skey。只改 QQProvider.kt 两处，不动登录流程与 WebView 通道：
+#     ① followQQRedirects 的 maxHops 8→16，跳转链变长时不再半路停；
+#     ② p_skey 缺失的报错带上已攒到的 cookie 名（只写名、不写值），下次再失败截图里
+#     就能看到链跟到了哪一步。注意：QQ 扫码无法本地复现（要真号真扫），这步是加固＋
+#     留诊断，不是包治；上游 v1.1.93 的 12 个 commit 全是收藏同步、没动登录流程。）
+QQP="app/src/main/java/com/mytv/mymusic/data/native/QQProvider.kt"
+if grep -F -q "maxHops: Int = 16" "${QQP}"; then
+  info "QQ 扫码登录容错已加，跳过"
+else
+  python3 - "${QQP}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+# 注意：QQProvider.kt 原文本身花括号 naive 计数就不平衡（597/596，字符串模板所致），
+# 故不用绝对平衡断言，改用差值断言：本次改动只加成对括号，{ 与 } 的差值、( 与 ) 的差值必须不变
+brace_diff = s.count("{") - s.count("}")
+paren_diff = s.count("(") - s.count(")")
+old = "        maxHops: Int = 8,\n"
+assert s.count(old) == 1, "[48v17] followQQRedirects maxHops 锚点出现次数 != 1"
+new = "        maxHops: Int = 16,\n"
+s = s.replace(old, new)
+old = "            if (pSkey.isEmpty()) return QRCheckResult(\"failed\", \"qq login missing p_skey\", \"\")\n"
+assert s.count(old) == 1, "[48v17] p_skey 报错锚点出现次数 != 1"
+new = (
+    "            if (pSkey.isEmpty()) {\n"
+    "                // [48v17] 报错带已攒到的 cookie 名（只写名、不写值），下次再失败截图就能看到链跟到了哪一步\n"
+    "                val got = cookies.keys.filter { cookies[it].orEmpty().isNotBlank() }\n"
+    "                val hint = if (got.isEmpty()) \"(cookies: none)\" else \"(cookies: \" + got.joinToString(\",\") + \")\"\n"
+    "                return QRCheckResult(\"failed\", \"qq login missing p_skey $hint\", \"\")\n"
+    "            }\n"
+)
+s = s.replace(old, new)
+assert s.count("maxHops: Int = 16") == 1, "[48v17] maxHops 16 出现次数 != 1"
+assert s.count("qq login missing p_skey $hint") == 1, "[48v17] p_skey 报错新行出现次数 != 1"
+assert s.count("qq login missing p_skey") == 1, "[48v17] p_skey 报错出现次数 != 1"
+assert s.count("{") - s.count("}") == brace_diff, "[48v17] QQProvider 花括号差值变了"
+assert s.count("(") - s.count(")") == paren_diff, "[48v17] QQProvider 圆括号差值变了"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v17] QQ 扫码登录容错已加")
+PYEOF
+fi
+# 3u 收尾断言
+grep -F -q "maxHops: Int = 16" "${QQP}" || die "3u 收尾：maxHops 未改 16"
+grep -F -q "qq login missing p_skey \$hint" "${QQP}" || die "3u 收尾：p_skey 报错未带 cookie 名"
+grep -F -q "cookies: none" "${QQP}" || die "3u 收尾：无 cookie 的 hint 未加"
+info "[48v17] QQ 扫码登录容错已加固（3u 完成）"
+
 info "== 4. Application 合并 =="
 # 4a. MyMusicApp 加 open（myMusic 侧，[已核实]：本地同提交 clone 直读 MyMusicApp.kt:50，
 #     类声明为 class MyMusicApp : Application()，上方有 @OptIn(UnstableApi::class)）
