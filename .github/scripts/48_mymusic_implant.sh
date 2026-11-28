@@ -1048,6 +1048,304 @@ print("[48v10] UiSettingsState navMusicHidden 默认已改 true")
 PYEOF
 fi
 
+# 3o. 自定义背景搬进 myMusic（2026-11-28 用户定“把音乐专区自定义背景放到这里面”）
+#     （音乐专区 39 壁纸系统精简版：只搬开关/选图/不透明度/模糊四要素，不搬渐变/
+#      文字模式/Scrim/历史/在线库。myMusic 已有 DataStore + Coil + haze +
+#      OpenDocument，另起 SharedPreferences 与 Activity 反而风险大。
+#      模糊不用 haze：hazeEffect/hazeBlur 只模糊图层背后的内容，壁纸已是最底层、
+#      背后无物可糊；改用 Modifier.blur 直接糊图本身（Compose 自带，无新依赖）。
+#      注意：Library/Search 两页根部画了不透明 surface（LibraryScreen.kt:404、
+#      SearchScreen.kt:428），壁纸在那两页会被盖住；榜单页 surface 带 0.78
+#      透明度、壁纸可透出来。想让两页也透出来须另改那两页根背景，本步不动，
+#      待用户定夺。仿真只验代码改得对，不验真机显示；编译由 CI 验。）
+WP_STORE="app/src/main/java/com/mytv/mymusic/data/AppStore.kt"
+WP_APPEAR="app/src/main/java/com/mytv/mymusic/ui/theme/Appearance.kt"
+WP_MVM="app/src/main/java/com/mytv/mymusic/ui/MusicViewModel.kt"
+WP_NAV="app/src/main/java/com/mytv/mymusic/ui/AppNavigation.kt"
+WP_SETT="app/src/main/java/com/mytv/mymusic/ui/settings/SettingsSubScreens.kt"
+if grep -F -q "wallpaperEnabledKey" "${WP_STORE}"; then
+  info "AppStore 自定义背景键已加，跳过"
+else
+  python3 - "${WP_STORE}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = """    private val githubMirrorKey = stringPreferencesKey("github_mirror")"""
+assert s.count(old) == 1, "[48v11] AppStore githubMirrorKey 锚点出现次数 != 1"
+new = """    private val githubMirrorKey = stringPreferencesKey("github_mirror")
+    // [48v11] 自定义背景（音乐专区 39 壁纸精简版：只搬开关/图片/不透明度/模糊四项）
+    private val wallpaperEnabledKey = booleanPreferencesKey("wallpaper_enabled")
+    private val wallpaperUrlKey = stringPreferencesKey("wallpaper_url")
+    private val wallpaperOpacityKey = intPreferencesKey("wallpaper_opacity")
+    private val wallpaperBlurKey = intPreferencesKey("wallpaper_blur")"""
+s = s.replace(old, new)
+old = """            lastSeed = values[lastSeedKey] ?: 0,"""
+assert s.count(old) == 1, "[48v11] AppStore 读设置 lastSeed 锚点出现次数 != 1"
+new = """            lastSeed = values[lastSeedKey] ?: 0,
+            wallpaperEnabled = values[wallpaperEnabledKey] ?: false,
+            wallpaperUrl = values[wallpaperUrlKey] ?: "",
+            wallpaperOpacity = (values[wallpaperOpacityKey] ?: 100).coerceIn(0, 100),
+            wallpaperBlur = (values[wallpaperBlurKey] ?: 0).coerceIn(0, 20),"""
+s = s.replace(old, new)
+old = """    val lastSeed: Int = 0,"""
+assert s.count(old) == 1, "[48v11] AppStore 数据类 lastSeed 锚点出现次数 != 1"
+new = """    val lastSeed: Int = 0,
+    /** 自定义背景：开关、图片 URI（OpenDocument 持久授权）、不透明度 0-100、模糊 0-20。 */
+    val wallpaperEnabled: Boolean = false,
+    val wallpaperUrl: String = "",
+    val wallpaperOpacity: Int = 100,
+    val wallpaperBlur: Int = 0,"""
+s = s.replace(old, new)
+old = """    suspend fun blurMode(value: String) = context.dataStore.edit { it[blurModeKey] = value }"""
+assert s.count(old) == 1, "[48v11] AppStore blurMode setter 锚点出现次数 != 1"
+new = """    suspend fun blurMode(value: String) = context.dataStore.edit { it[blurModeKey] = value }
+    suspend fun wallpaperEnabled(value: Boolean) = context.dataStore.edit { it[wallpaperEnabledKey] = value }
+    suspend fun wallpaperUrl(value: String) = context.dataStore.edit { it[wallpaperUrlKey] = value }
+    suspend fun wallpaperOpacity(value: Int) = context.dataStore.edit { it[wallpaperOpacityKey] = value.coerceIn(0, 100) }
+    suspend fun wallpaperBlur(value: Int) = context.dataStore.edit { it[wallpaperBlurKey] = value.coerceIn(0, 20) }"""
+s = s.replace(old, new)
+assert s.count("wallpaperEnabledKey") == 3, "[48v11] AppStore wallpaperEnabledKey 出现次数 != 3"
+assert s.count("(") == s.count(")"), "[48v11] AppStore 括号不平衡"
+assert s.count("{") == s.count("}"), "[48v11] AppStore 花括号不平衡"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v11] AppStore 自定义背景键/读值/字段/setter 已加")
+PYEOF
+fi
+if grep -F -q "wallpaperEnabled: Boolean = false" "${WP_APPEAR}"; then
+  info "Appearance 自定义背景字段已加，跳过"
+else
+  python3 - "${WP_APPEAR}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = """    val lastSeed: Int = 0,"""
+assert s.count(old) == 1, "[48v11] Appearance lastSeed 锚点出现次数 != 1"
+new = """    val lastSeed: Int = 0,
+    // [48v11] 自定义背景（与 AppSettings 同名同默认值，见 toAppearance 映射）
+    val wallpaperEnabled: Boolean = false,
+    val wallpaperUrl: String = "",
+    val wallpaperOpacity: Int = 100,
+    val wallpaperBlur: Int = 0,"""
+s = s.replace(old, new)
+assert s.count("wallpaperEnabled") == 1, "[48v11] Appearance wallpaperEnabled 出现次数 != 1"
+assert s.count("(") == s.count(")"), "[48v11] Appearance 括号不平衡"
+assert s.count("{") == s.count("}"), "[48v11] Appearance 花括号不平衡"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v11] Appearance 自定义背景字段已加")
+PYEOF
+fi
+if grep -F -q "setWallpaperEnabled" "${WP_MVM}"; then
+  info "MusicViewModel 自定义背景映射/setter 已加，跳过"
+else
+  python3 - "${WP_MVM}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = """    lastSeed = lastSeed,"""
+assert s.count(old) == 1, "[48v11] MusicViewModel toAppearance lastSeed 锚点出现次数 != 1"
+new = """    lastSeed = lastSeed,
+    wallpaperEnabled = wallpaperEnabled,
+    wallpaperUrl = wallpaperUrl,
+    wallpaperOpacity = wallpaperOpacity,
+    wallpaperBlur = wallpaperBlur,"""
+s = s.replace(old, new)
+old = """    fun setBlurMode(value: BlurMode) = viewModelScope.launch { app.settings.blurMode(value.name) }"""
+assert s.count(old) == 1, "[48v11] MusicViewModel setBlurMode 锚点出现次数 != 1"
+new = """    fun setBlurMode(value: BlurMode) = viewModelScope.launch { app.settings.blurMode(value.name) }
+    // [48v11] 自定义背景 setter（与 setBlurMode 同模式）
+    fun setWallpaperEnabled(value: Boolean) = viewModelScope.launch { app.settings.wallpaperEnabled(value) }
+    fun setWallpaperUrl(value: String) = viewModelScope.launch { app.settings.wallpaperUrl(value) }
+    fun setWallpaperOpacity(value: Int) = viewModelScope.launch { app.settings.wallpaperOpacity(value) }
+    fun setWallpaperBlur(value: Int) = viewModelScope.launch { app.settings.wallpaperBlur(value) }"""
+s = s.replace(old, new)
+assert s.count("setWallpaperEnabled") == 1, "[48v11] MusicViewModel setWallpaperEnabled 出现次数 != 1"
+assert s.count("wallpaperEnabled = wallpaperEnabled,") == 1, "[48v11] MusicViewModel toAppearance 映射出现次数 != 1"
+assert s.count("(") == s.count(")"), "[48v11] MusicViewModel 括号不平衡"
+assert s.count("{") == s.count("}"), "[48v11] MusicViewModel 花括号不平衡"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v11] MusicViewModel toAppearance 映射与自定义背景 setter 已加")
+PYEOF
+fi
+if grep -F -q "state.appearance.wallpaperEnabled && state.appearance.wallpaperUrl" "${WP_NAV}"; then
+  info "AppNavigation 壁纸层已加，跳过"
+else
+  python3 - "${WP_NAV}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = """import androidx.compose.ui.draw.drawBehind"""
+assert s.count(old) == 1, "[48v11] AppNavigation drawBehind import 锚点出现次数 != 1"
+new = """import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawBehind"""
+s = s.replace(old, new)
+old = """import androidx.compose.ui.platform.LocalDensity"""
+assert s.count(old) == 1, "[48v11] AppNavigation LocalDensity import 锚点出现次数 != 1"
+new = """import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity"""
+s = s.replace(old, new)
+old = """import com.mytv.mymusic.CrashReporter"""
+assert s.count(old) == 1, "[48v11] AppNavigation CrashReporter import 锚点出现次数 != 1"
+new = """import coil3.compose.AsyncImage
+import com.mytv.mymusic.CrashReporter"""
+s = s.replace(old, new)
+old = """        Box(Modifier.fillMaxSize()) {
+            // 手机横屏（≥600dp 走平板布局）时导航栏、挖孔在左右两侧，内容不能伸到下面"""
+assert s.count(old) == 1, "[48v11] AppNavigation 内容区 Box 锚点出现次数 != 1"
+new = """        Box(Modifier.fillMaxSize()) {
+            // [48v11] 自定义背景（音乐专区 39 壁纸精简版）：开关+图片走 DataStore，
+            // 只在开启且已选图时铺底。模糊不用 haze（haze 只模糊图层背后的内容，
+            // 壁纸已是最底层、背后无物可糊），改用 Modifier.blur 直接糊图本身；
+            // 不透明度用 alpha；颜色一律不写死，靠图片本身与主题底色。
+            if (state.appearance.wallpaperEnabled && state.appearance.wallpaperUrl.isNotBlank()) {
+                AsyncImage(
+                    model = state.appearance.wallpaperUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                        .alpha(state.appearance.wallpaperOpacity / 100f)
+                        .then(if (state.appearance.wallpaperBlur > 0) Modifier.blur(state.appearance.wallpaperBlur.dp) else Modifier),
+                )
+            }
+            // 手机横屏（≥600dp 走平板布局）时导航栏、挖孔在左右两侧，内容不能伸到下面"""
+s = s.replace(old, new)
+assert s.count("wallpaperEnabled && state.appearance.wallpaperUrl") == 1, "[48v11] AppNavigation 壁纸层出现次数 != 1"
+assert s.count("(") == s.count(")"), "[48v11] AppNavigation 括号不平衡"
+assert s.count("{") == s.count("}"), "[48v11] AppNavigation 花括号不平衡"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v11] AppNavigation 壁纸层已加")
+PYEOF
+fi
+if grep -F -q "WallpaperSettings(" "${WP_SETT}"; then
+  info "设置页自定义背景段已加，跳过"
+else
+  python3 - "${WP_SETT}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+pairs = [
+    ("""import android.os.Build""", """import android.content.Intent
+import android.os.Build"""),
+    ("""import androidx.activity.compose.PredictiveBackHandler""", """import androidx.activity.compose.PredictiveBackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts"""),
+    ("""import androidx.compose.material3.OutlinedTextField""", """import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider"""),
+    ("""import androidx.compose.ui.text.font.FontWeight""", """import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight"""),
+    ("""import kotlin.math.abs""", """import kotlin.math.abs
+import kotlin.math.roundToInt"""),
+]
+for old, new in pairs:
+    assert s.count(old) == 1, "[48v11] Settings import 锚点出现次数 != 1: " + old
+    s = s.replace(old, new)
+anchor = """        item(key = "blurNote", contentType = "note") {"""
+assert s.count(anchor) == 1, "[48v11] Settings blurNote 锚点出现次数 != 1"
+start = s.index(anchor)
+depth = 0
+i = start
+end = -1
+while i < len(s):
+    c = s[i]
+    if c == "{":
+        depth += 1
+    elif c == "}":
+        depth -= 1
+        if depth == 0:
+            end = i + 1
+            break
+    i += 1
+assert end != -1, "[48v11] Settings blurNote 块闭合未找到"
+items = """
+        item(key = "wallpaperHead", contentType = "sectionHeader") { SectionLabel("自定义背景") }
+        item(key = "wallpaper", contentType = "wallpaperSettings") { WallpaperSettings(state, actions, groupWidth) }"""
+s = s[:end] + items + s[end:]
+old = """private fun layoutModeHint(mode: LayoutMode): String = when (mode) {"""
+assert s.count(old) == 1, "[48v11] Settings layoutModeHint 锚点出现次数 != 1"
+comp = """/** [48v11] 自定义背景设置区（音乐专区 39 壁纸精简版）：开关 + 选图 + 不透明度/模糊滑杆。 */
+@Composable
+private fun WallpaperSettings(
+    state: MusicUiState,
+    actions: MusicActions,
+    modifier: Modifier = Modifier,
+) {
+    val appearance = state.appearance
+    val context = LocalContext.current
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            actions.setWallpaperUrl(uri.toString())
+        }
+    }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SwitchRow(
+            title = "自定义背景",
+            checked = appearance.wallpaperEnabled,
+            onCheckedChange = { actions.setWallpaperEnabled(it) },
+            index = 0,
+            count = 1,
+            summary = "用自选图片做应用背景，关掉恢复主题底色",
+            icon = Icons.Filled.Palette,
+        )
+        if (appearance.wallpaperEnabled) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(onClick = { pickImage.launch(arrayOf("image/*")) }) { Text("选择图片") }
+                if (appearance.wallpaperUrl.isNotBlank()) {
+                    TextButton(onClick = { actions.setWallpaperUrl("") }) { Text("清除图片") }
+                }
+            }
+            SettingsNote(if (appearance.wallpaperUrl.isBlank()) "还没有选图片，点“选择图片”从文件里挑一张。" else "已选图片；重启后仍在，换图点“选择图片”。")
+            Text(
+                text = "不透明度 " + appearance.wallpaperOpacity + "%",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Slider(
+                value = appearance.wallpaperOpacity / 100f,
+                onValueChange = { v ->
+                    val pct = (v * 100).roundToInt().coerceIn(0, 100)
+                    if (pct != appearance.wallpaperOpacity) actions.setWallpaperOpacity(pct)
+                },
+                valueRange = 0f..1f,
+                steps = 99,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = "模糊 " + appearance.wallpaperBlur,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Slider(
+                value = appearance.wallpaperBlur / 20f,
+                onValueChange = { v ->
+                    val blur = (v * 20).roundToInt().coerceIn(0, 20)
+                    if (blur != appearance.wallpaperBlur) actions.setWallpaperBlur(blur)
+                },
+                valueRange = 0f..1f,
+                steps = 19,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+"""
+s = s.replace(old, comp + old)
+assert s.count("fun WallpaperSettings(") == 1, "[48v11] Settings WallpaperSettings 出现次数 != 1"
+assert s.count("(") == s.count(")"), "[48v11] Settings 括号不平衡"
+assert s.count("{") == s.count("}"), "[48v11] Settings 花括号不平衡"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v11] 设置页自定义背景段已加")
+PYEOF
+fi
+# 3o 收尾断言：五文件各一标记在位
+grep -F -q "wallpaperEnabledKey" "${WP_STORE}" || die "3o 收尾：AppStore 无 wallpaperEnabledKey"
+grep -F -q "wallpaperEnabled: Boolean = false" "${WP_APPEAR}" || die "3o 收尾：Appearance 无 wallpaperEnabled 字段"
+grep -F -q "setWallpaperEnabled" "${WP_MVM}" || die "3o 收尾：MusicViewModel 无 setWallpaperEnabled"
+grep -F -q "state.appearance.wallpaperEnabled && state.appearance.wallpaperUrl" "${WP_NAV}" || die "3o 收尾：AppNavigation 无壁纸层"
+grep -F -q "fun WallpaperSettings(" "${WP_SETT}" || die "3o 收尾：设置页无 WallpaperSettings"
+info "[48v11] 自定义背景已搬进 myMusic（3o 完成）"
+
 info "== 4. Application 合并 =="
 # 4a. MyMusicApp 加 open（myMusic 侧，[已核实]：本地同提交 clone 直读 MyMusicApp.kt:50，
 #     类声明为 class MyMusicApp : Application()，上方有 @OptIn(UnstableApi::class)）
