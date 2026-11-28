@@ -1773,6 +1773,171 @@ print("[48v13] MusicActions 壁纸 setter 已补")
 PYEOF
 fi
 
+# 3r. 设置页/我的/搜索根背景跟壁纸走（2026-11-28 用户定“设置页、我的、搜索一起改”）
+#     （根因已核实：壁纸层本身在画（3o，AppNavigation 根部 Box 首个孩子），盖住它的是三处
+#      不透明底色——① PageScaffold（Scaffolds.kt:83）的 Scaffold containerColor = surface，
+#      所有设置子页与榜单/歌单都走它（ChartsScreen:179、PlaylistsScreen:185 各调一次
+#      PageScaffold；设置子页走 SettingsPage → PageScaffold）；② LibraryScreen.kt:404
+#      根部 FoldRow 的 surface（“我的”）；③ SearchScreen.kt:428 根部 Box 的 surface（“搜索”）。
+#      纠正：ChartsScreen.kt:1114 的 0.78 是封面播放量小标签 PlayCountTag，不是页面背景，
+#      榜单页之前也被盖住、看不到；改 PageScaffold 一处就连榜单一起修，不另加消费点。
+#      做法：新增 LocalWallpaperOn（compositionLocalOf，默认 false；不用 static，
+#      开关拨动时页面要重组），AppNavigation 在 CompositionLocalProvider 里按与壁纸层
+#      相同的条件提供；三处根背景改成开着透明、关着回主题 surface；顶栏颜色不动（保可读性）；
+#      Color.Transparent 是 UI_SPEC 允许的例外。仿真只验代码改得对，不验真机显示；编译由 CI 验。）
+WP_WIN="app/src/main/java/com/mytv/mymusic/ui/components/Window.kt"
+WP_NAV="app/src/main/java/com/mytv/mymusic/ui/AppNavigation.kt"
+WP_SCAFF="app/src/main/java/com/mytv/mymusic/ui/components/Scaffolds.kt"
+WP_LIB="app/src/main/java/com/mytv/mymusic/ui/library/LibraryScreen.kt"
+WP_SRCH="app/src/main/java/com/mytv/mymusic/ui/search/SearchScreen.kt"
+if grep -F -q "val LocalWallpaperOn = compositionLocalOf { false }" "${WP_WIN}"; then
+  info "LocalWallpaperOn 已定义，跳过"
+else
+  python3 - "${WP_WIN}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = """val LocalAppWindow = staticCompositionLocalOf { AppWindow(DeviceKind.Phone, 400, 800) }"""
+assert s.count(old) == 1, "[48v14] Window LocalAppWindow 锚点出现次数 != 1"
+new = """val LocalAppWindow = staticCompositionLocalOf { AppWindow(DeviceKind.Phone, 400, 800) }
+
+/** [48v14] 自定义背景是否在铺底：AppNavigation 按开关+已选图提供；设置页/我的/搜索根背景据此变透明。 */
+val LocalWallpaperOn = compositionLocalOf { false }"""
+s = s.replace(old, new)
+assert s.count("val LocalWallpaperOn = compositionLocalOf { false }") == 1, "[48v14] LocalWallpaperOn 定义出现次数 != 1"
+assert s.count("import androidx.compose.runtime.compositionLocalOf") == 1, "[48v14] Window 缺 compositionLocalOf import"
+assert s.count("(") == s.count(")"), "[48v14] Window 括号不平衡"
+assert s.count("{") == s.count("}"), "[48v14] Window 花括号不平衡"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v14] LocalWallpaperOn 已定义")
+PYEOF
+fi
+if grep -F -q "LocalWallpaperOn provides" "${WP_NAV}"; then
+  info "AppNavigation 已提供 LocalWallpaperOn，跳过"
+else
+  python3 - "${WP_NAV}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = """import com.mytv.mymusic.ui.components.LocalAppWindow"""
+assert s.count(old) == 1, "[48v14] AppNavigation LocalAppWindow import 锚点出现次数 != 1"
+new = """import com.mytv.mymusic.ui.components.LocalAppWindow
+import com.mytv.mymusic.ui.components.LocalWallpaperOn"""
+s = s.replace(old, new)
+old = """state.appearance.wallpaperEnabled && state.appearance.wallpaperUrl.isNotBlank()"""
+assert s.count(old) == 1, "[48v14] 依赖 3o 壁纸层未找到（3o 未跑？）"
+old = """        LocalPlayerBottomChrome provides playerChrome,
+    ) {"""
+assert s.count(old) == 1, "[48v14] AppNavigation CompositionLocalProvider 锚点出现次数 != 1"
+new = """        LocalPlayerBottomChrome provides playerChrome,
+        // [48v14] 自定义背景开关：壁纸开着时设置页/我的/搜索根背景变透明（与壁纸层同条件）
+        LocalWallpaperOn provides (state.appearance.wallpaperEnabled && state.appearance.wallpaperUrl.isNotBlank()),
+    ) {"""
+s = s.replace(old, new)
+assert s.count("LocalWallpaperOn provides (state.appearance.wallpaperEnabled && state.appearance.wallpaperUrl.isNotBlank())") == 1, "[48v14] LocalWallpaperOn 提供值出现次数 != 1"
+assert s.count("state.appearance.wallpaperEnabled && state.appearance.wallpaperUrl.isNotBlank()") == 2, "[48v14] 壁纸条件出现次数 != 2（壁纸层 + 提供值）"
+assert s.count("(") == s.count(")"), "[48v14] AppNavigation 括号不平衡"
+assert s.count("{") == s.count("}"), "[48v14] AppNavigation 花括号不平衡"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v14] AppNavigation 已提供 LocalWallpaperOn")
+PYEOF
+fi
+if grep -F -q "LocalWallpaperOn.current" "${WP_SCAFF}"; then
+  info "PageScaffold 根背景已跟壁纸走，跳过"
+else
+  python3 - "${WP_SCAFF}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = """import androidx.compose.ui.Modifier"""
+assert s.count(old) == 1, "[48v14] Scaffolds Modifier import 锚点出现次数 != 1"
+new = """import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color"""
+s = s.replace(old, new)
+old = """    Scaffold(
+        modifier = modifier.nestedScroll(scroll.nestedScrollConnection).semantics { paneTitle = title },
+        containerColor = MaterialTheme.colorScheme.surface,"""
+assert s.count(old) == 1, "[48v14] Scaffolds Scaffold containerColor 锚点出现次数 != 1"
+new = """    Scaffold(
+        modifier = modifier.nestedScroll(scroll.nestedScrollConnection).semantics { paneTitle = title },
+        containerColor = if (LocalWallpaperOn.current) Color.Transparent else MaterialTheme.colorScheme.surface, // [48v14] 壁纸开着时根背景透明，关着回主题底色"""
+s = s.replace(old, new)
+assert s.count("containerColor = if (LocalWallpaperOn.current) Color.Transparent else MaterialTheme.colorScheme.surface,") == 1, "[48v14] Scaffolds 透明 containerColor 出现次数 != 1"
+assert s.count("containerColor = MaterialTheme.colorScheme.surface,") == 1, "[48v14] Scaffolds 顶栏 containerColor 应仍为 1（未动顶栏）"
+assert s.count("import androidx.compose.ui.graphics.Color") == 1, "[48v14] Scaffolds Color import 出现次数 != 1"
+assert s.count("(") == s.count(")"), "[48v14] Scaffolds 括号不平衡"
+assert s.count("{") == s.count("}"), "[48v14] Scaffolds 花括号不平衡"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v14] PageScaffold 根背景已跟壁纸走")
+PYEOF
+fi
+if grep -F -q "LocalWallpaperOn.current" "${WP_LIB}"; then
+  info "LibraryScreen 根背景已跟壁纸走，跳过"
+else
+  python3 - "${WP_LIB}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+assert s.count("import androidx.compose.ui.graphics.Color") == 1, "[48v14] Library 缺 Color import"
+old = """import com.mytv.mymusic.ui.components.LocalOverlayPadding"""
+assert s.count(old) == 1, "[48v14] Library LocalOverlayPadding import 锚点出现次数 != 1"
+new = """import com.mytv.mymusic.ui.components.LocalOverlayPadding
+import com.mytv.mymusic.ui.components.LocalWallpaperOn"""
+s = s.replace(old, new)
+old = """        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),"""
+assert s.count(old) == 1, "[48v14] Library 根背景锚点出现次数 != 1"
+new = """        modifier = Modifier.fillMaxSize().background(if (LocalWallpaperOn.current) Color.Transparent else MaterialTheme.colorScheme.surface), // [48v14] 壁纸开着时根背景透明，关着回主题底色"""
+s = s.replace(old, new)
+assert s.count("background(if (LocalWallpaperOn.current) Color.Transparent else MaterialTheme.colorScheme.surface)") == 1, "[48v14] Library 透明根背景出现次数 != 1"
+assert s.count("import com.mytv.mymusic.ui.components.LocalWallpaperOn") == 1, "[48v14] Library LocalWallpaperOn import 出现次数 != 1"
+assert s.count("(") == s.count(")"), "[48v14] Library 括号不平衡"
+assert s.count("{") == s.count("}"), "[48v14] Library 花括号不平衡"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v14] LibraryScreen 根背景已跟壁纸走")
+PYEOF
+fi
+if grep -F -q "LocalWallpaperOn.current" "${WP_SRCH}"; then
+  info "SearchScreen 根背景已跟壁纸走，跳过"
+else
+  python3 - "${WP_SRCH}" <<'PYEOF'
+import sys
+path = sys.argv[1]
+s = open(path, encoding="utf-8").read()
+old = """import androidx.compose.ui.graphics.SolidColor"""
+assert s.count(old) == 1, "[48v14] Search SolidColor import 锚点出现次数 != 1"
+new = """import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor"""
+s = s.replace(old, new)
+old = """import com.mytv.mymusic.ui.components.LocalOverlayPadding"""
+assert s.count(old) == 1, "[48v14] Search LocalOverlayPadding import 锚点出现次数 != 1"
+new = """import com.mytv.mymusic.ui.components.LocalOverlayPadding
+import com.mytv.mymusic.ui.components.LocalWallpaperOn"""
+s = s.replace(old, new)
+old = """            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)
+            .graphicsLayer {"""
+assert s.count(old) == 1, "[48v14] Search 根背景锚点出现次数 != 1"
+new = """            .fillMaxSize()
+            .background(if (LocalWallpaperOn.current) Color.Transparent else MaterialTheme.colorScheme.surface) // [48v14] 壁纸开着时根背景透明，关着回主题底色
+            .graphicsLayer {"""
+s = s.replace(old, new)
+assert s.count("background(if (LocalWallpaperOn.current) Color.Transparent else MaterialTheme.colorScheme.surface)") == 1, "[48v14] Search 透明根背景出现次数 != 1"
+assert s.count("import androidx.compose.ui.graphics.Color") == 1, "[48v14] Search Color import 出现次数 != 1"
+assert s.count("import com.mytv.mymusic.ui.components.LocalWallpaperOn") == 1, "[48v14] Search LocalWallpaperOn import 出现次数 != 1"
+assert s.count("(") == s.count(")"), "[48v14] Search 括号不平衡"
+assert s.count("{") == s.count("}"), "[48v14] Search 花括号不平衡"
+open(path, "w", encoding="utf-8").write(s)
+print("[48v14] SearchScreen 根背景已跟壁纸走")
+PYEOF
+fi
+# 3r 收尾断言：五文件各一标记在位 + 四 tab 根背景全覆盖
+grep -F -q "val LocalWallpaperOn = compositionLocalOf { false }" "${WP_WIN}" || die "3r 收尾：Window.kt 无 LocalWallpaperOn"
+grep -F -q "LocalWallpaperOn provides (state.appearance.wallpaperEnabled && state.appearance.wallpaperUrl.isNotBlank())" "${WP_NAV}" || die "3r 收尾：AppNavigation 未提供 LocalWallpaperOn"
+grep -F -q "containerColor = if (LocalWallpaperOn.current) Color.Transparent else MaterialTheme.colorScheme.surface," "${WP_SCAFF}" || die "3r 收尾：PageScaffold 未跟壁纸走"
+grep -F -q "background(if (LocalWallpaperOn.current) Color.Transparent else MaterialTheme.colorScheme.surface)" "${WP_LIB}" || die "3r 收尾：LibraryScreen 根背景未跟壁纸走"
+grep -F -q "background(if (LocalWallpaperOn.current) Color.Transparent else MaterialTheme.colorScheme.surface)" "${WP_SRCH}" || die "3r 收尾：SearchScreen 根背景未跟壁纸走"
+info "[48v14] 设置页/我的/搜索根背景已跟壁纸走（3r 完成）"
+
 info "== 4. Application 合并 =="
 # 4a. MyMusicApp 加 open（myMusic 侧，[已核实]：本地同提交 clone 直读 MyMusicApp.kt:50，
 #     类声明为 class MyMusicApp : Application()，上方有 @OptIn(UnstableApi::class)）
